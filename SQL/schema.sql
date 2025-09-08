@@ -4,9 +4,12 @@ create extension if not exists pgcrypto;
 -- Profiles mirror auth.users, hold telegram mapping + role
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
+  email text,
+  full_name text,
   telegram_id text unique,
   role text check (role in ('buyer','seller','admin')) default 'buyer',
-  created_at timestamp with time zone default now()
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
 );
 
 -- Core escrows
