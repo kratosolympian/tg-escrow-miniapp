@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const { bank_name, account_number, account_holder } = updateBankSchema.parse(body)
 
     // Insert new bank settings
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('admin_settings')
       .insert({
         bank_name,
