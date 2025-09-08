@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
       .insert({
         id: authData.user.id,
         email: email,
+        full_name: name,
         role: 'seller',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
