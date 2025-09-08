@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
-import { getProfile, canAccessEscrow } from '@/lib/rbac'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 
 export async function GET(
   request: NextRequest,
@@ -8,16 +7,15 @@ export async function GET(
 ) {
   try {
     const supabase = createServerClientWithCookies()
-    const profile = await getProfile(supabase)
+    const serviceClient = createServiceRoleClient()
+    
+    // Get user if authenticated (but don't require auth for public escrow view)
+    const { data: { user } } = await supabase.auth.getUser()
 
-    // Find escrow by code
-    const { data: escrow, error: findError } = await (supabase as any)
+    // Find escrow by code using service client to bypass RLS
+    const { data: escrow, error: findError } = await serviceClient
       .from('escrows')
-      .select(`
-        *,
-        seller:profiles!seller_id(telegram_id),
-        buyer:profiles!buyer_id(telegram_id)
-      `)
+      .select('*')
       .eq('code', params.code.toUpperCase())
       .single()
 
@@ -26,21 +24,37 @@ export async function GET(
     }
 
     // If user is not authenticated or not a member, return limited info
-    if (!profile || !canAccessEscrow(profile, escrow)) {
+    if (!user || ((escrow as any).seller_id !== user.id && (escrow as any).buyer_id !== user.id)) {
       return NextResponse.json({
-        id: escrow.id,
-        code: escrow.code,
-        description: escrow.description,
-        price: escrow.price,
-        admin_fee: escrow.admin_fee,
-        status: escrow.status,
-        created_at: escrow.created_at,
-        has_buyer: !!escrow.buyer_id
+        id: (escrow as any).id,
+        code: (escrow as any).code,
+        description: (escrow as any).description,
+        price: (escrow as any).price,
+        admin_fee: (escrow as any).admin_fee,
+        status: (escrow as any).status,
+        created_at: (escrow as any).created_at,
+        has_buyer: !!(escrow as any).buyer_id
       })
     }
 
-    // Return full details for members
-    return NextResponse.json(escrow)
+    // Return full details for members - get related data
+    const { data: statusLogs } = await serviceClient
+      .from('status_logs')
+      .select('id, status, created_at, changed_by')
+      .eq('escrow_id', (escrow as any).id)
+      .order('created_at', { ascending: true })
+
+    const { data: receipts } = await serviceClient
+      .from('receipts')
+      .select('id, file_path, created_at, uploaded_by')
+      .eq('escrow_id', (escrow as any).id)
+      .order('created_at', { ascending: true })
+
+    return NextResponse.json({
+      ...(escrow as any),
+      status_logs: statusLogs || [],
+      receipts: receipts || []
+    })
 
   } catch (error) {
     console.error('Get escrow by code error:', error)
