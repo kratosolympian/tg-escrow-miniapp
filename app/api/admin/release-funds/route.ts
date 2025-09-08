@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if can transition from completed to closed
-    if (!canTransition(escrow.status, ESCROW_STATUS.CLOSED)) {
+    if (!canTransition(escrow.status as string, ESCROW_STATUS.CLOSED)) {
       return NextResponse.json({ 
         error: 'Cannot release funds in current status' 
       }, { status: 400 })

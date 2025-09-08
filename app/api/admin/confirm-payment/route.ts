@@ -3,6 +3,7 @@ import { createServerClientWithCookies } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition } from '@/lib/status'
 import { z } from 'zod'
+import { Escrow } from '@/lib/types'
 
 const confirmPaymentSchema = z.object({
   escrowId: z.string().uuid()
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
-      .single()
+      .single() as any
 
     if (escrowError || !escrow) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
@@ -37,10 +38,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Update escrow status
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase
       .from('escrows')
       .update({ status: ESCROW_STATUS.PAYMENT_CONFIRMED })
-      .eq('id', escrow.id)
+      .eq('id', escrow.id) as any)
 
     if (updateError) {
       console.error('Error updating escrow:', updateError)
@@ -48,13 +49,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await supabase
+    await (supabase
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,
         status: ESCROW_STATUS.PAYMENT_CONFIRMED,
         changed_by: profile.id
-      })
+      }) as any)
 
     return NextResponse.json({ ok: true })
 
