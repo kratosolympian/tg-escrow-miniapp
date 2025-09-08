@@ -15,20 +15,6 @@ interface CreatedEscrow {
   code: string
 }
 
-// Declare global Telegram type
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initData?: string
-        initDataUnsafe?: any
-        ready?: () => void
-        expand?: () => void
-      }
-    }
-  }
-}
-
 export default function SellerPage() {
   const [form, setForm] = useState<CreateEscrowForm>({
     description: '',
