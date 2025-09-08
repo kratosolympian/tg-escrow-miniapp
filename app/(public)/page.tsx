@@ -3,18 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initData: string
-        ready: () => void
-        expand: () => void
-      }
-    }
-  }
-}
-
 export default function HomePage() {
   const [isInTelegram, setIsInTelegram] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
