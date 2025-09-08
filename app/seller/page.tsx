@@ -23,57 +23,101 @@ export default function SellerPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [createdEscrow, setCreatedEscrow] = useState<CreatedEscrow | null>(null)
-  const [authenticating, setAuthenticating] = useState(false)
+  
+  // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [showAuthForm, setShowAuthForm] = useState(false)
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup')
+  const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
+  const [authLoading, setAuthLoading] = useState(false)
+  
   const router = useRouter()
 
-  // Handle Telegram authentication
+  // Check authentication on load
+  useEffect(() => {
+    checkAuthStatus()
+  }, [])
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch('/api/auth/status')
+      if (response.ok) {
+        setIsAuthenticated(true)
+      } else {
+        setShowAuthForm(true)
+      }
+    } catch (error) {
+      setShowAuthForm(true)
+    }
+  }
+
+  // Handle authentication
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    setError('')
+
+    try {
+      const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/signup'
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authForm)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setIsAuthenticated(true)
+        setShowAuthForm(false)
+      } else {
+        setError(data.error || 'Authentication failed')
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  // Handle Telegram authentication (keep as fallback)
   useEffect(() => {
     const authenticateWithTelegram = async () => {
+      if (isAuthenticated || showAuthForm) return
+
       try {
         // Check if we're in Telegram WebApp
         const telegram = window.Telegram?.WebApp
         const isInTelegram = telegram?.initData
         
         if (isInTelegram && telegram) {
-          setAuthenticating(true)
           const initData = telegram.initData
           
-          if (!initData) {
-            setError('Failed to get Telegram data')
-            return
-          }
+          if (initData) {
+            // Call our Telegram auth endpoint
+            const response = await fetch('/api/auth/telegram', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ initData })
+            })
 
-          // Call our Telegram auth endpoint
-          const response = await fetch('/api/auth/telegram', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData })
-          })
-
-          if (response.ok) {
-            setIsAuthenticated(true)
-            // Initialize Telegram WebApp
-            telegram.ready?.()
-            telegram.expand?.()
-          } else {
-            const errorData = await response.json()
-            setError(errorData.error || 'Authentication failed')
+            if (response.ok) {
+              setIsAuthenticated(true)
+              telegram.ready?.()
+              telegram.expand?.()
+            } else {
+              setShowAuthForm(true)
+            }
           }
-        } else {
-          // Not in Telegram, set authenticated for testing
-          setIsAuthenticated(true)
         }
       } catch (error) {
         console.error('Telegram auth error:', error)
-        setError('Authentication failed')
-      } finally {
-        setAuthenticating(false)
+        setShowAuthForm(true)
       }
     }
 
     authenticateWithTelegram()
-  }, [])
+  }, [isAuthenticated, showAuthForm])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -134,21 +178,103 @@ export default function SellerPage() {
     setError('')
   }
 
-  // Show authentication loading
-  if (authenticating) {
+  // Show authentication form
+  if (showAuthForm) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 flex items-center justify-center">
-        <div className="card text-center max-w-md mx-auto">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold mb-2">Authenticating with Telegram...</h2>
-          <p className="text-gray-600">Please wait while we verify your Telegram account.</p>
+        <div className="card max-w-md mx-auto">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              💼 Seller Account
+            </h1>
+            <p className="text-gray-600">
+              {authMode === 'login' ? 'Sign in to your account' : 'Create your seller account'}
+            </p>
+          </div>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            {authMode === 'signup' && (
+              <div>
+                <label className="label">Full Name</label>
+                <input
+                  type="text"
+                  value={authForm.name}
+                  onChange={(e) => setAuthForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="input"
+                  placeholder="Your full name"
+                  required
+                />
+              </div>
+            )}
+            
+            <div>
+              <label className="label">Email Address</label>
+              <input
+                type="email"
+                value={authForm.email}
+                onChange={(e) => setAuthForm(prev => ({ ...prev, email: e.target.value }))}
+                className="input"
+                placeholder="your@email.com"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="label">Password</label>
+              <input
+                type="password"
+                value={authForm.password}
+                onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
+                className="input"
+                placeholder="••••••••"
+                minLength={6}
+                required
+              />
+            </div>
+
+            {error && (
+              <div className="error-message">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authLoading}
+              className="btn-primary w-full"
+            >
+              {authLoading ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  {authMode === 'login' ? 'Signing In...' : 'Creating Account...'}
+                </div>
+              ) : (
+                authMode === 'login' ? 'Sign In' : 'Create Account'
+              )}
+            </button>
+          </form>
+
+          <div className="text-center mt-4">
+            <button
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'signup' : 'login')
+                setError('')
+              }}
+              className="text-blue-600 hover:text-blue-800"
+            >
+              {authMode === 'login' 
+                ? "Don't have an account? Sign up" 
+                : "Already have an account? Sign in"
+              }
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Show authentication error
-  if (!isAuthenticated && error) {
+  // Show authentication error (old fallback)
+  if (!isAuthenticated && error && !showAuthForm) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-50 p-4 flex items-center justify-center">
         <div className="card text-center max-w-md mx-auto">
