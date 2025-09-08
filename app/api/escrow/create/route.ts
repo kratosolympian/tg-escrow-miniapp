@@ -20,10 +20,13 @@ export async function POST(request: NextRequest) {
     try {
       profile = await requireAuth(supabase)
     } catch (authError) {
-      // Check if we're in development mode and create a test user
-      const isDev = process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'preview'
+      // Check if we should allow test users (for development and testing)
+      const allowTestUsers = process.env.NODE_ENV === 'development' || 
+                            process.env.VERCEL_ENV === 'preview' ||
+                            process.env.VERCEL_ENV === 'development' ||
+                            process.env.NEXT_PUBLIC_APP_URL?.includes('vercel.app')
       
-      if (isDev) {
+      if (allowTestUsers) {
         // Use a consistent test user ID
         const testUserId = 'test-seller-dev'
         
