@@ -8,11 +8,38 @@ export async function getProfile(supabase: SupabaseClient<Database>): Promise<Pr
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single()
+
+    // If profile doesn't exist, create it
+    if (error && error.code === 'PGRST116') {
+      console.log('Profile not found, creating one for user:', user.id)
+      const { data: newProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name || '',
+          role: 'seller'
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('Error creating profile:', createError)
+        return null
+      }
+
+      return newProfile
+    }
+
+    if (error) {
+      console.error('Error getting profile:', error)
+      return null
+    }
 
     return profile
   } catch (error) {
