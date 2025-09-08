@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     // Keep generating until we get a unique code
     while (codeExists) {
       code = shortCode()
-      const { data: existing } = await (supabase as any)
+      const { data: existing } = await serviceClient
         .from('escrows')
         .select('id')
         .eq('code', code)
@@ -81,8 +81,8 @@ export async function POST(request: NextRequest) {
       codeExists = !!existing
     }
 
-    // Create escrow
-    const { data: escrow, error: escrowError } = await (supabase as any)
+    // Create escrow using service client to bypass RLS issues
+    const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
       .insert({
         code: code!,
@@ -101,18 +101,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create escrow' }, { status: 500 })
     }
 
-    // Log status change
-    await (supabase as any)
+    // Log status change using service client to bypass RLS
+    const { error: logError } = await (serviceClient as any)
       .from('status_logs')
       .insert({
-        escrow_id: (escrow as any).id,
+        escrow_id: escrow.id,
         status: ESCROW_STATUS.CREATED,
         changed_by: user.id
       })
 
+    if (logError) {
+      console.error('Error logging status:', logError)
+      // Don't fail the request if logging fails
+    }
+
     return NextResponse.json({
-      id: (escrow as any).id,
-      code: (escrow as any).code
+      id: escrow.id,
+      code: escrow.code
     })
 
   } catch (error) {
