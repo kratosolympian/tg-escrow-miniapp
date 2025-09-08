@@ -15,6 +15,20 @@ interface CreatedEscrow {
   code: string
 }
 
+// Declare global Telegram type
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        initData?: string
+        initDataUnsafe?: any
+        ready?: () => void
+        expand?: () => void
+      }
+    }
+  }
+}
+
 export default function SellerPage() {
   const [form, setForm] = useState<CreateEscrowForm>({
     description: '',
@@ -23,7 +37,57 @@ export default function SellerPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [createdEscrow, setCreatedEscrow] = useState<CreatedEscrow | null>(null)
+  const [authenticating, setAuthenticating] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const router = useRouter()
+
+  // Handle Telegram authentication
+  useEffect(() => {
+    const authenticateWithTelegram = async () => {
+      try {
+        // Check if we're in Telegram WebApp
+        const telegram = window.Telegram?.WebApp
+        const isInTelegram = telegram?.initData
+        
+        if (isInTelegram && telegram) {
+          setAuthenticating(true)
+          const initData = telegram.initData
+          
+          if (!initData) {
+            setError('Failed to get Telegram data')
+            return
+          }
+
+          // Call our Telegram auth endpoint
+          const response = await fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData })
+          })
+
+          if (response.ok) {
+            setIsAuthenticated(true)
+            // Initialize Telegram WebApp
+            telegram.ready?.()
+            telegram.expand?.()
+          } else {
+            const errorData = await response.json()
+            setError(errorData.error || 'Authentication failed')
+          }
+        } else {
+          // Not in Telegram, set authenticated for testing
+          setIsAuthenticated(true)
+        }
+      } catch (error) {
+        console.error('Telegram auth error:', error)
+        setError('Authentication failed')
+      } finally {
+        setAuthenticating(false)
+      }
+    }
+
+    authenticateWithTelegram()
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -82,6 +146,33 @@ export default function SellerPage() {
     setCreatedEscrow(null)
     setForm({ description: '', price: '' })
     setError('')
+  }
+
+  // Show authentication loading
+  if (authenticating) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 flex items-center justify-center">
+        <div className="card text-center max-w-md mx-auto">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold mb-2">Authenticating with Telegram...</h2>
+          <p className="text-gray-600">Please wait while we verify your Telegram account.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show authentication error
+  if (!isAuthenticated && error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-50 p-4 flex items-center justify-center">
+        <div className="card text-center max-w-md mx-auto">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold mb-2">Authentication Failed</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-sm text-gray-500">Please make sure you're accessing this through the Telegram Mini App.</p>
+        </div>
+      </div>
+    )
   }
 
   if (createdEscrow) {
