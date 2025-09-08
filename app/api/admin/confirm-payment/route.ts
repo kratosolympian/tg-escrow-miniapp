@@ -20,11 +20,11 @@ export async function POST(request: NextRequest) {
     const { escrowId } = confirmPaymentSchema.parse(body)
 
     // Get escrow
-    const { data: escrow, error: escrowError } = await supabase
+    const { data: escrow, error: escrowError } = await (supabase as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
-      .single() as any
+      .single()
 
     if (escrowError || !escrow) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
@@ -38,29 +38,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Update escrow status
-    const { error: updateError } = await (supabase
+    const { error: updateError } = await (supabase as any)
       .from('escrows')
       .update({ status: ESCROW_STATUS.PAYMENT_CONFIRMED })
-      .eq('id', escrow.id) as any)
+      .eq('id', escrow.id)
 
     if (updateError) {
-      console.error('Error updating escrow:', updateError)
       return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
     }
 
     // Log status change
-    await (supabase
+    const { error: logError } = await (supabase as any)
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,
-        status: ESCROW_STATUS.PAYMENT_CONFIRMED,
-        changed_by: profile.id
-      }) as any)
+        old_status: escrow.status,
+        new_status: ESCROW_STATUS.PAYMENT_CONFIRMED,
+        changed_by: profile.id,
+        reason: 'Payment confirmed by admin'
+      })
+
+    if (logError) {
+      console.error('Failed to log status change:', logError)
+    }
 
     return NextResponse.json({ ok: true })
 
   } catch (error) {
-    console.error('Confirm payment error:', error)
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
     }

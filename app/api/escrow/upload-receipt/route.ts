@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get escrow
-    const { data: escrow, error: escrowError } = await supabase
+    const { data: escrow, error: escrowError } = await (supabase as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert receipt record
-    const { error: receiptError } = await supabase
+    const { error: receiptError } = await (supabase as any)
       .from('receipts')
       .insert({
         escrow_id: escrow.id,
@@ -90,13 +90,13 @@ export async function POST(request: NextRequest) {
     if (escrow.status === ESCROW_STATUS.WAITING_PAYMENT && 
         canTransition(escrow.status, ESCROW_STATUS.WAITING_ADMIN)) {
       
-      await supabase
+      await (supabase as any)
         .from('escrows')
         .update({ status: ESCROW_STATUS.WAITING_ADMIN })
         .eq('id', escrow.id)
 
       // Log status change
-      await supabase
+      await (supabase as any)
         .from('status_logs')
         .insert({
           escrow_id: escrow.id,

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const { escrowId } = releaseFundsSchema.parse(body)
 
     // Get escrow
-    const { data: escrow, error: escrowError } = await supabase
+    const { data: escrow, error: escrowError } = await (supabase as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -30,14 +30,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if can transition from completed to closed
-    if (!canTransition(escrow.status as string, ESCROW_STATUS.CLOSED)) {
+    if (!canTransition(escrow.status, ESCROW_STATUS.CLOSED)) {
       return NextResponse.json({ 
         error: 'Cannot release funds in current status' 
       }, { status: 400 })
     }
 
     // Update escrow status
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase as any)
       .from('escrows')
       .update({ status: ESCROW_STATUS.CLOSED })
       .eq('id', escrow.id)

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const { escrowId } = refundSchema.parse(body)
 
     // Get escrow
-    const { data: escrow, error: escrowError } = await supabase
+    const { data: escrow, error: escrowError } = await (supabase as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update escrow status to refunded
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase as any)
       .from('escrows')
       .update({ status: ESCROW_STATUS.REFUNDED })
       .eq('id', escrow.id)
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await supabase
+    await (supabase as any)
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,
