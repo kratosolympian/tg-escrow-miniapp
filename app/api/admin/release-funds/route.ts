@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await supabase
+    await (supabase as any)
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,
