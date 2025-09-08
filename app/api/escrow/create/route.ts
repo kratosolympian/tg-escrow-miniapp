@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
-import { requireAuth } from '@/lib/rbac'
 import { shortCode, generateUUID, getFileExtension, isValidImageType } from '@/lib/utils'
 import { ESCROW_STATUS } from '@/lib/status'
 import { z } from 'zod'
@@ -15,8 +14,11 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClientWithCookies()
     const serviceClient = createServiceRoleClient()
     
-    // Require authentication - now works with email/password auth
-    const profile = await requireAuth(supabase)
+    // Get authenticated user directly to bypass profile lookup issue
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
     
     const formData = await request.formData()
     const description = formData.get('description') as string
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       const fileId = generateUUID()
       const extension = getFileExtension(imageFile.name)
       const fileName = `${fileId}.${extension}`
-      const filePath = `${profile.id}/${fileName}`
+      const filePath = `${user.id}/${fileName}`
 
       // Upload to storage using service client
       const { error: uploadError } = await serviceClient.storage
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest) {
       .from('escrows')
       .insert({
         code: code!,
-        seller_id: profile.id,
+        seller_id: user.id,
         description: validDescription,
         price: validPrice,
         admin_fee: 300,
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
       .insert({
         escrow_id: (escrow as any).id,
         status: ESCROW_STATUS.CREATED,
-        changed_by: profile.id
+        changed_by: user.id
       })
 
     return NextResponse.json({
