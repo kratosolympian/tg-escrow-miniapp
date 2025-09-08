@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     // Keep generating until we get a unique code
     while (codeExists) {
       code = shortCode()
-      const { data: existing } = await supabase
+      const { data: existing } = await (supabase as any)
         .from('escrows')
         .select('id')
         .eq('code', code)
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create escrow
-    const { data: escrow, error: escrowError } = await supabase
+    const { data: escrow, error: escrowError } = await (supabase as any)
       .from('escrows')
       .insert({
         code: code!,
@@ -100,17 +100,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await supabase
+    await (supabase as any)
       .from('status_logs')
       .insert({
-        escrow_id: escrow.id,
+        escrow_id: (escrow as any).id,
         status: ESCROW_STATUS.CREATED,
         changed_by: profile.id
       })
 
     return NextResponse.json({
-      id: escrow.id,
-      code: escrow.code
+      id: (escrow as any).id,
+      code: (escrow as any).code
     })
 
   } catch (error) {

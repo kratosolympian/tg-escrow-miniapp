@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    let query = supabase
+    let query = (supabase as any)
       .from('escrows')
       .select(`
         *,
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get total count for pagination
-    let countQuery = supabase
+    let countQuery = (supabase as any)
       .from('escrows')
       .select('*', { count: 'exact', head: true })
 

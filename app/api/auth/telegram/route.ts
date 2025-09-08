@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Create profile
-      const { error: profileError } = await serviceClient
+      const { error: profileError } = await (serviceClient as any)
         .from('profiles')
         .insert({
           id: newUser.user.id,
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       }
     } else if (existingUser.user) {
       // Update profile with telegram_id if not set
-      await serviceClient
+      await (serviceClient as any)
         .from('profiles')
         .upsert({
           id: existingUser.user.id,

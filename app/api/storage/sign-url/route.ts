@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         if (sellerId !== profile.id) {
           // If there's an escrow ID, check escrow access
           if (pathParts.length >= 3) {
-            const { data: escrow } = await supabase
+            const { data: escrow } = await (supabase as any)
               .from('escrows')
               .select('seller_id, buyer_id')
               .eq('id', pathParts[1])
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       if (pathParts.length >= 2) {
         const escrowId = pathParts[0]
         
-        const { data: escrow } = await supabase
+        const { data: escrow } = await (supabase as any)
           .from('escrows')
           .select('seller_id, buyer_id')
           .eq('id', escrowId)

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const { code } = joinEscrowSchema.parse(body)
 
     // Find escrow by code
-    const { data: escrow, error: findError } = await supabase
+    const { data: escrow, error: findError } = await (supabase as any)
       .from('escrows')
       .select('*')
       .eq('code', code.toUpperCase())
@@ -49,13 +49,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Update escrow with buyer and new status
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase as any)
       .from('escrows')
       .update({
         buyer_id: profile.id,
         status: ESCROW_STATUS.WAITING_PAYMENT
       })
-      .eq('id', escrow.id)
+      .eq('id', (escrow as any).id)
 
     if (updateError) {
       console.error('Error updating escrow:', updateError)
@@ -63,15 +63,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await supabase
+    await (supabase as any)
       .from('status_logs')
       .insert({
-        escrow_id: escrow.id,
+        escrow_id: (escrow as any).id,
         status: ESCROW_STATUS.WAITING_PAYMENT,
         changed_by: profile.id
       })
 
-    return NextResponse.json({ ok: true, escrowId: escrow.id })
+    return NextResponse.json({ ok: true, escrowId: (escrow as any).id })
 
   } catch (error) {
     console.error('Join escrow error:', error)

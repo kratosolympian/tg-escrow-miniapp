@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     await requireAuth(supabase)
     
     // Get latest bank settings
-    const { data: settings, error } = await supabase
+    const { data: settings, error } = await (supabase as any)
       .from('admin_settings')
       .select('bank_name, account_number, account_holder, updated_at')
       .order('updated_at', { ascending: false })

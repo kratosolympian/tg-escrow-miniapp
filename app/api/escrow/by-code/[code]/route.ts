@@ -11,7 +11,7 @@ export async function GET(
     const profile = await getProfile(supabase)
 
     // Find escrow by code
-    const { data: escrow, error: findError } = await supabase
+    const { data: escrow, error: findError } = await (supabase as any)
       .from('escrows')
       .select(`
         *,
