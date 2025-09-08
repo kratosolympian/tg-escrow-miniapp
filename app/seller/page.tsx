@@ -43,10 +43,13 @@ export default function SellerPage() {
       const response = await fetch('/api/auth/status')
       if (response.ok) {
         setIsAuthenticated(true)
+        setShowAuthForm(false)
       } else {
+        setIsAuthenticated(false)
         setShowAuthForm(true)
       }
     } catch (error) {
+      setIsAuthenticated(false)
       setShowAuthForm(true)
     }
   }
@@ -83,7 +86,8 @@ export default function SellerPage() {
   // Handle Telegram authentication (keep as fallback)
   useEffect(() => {
     const authenticateWithTelegram = async () => {
-      if (isAuthenticated || showAuthForm) return
+      // Only try Telegram auth if we've already determined the user is not authenticated
+      if (isAuthenticated || !showAuthForm) return
 
       try {
         // Check if we're in Telegram WebApp
@@ -103,16 +107,17 @@ export default function SellerPage() {
 
             if (response.ok) {
               setIsAuthenticated(true)
+              setShowAuthForm(false)
               telegram.ready?.()
               telegram.expand?.()
-            } else {
-              setShowAuthForm(true)
             }
+            // If Telegram auth fails, keep showAuthForm = true to show email/password form
           }
         }
+        // If not in Telegram, keep showAuthForm = true to show email/password form
       } catch (error) {
         console.error('Telegram auth error:', error)
-        setShowAuthForm(true)
+        // Keep showAuthForm = true to show email/password form
       }
     }
 
