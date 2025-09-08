@@ -20,8 +20,15 @@ export async function POST(request: NextRequest) {
 
     const telegramUser = verifyTelegramInitData(initData, botToken)
     if (!telegramUser) {
+      console.error('Telegram verification failed for initData:', initData.substring(0, 50) + '...')
       return NextResponse.json({ error: 'Invalid Telegram data' }, { status: 401 })
     }
+
+    console.log('Telegram user verified:', {
+      id: telegramUser.id,
+      first_name: telegramUser.first_name,
+      username: telegramUser.username
+    })
 
     // Create service role client for admin operations
     const serviceClient = createServiceRoleClient()
@@ -49,7 +56,11 @@ export async function POST(request: NextRequest) {
 
       if (createError || !newUser.user) {
         console.error('Error creating user:', createError)
-        return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
+        console.error('User creation failed for email:', email)
+        return NextResponse.json({ 
+          error: 'Failed to create user', 
+          details: createError?.message || 'Unknown error'
+        }, { status: 500 })
       }
 
       // Create profile
@@ -57,13 +68,20 @@ export async function POST(request: NextRequest) {
         .from('profiles')
         .insert({
           id: newUser.user.id,
+          email: email,
           telegram_id: telegramUser.id.toString(),
-          role: 'buyer'
+          role: 'seller', // Default to seller for escrow creation
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
 
       if (profileError) {
         console.error('Error creating profile:', profileError)
-        return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
+        console.error('Profile creation failed for user:', newUser.user.id)
+        return NextResponse.json({ 
+          error: 'Failed to create profile', 
+          details: profileError.message || 'Unknown error'
+        }, { status: 500 })
       }
     } else if (existingUser.user) {
       // Update profile with telegram_id if not set
