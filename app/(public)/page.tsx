@@ -10,12 +10,13 @@ export default function HomePage() {
   useEffect(() => {
     // Check if we're in Telegram WebApp
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      const webApp = window.Telegram.WebApp
       setIsInTelegram(true)
-      window.Telegram.WebApp.ready()
-      window.Telegram.WebApp.expand()
+      webApp.ready?.()
+      webApp.expand?.()
 
       // Auto-authenticate with Telegram
-      const initData = window.Telegram.WebApp.initData
+      const initData = webApp.initData
       if (initData) {
         authenticateWithTelegram(initData)
       }
