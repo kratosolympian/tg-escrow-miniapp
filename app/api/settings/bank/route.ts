@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
-import { requireAuth } from '@/lib/rbac'
+import { createServiceRoleClient } from '@/lib/supabaseServer'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
+    // Use service role client for public access to bank settings
+    const supabase = createServiceRoleClient()
     
-    // Require authentication
-    await requireAuth(supabase)
-    
-    // Get latest bank settings
+    // First try to read canonical settings row (id = 1)
+    const { data: canonical, error: canonErr } = await (supabase as any)
+      .from('admin_settings')
+      .select('bank_name, account_number, account_holder, updated_at')
+      .eq('id', 1)
+      .single()
+
+    if (!canonErr && canonical) {
+      return NextResponse.json(canonical, { status: 200, headers: { 'Cache-Control': 'no-store' } })
+    }
+
+    // Fallback to latest row by updated_at
     const { data: settings, error } = await (supabase as any)
       .from('admin_settings')
       .select('bank_name, account_number, account_holder, updated_at')
@@ -22,7 +30,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No bank settings configured' }, { status: 404 })
     }
 
-    return NextResponse.json(settings)
+    return NextResponse.json(settings, { status: 200, headers: { 'Cache-Control': 'no-store' } })
 
   } catch (error) {
     console.error('Get bank settings error:', error)

@@ -37,6 +37,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create user' }, { status: 400 })
     }
 
+    // Attempt to sign the user in immediately so a session cookie is established
+    try {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInError) {
+        console.warn('Sign-in after signup failed:', signInError)
+        // continue — signup succeeded but no session was created
+      } else {
+        // signInData may contain session info; cookies are set via the server client
+        console.log('User signed in after signup:', signInData?.user?.id)
+      }
+    } catch (e) {
+      console.warn('Error signing in after signup:', e)
+    }
+
     // Create profile using service client
     const { error: profileError } = await (serviceClient as any)
       .from('profiles')
@@ -54,18 +68,34 @@ export async function POST(request: NextRequest) {
       // Continue anyway, profile might be created by trigger
     }
 
-    return NextResponse.json({ 
-      user: {
-        id: authData.user.id,
-        email: authData.user.email
-      }
-    })
+    // Generate a one-time token clients can use immediately to authenticate a follow-up action
+    try {
+      const { createOneTimeToken } = await import('@/lib/ephemeralAuth')
+      const token = createOneTimeToken(authData.user.id, 300) // 5 minutes
+      return NextResponse.json({ 
+        user: {
+          id: authData.user.id,
+          email: authData.user.email
+        },
+        __one_time_token: token
+      })
+    } catch (e) {
+      return NextResponse.json({ 
+        user: {
+          id: authData.user.id,
+          email: authData.user.email
+        }
+      })
+    }
 
   } catch (error) {
     console.error('Signup route error:', error)
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    // Return the error message for easier local debugging. Do not expose
+    // sensitive details in production.
+    const msg = (error && (error as any).message) ? (error as any).message : 'Internal server error'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

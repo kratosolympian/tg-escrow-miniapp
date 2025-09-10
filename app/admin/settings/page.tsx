@@ -17,13 +17,25 @@ export default function AdminSettingsPage() {
     account_number: '',
     account_holder: ''
   })
+  const [profileBank, setProfileBank] = useState({ bank_name: '', account_number: '', account_holder: '' })
+  const [presenceLoading, setPresenceLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [user, setUser] = useState<any | null>(null)
 
   useEffect(() => {
-    fetchBankSettings()
+  fetchBankSettings()
+    ;(async () => {
+      try {
+        const { supabase } = await import('@/lib/supabaseClient')
+        const { data } = await supabase.auth.getUser()
+        setUser(data?.user ?? null)
+      } catch (e) {
+        console.error('Failed to get user on mount', e)
+      }
+    })()
   }, [])
 
   const fetchBankSettings = async () => {
@@ -37,6 +49,12 @@ export default function AdminSettingsPage() {
           account_number: data.account_number,
           account_holder: data.account_holder
         })
+        // fetch profile banking via dedicated endpoint
+        const pb = await fetch('/api/profile/banking')
+        if (pb.ok) {
+          const pjson = await pb.json()
+          setProfileBank({ bank_name: pjson.profile?.bank_name || '', account_number: pjson.profile?.account_number || '', account_holder: pjson.profile?.account_holder_name || '' })
+        }
       }
     } catch (error) {
       console.error('Error fetching bank settings:', error)
@@ -64,13 +82,18 @@ export default function AdminSettingsPage() {
         },
         body: JSON.stringify(form)
       })
-
-      if (response.ok) {
+      const data = await response.json().catch(() => null)
+      if (response.ok && data && data.settings) {
         setSuccess('Bank settings updated successfully!')
-        fetchBankSettings()
+        // Update UI from POST response instead of refetching
+        setCurrentSettings(data.settings)
+        setForm({
+          bank_name: data.settings.bank_name,
+          account_number: data.settings.account_number,
+          account_holder: data.settings.account_holder
+        })
       } else {
-        const data = await response.json()
-        setError(data.error || 'Failed to update settings')
+        setError((data && data.error) || 'Failed to update settings')
       }
     } catch (error) {
       console.error('Error updating settings:', error)
@@ -80,9 +103,51 @@ export default function AdminSettingsPage() {
     }
   }
 
+  const saveProfileBank = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const res = await fetch('/api/admin/update-bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profileBank }) })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error || 'Failed to update profile bank')
+      } else {
+        setSuccess('Profile bank updated')
+      }
+    } catch (e) {
+      console.error('Save profile bank error:', e)
+      setError('Failed to update profile bank')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const togglePresence = async () => {
+    if (!user) return
+    setPresenceLoading(true)
+    try {
+      const res = await fetch('/api/admin/set-presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_online: !(profileBank as any).is_online }) })
+      if (res.ok) {
+        const json = await res.json()
+        // refresh profile banking
+        const pb = await fetch('/api/profile/banking')
+        if (pb.ok) {
+          const pjson = await pb.json()
+          setProfileBank({ bank_name: pjson.profile?.bank_name || '', account_number: pjson.profile?.account_number || '', account_holder: pjson.profile?.account_holder_name || '' })
+        }
+      }
+    } catch (e) {
+      console.error('Toggle presence error:', e)
+    } finally {
+      setPresenceLoading(false)
+    }
+  }
+
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
       window.location.href = '/'
     } catch (error) {
       console.error('Logout error:', error)
@@ -111,9 +176,11 @@ export default function AdminSettingsPage() {
             </Link>
             <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
           </div>
-          <button onClick={handleLogout} className="btn-secondary">
-            🚪 Logout
-          </button>
+          {user && (
+            <button onClick={handleLogout} className="btn-secondary">
+              🚪 Logout
+            </button>
+          )}
         </div>
       </div>
 

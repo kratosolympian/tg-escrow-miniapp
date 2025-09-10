@@ -1,11 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatNaira } from '@/lib/utils'
 import { getStatusLabel, getStatusColor } from '@/lib/status'
+import EscrowChat from '@/components/EscrowChat'
+
+interface User {
+  id: string
+  email: string
+}
 
 interface Escrow {
   id: string
@@ -43,10 +49,22 @@ export default function BuyerEscrowPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  
+  // Authentication states
+  const [user, setUser] = useState<User | null>(null)
+  const [showAuthForm, setShowAuthForm] = useState(false)
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup')
+  const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
+  const [authLoading, setAuthLoading] = useState(false)
+  const [joining, setJoining] = useState(false)
+  const authFormRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    checkAuthStatus()
     fetchEscrow()
     fetchBankSettings()
+    fetchCurrentUser()
   }, [code])
 
   useEffect(() => {
@@ -81,6 +99,120 @@ export default function BuyerEscrowPage() {
       }
     } catch (error) {
       console.error('Error fetching bank settings:', error)
+    }
+  }
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch('/api/auth/status')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.authenticated) {
+          setUser(data.user)
+          setShowAuthForm(false)
+        } else {
+          setUser(null)
+        }
+      }
+    } catch (error) {
+      console.error('Auth check error:', error)
+      setUser(null)
+    }
+  }
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/auth/me')
+      if (response.ok) {
+        const data = await response.json()
+        setCurrentUser(data)
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error)
+    }
+  }
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    setError('')
+
+    try {
+      const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/signup'
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(authForm)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setUser(data.user)
+        setShowAuthForm(false)
+        setAuthForm({ email: '', password: '', name: '' })
+        setSuccess(authMode === 'login' ? 'Logged in successfully!' : 'Account created successfully!')
+        // If the transaction is joinable, attempt to join automatically after auth
+        try {
+          if (escrow && escrow.status === 'created' && !escrow.buyer_id && escrow.seller_id !== data.user.id) {
+            // attempt join using credentials-aware request
+            const joinRes = await fetch('/api/escrow/join', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ code: escrow.code })
+            })
+            const joinJson = await joinRes.json().catch(() => null)
+            if (joinRes.ok) {
+              setSuccess('Successfully joined the transaction!')
+              fetchEscrow()
+            } else {
+              // don't overwrite existing success message
+              setError(joinJson?.error || 'Failed to join transaction after login')
+            }
+          }
+        } catch (joinErr) {
+          console.error('Auto-join after auth error:', joinErr)
+        }
+      } else {
+        setError(data.error || 'Authentication failed')
+      }
+    } catch (error) {
+      console.error('Auth error:', error)
+      setError('Authentication failed. Please try again.')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleJoinTransaction = async () => {
+    if (!user || !escrow) return
+
+    setJoining(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/escrow/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+  credentials: 'include',
+  body: JSON.stringify({ code: escrow.code })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setSuccess('Successfully joined the transaction!')
+        fetchEscrow() // Refresh to show updated status
+      } else {
+        setError(data.error || 'Failed to join transaction')
+      }
+    } catch (error) {
+      console.error('Join error:', error)
+      setError('Failed to join transaction. Please try again.')
+    } finally {
+      setJoining(false)
     }
   }
 
@@ -193,6 +325,27 @@ export default function BuyerEscrowPage() {
   const totalAmount = escrow.price + escrow.admin_fee
   const canUploadReceipt = escrow.status === 'waiting_payment' || escrow.status === 'waiting_admin'
   const canConfirmReceived = escrow.status === 'in_progress'
+  
+  // Check if user can join this transaction
+  // For public view, we use has_buyer field since seller_id/buyer_id are not returned when not authenticated
+  const canJoinTransaction = escrow.status === 'created' && !escrow.buyer_id && (!user || escrow.seller_id !== user.id) 
+  const canJoinPublic = escrow.status === 'created' && !(escrow as any).has_buyer // For unauthenticated users
+  const isUserBuyer = user && escrow.buyer_id === user.id
+  const isUserSeller = user && escrow.seller_id === user.id
+  const needsAuthentication = (canJoinTransaction || canJoinPublic) && !user
+
+  console.log('DEBUG - Conditional variables:', {
+    escrowStatus: escrow.status,
+    buyerId: escrow.buyer_id,
+    sellerId: escrow.seller_id,
+    hasBuyer: (escrow as any).has_buyer,
+    userId: user?.id,
+    canJoinTransaction,
+    canJoinPublic,
+    isUserBuyer,
+    isUserSeller,
+    needsAuthentication
+  })
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -248,8 +401,153 @@ export default function BuyerEscrowPage() {
           </div>
         </div>
 
+        {/* Prominent Auth Banner for buyers who need to sign in */}
+        {needsAuthentication && !showAuthForm && (
+          <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-blue-800">Sign in to Join</h3>
+              <p className="text-sm text-blue-700">Create an account or sign in to join this transaction and make a payment.</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setAuthMode('signup'); setShowAuthForm(true); setTimeout(() => authFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150) }}
+                className="btn-primary"
+              >
+                Sign Up
+              </button>
+              <button
+                onClick={() => { setAuthMode('login'); setShowAuthForm(true); setTimeout(() => authFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150) }}
+                className="btn-secondary"
+              >
+                Login
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Join Transaction Section */}
+        {needsAuthentication && (
+          <div className="card mb-6">
+            <h2 className="text-xl font-semibold mb-4">🔑 Join This Transaction</h2>
+            <p className="text-gray-600 mb-4">
+              To join this transaction, you need to create an account or sign in.
+            </p>
+            
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => { setAuthMode('signup'); setShowAuthForm(true); }}
+                className={`px-4 py-2 rounded-lg ${authMode === 'signup' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+              >
+                Sign Up
+              </button>
+              <button
+                onClick={() => { setAuthMode('login'); setShowAuthForm(true); }}
+                className={`px-4 py-2 rounded-lg ${authMode === 'login' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+              >
+                Login
+              </button>
+            </div>
+
+            {showAuthForm && (
+              <div ref={authFormRef}>
+              <form onSubmit={handleAuth} className="space-y-4">
+                {authMode === 'signup' && (
+                  <div>
+                    <label htmlFor="name" className="label">Full Name</label>
+                    <input
+                      type="text"
+                      id="name"
+                      value={authForm.name}
+                      onChange={(e) => setAuthForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="input"
+                      required
+                      disabled={authLoading}
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <label htmlFor="email" className="label">Email</label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={authForm.email}
+                    onChange={(e) => setAuthForm(prev => ({ ...prev, email: e.target.value }))}
+                    className="input"
+                    required
+                    disabled={authLoading}
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="password" className="label">Password</label>
+                  <input
+                    type="password"
+                    id="password"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
+                    className="input"
+                    required
+                    disabled={authLoading}
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="btn-primary w-full"
+                >
+                  {authLoading ? 'Processing...' : (authMode === 'login' ? 'Sign In' : 'Create Account')}
+                </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Join Transaction Button */}
+        {canJoinTransaction && user && (
+          <div className="card mb-6">
+            <h2 className="text-xl font-semibold mb-4">🚀 Ready to Join?</h2>
+            <p className="text-gray-600 mb-4">
+              Join this transaction to proceed with the purchase. You'll be able to make payment and track the progress.
+            </p>
+            
+            <button
+              onClick={handleJoinTransaction}
+              disabled={joining}
+              className="btn-primary w-full"
+            >
+              {joining ? 'Joining Transaction...' : 'Join Transaction'}
+            </button>
+          </div>
+        )}
+
+        {/* User Status Information */}
+        {isUserSeller && (
+          <div className="card mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <h3 className="font-semibold text-blue-800 mb-2">👨‍💼 You are the seller</h3>
+              <p className="text-blue-600">
+                This is your transaction. Share the code <strong>{escrow.code}</strong> with your buyer.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {escrow.buyer_id && !isUserBuyer && !isUserSeller && (
+          <div className="card mb-6">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+              <h3 className="font-semibold text-yellow-800 mb-2">⚠️ Transaction Unavailable</h3>
+              <p className="text-yellow-600">
+                This transaction already has a buyer and is no longer available to join.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Bank Details */}
-        {bankSettings && (
+        {bankSettings && (isUserBuyer || (canUploadReceipt && user)) && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">💳 Payment Details</h2>
             <div className="space-y-3">
@@ -274,7 +572,7 @@ export default function BuyerEscrowPage() {
         )}
 
         {/* Receipt Upload */}
-        {canUploadReceipt && (
+        {canUploadReceipt && isUserBuyer && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">📄 Upload Payment Receipt</h2>
             <div className="space-y-4">
@@ -305,7 +603,7 @@ export default function BuyerEscrowPage() {
         )}
 
         {/* Confirm Received */}
-        {canConfirmReceived && (
+        {canConfirmReceived && isUserBuyer && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">✅ Confirm Product Received</h2>
             <p className="text-gray-600 mb-4">
@@ -317,6 +615,18 @@ export default function BuyerEscrowPage() {
             >
               Confirm Received
             </button>
+          </div>
+        )}
+
+        {/* Communication Chat */}
+        {escrow.seller && isUserBuyer && currentUser && (
+          <div className="card mb-6">
+            <h2 className="text-xl font-semibold mb-4">💬 Communication</h2>
+            <EscrowChat 
+              escrowId={escrow.id}
+              currentUserId={currentUser.id}
+              isAdmin={false}
+            />
           </div>
         )}
 
@@ -334,7 +644,7 @@ export default function BuyerEscrowPage() {
         )}
 
         {/* Receipt Status */}
-        {escrow.receipts && escrow.receipts.length > 0 && (
+        {escrow.receipts && escrow.receipts.length > 0 && isUserBuyer && (
           <div className="card">
             <h2 className="text-xl font-semibold mb-4">Receipt Status</h2>
             <div className="bg-green-50 border border-green-200 rounded-xl p-4">

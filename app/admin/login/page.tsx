@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
+// Using server-side login endpoint to set HTTP-only session cookie
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -11,46 +11,30 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password })
       })
 
-      if (error) {
-        setError(error.message)
-        return
+      const data = await res.json().catch(() => null)
+
+      if (res.ok) {
+        // Server should set HTTP-only cookie; redirect to dashboard
+        window.location.replace('/admin/dashboard')
+      } else {
+        setError(data?.error || 'Login failed')
       }
-
-      // Check if user is admin
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single()
-
-      if (profileError || !profile) {
-        setError('Profile not found')
-        await supabase.auth.signOut()
-        return
-      }
-
-      if (profile.role !== 'admin') {
-        setError('Admin access required')
-        await supabase.auth.signOut()
-        return
-      }
-
-      router.push('/admin/dashboard')
-    } catch (error) {
-      console.error('Login error:', error)
-      setError('Login failed')
+    } catch (err) {
+      console.error('Login error:', err)
+      setError('Network error. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -72,13 +56,16 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="card">
-          <form onSubmit={handleLogin} className="space-y-6">
+          {/* Use a plain HTML form so the server can set the HTTP-only cookie and return a redirect
+              in the same response. This avoids fetch + client-side navigation timing issues. */}
+          <form method="post" action="/api/auth/login" className="space-y-6">
             <div>
               <label htmlFor="email" className="label">
                 Email Address
               </label>
               <input
                 type="email"
+                name="email"
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -95,10 +82,11 @@ export default function AdminLoginPage() {
               </label>
               <input
                 type="password"
+                name="password"
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder=""
                 className="input"
                 required
                 disabled={loading}
@@ -111,12 +99,8 @@ export default function AdminLoginPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading || !email || !password}
-              className="btn-primary w-full"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
+            <button type="submit" className="btn-primary w-full">
+              Sign In
             </button>
           </form>
 
