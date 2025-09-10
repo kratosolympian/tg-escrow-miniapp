@@ -1,13 +1,21 @@
 -- Enable required extensions
 create extension if not exists pgcrypto;
 
--- Profiles mirror auth.users, hold telegram mapping + role
+-- Profiles mirror auth.users, hold telegram mapping + role + banking info
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
   telegram_id text unique,
   role text check (role in ('buyer','seller','admin')) default 'buyer',
+  -- Banking information for payments/refunds
+  bank_name text,
+  account_number text,
+  account_holder_name text,
+  bvn text, -- Bank Verification Number for Nigerian banks
+  phone_number text,
+  -- Profile completion tracking
+  profile_completed boolean default false,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );
@@ -73,6 +81,27 @@ create table if not exists disputes (
   status text check (status in ('open','resolved','rejected')) default 'open',
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
+);
+
+-- Chat messages for escrow transactions
+create table if not exists chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  escrow_id uuid not null references escrows(id) on delete cascade,
+  sender_id uuid not null references profiles(id) on delete cascade,
+  message text not null,
+  message_type text check (message_type in ('text', 'system', 'warning')) default 'text',
+  is_read boolean default false,
+  created_at timestamp with time zone default now()
+);
+
+-- Chat participants (to track who has access to chat)
+create table if not exists chat_participants (
+  id uuid primary key default gen_random_uuid(),
+  escrow_id uuid not null references escrows(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  joined_at timestamp with time zone default now(),
+  last_read_at timestamp with time zone default now(),
+  unique(escrow_id, user_id)
 );
 
 -- Simple trigger to keep updated_at fresh

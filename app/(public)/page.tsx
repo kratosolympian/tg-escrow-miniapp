@@ -55,7 +55,6 @@ export default function HomePage() {
           </p>
           {isInTelegram && (
             <div className="mt-4 p-3 bg-blue-100 rounded-xl text-blue-800">
-              📱 Running inside Telegram WebApp
               {isAuthenticated && ' - Authenticated ✅'}
             </div>
           )}

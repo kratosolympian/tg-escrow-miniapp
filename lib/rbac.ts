@@ -1,3 +1,9 @@
+// RBAC utility for super admin check
+const SUPER_ADMIN_EMAIL = 'ceo@kratos.ng'
+
+export function isSuperAdmin(email: string): boolean {
+  return email === SUPER_ADMIN_EMAIL
+}
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './supabaseClient'
 
@@ -50,7 +56,7 @@ export async function getProfile(supabase: SupabaseClient<Database>): Promise<Pr
 
 export async function requireRole(
   supabase: SupabaseClient<Database>,
-  requiredRole: 'buyer' | 'seller' | 'admin'
+  requiredRole: 'buyer' | 'seller' | 'admin' | 'super_admin'
 ): Promise<Profile> {
   const profile = await getProfile(supabase)
   
@@ -58,7 +64,9 @@ export async function requireRole(
     throw new Error('Authentication required')
   }
   
-  if (profile.role !== requiredRole && profile.role !== 'admin') {
+  // super_admin should be treated as admin for permission checks
+  const roleStr = String(profile.role)
+  if (roleStr !== requiredRole && roleStr !== 'admin' && roleStr !== 'super_admin') {
     throw new Error(`${requiredRole} role required`)
   }
   
@@ -76,7 +84,8 @@ export async function requireAuth(supabase: SupabaseClient<Database>): Promise<P
 }
 
 export function isAdmin(profile: Profile): boolean {
-  return profile.role === 'admin'
+  const roleVal = String(profile.role)
+  return roleVal === 'admin' || roleVal === 'super_admin'
 }
 
 export function canAccessEscrow(

@@ -1,0 +1,10 @@
+tests/admin-login.spec.ts
+README.md
+SQL/schema.sql
+SQL/rls.sql
+SQL/storage.sql
+SQL/add_super_admin.sql
+SQL/add_admin_profile.sql
+SQL/add_super_admin_role.sql
+SQL/profiles_dump.sql
+.github/copilot-instructions.md

@@ -1,0 +1,20 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Playwright admin login test",
+			"type": "shell",
+			"command": "npx playwright test --grep \"admin login\""
+		},
+		{
+			"label": "Run Playwright admin login test",
+			"type": "shell",
+			"command": "npx playwright test --grep \"admin login\""
+		},
+		{
+			"label": "Run Playwright admin login test",
+			"type": "shell",
+			"command": "npx playwright test --grep \"admin login\""
+		}
+	]
+}

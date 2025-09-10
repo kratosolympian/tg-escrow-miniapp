@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { formatNaira } from '@/lib/utils'
 import { getStatusLabel, getStatusColor } from '@/lib/status'
 import StatusBadge from '@/components/StatusBadge'
+import EscrowChat from '@/components/EscrowChat'
 
 interface Escrow {
   id: string
@@ -45,9 +46,20 @@ export default function SellerEscrowPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)
 
   useEffect(() => {
     fetchEscrow()
+    fetchCurrentUser()
+    const interval = setInterval(() => {
+      // poll escrow to pick up status changes, but only if escrow loaded
+      if (escrow) {
+        // refresh every 15s
+        fetchEscrow()
+      }
+    }, 15000)
+    return () => clearInterval(interval)
   }, [id])
 
   useEffect(() => {
@@ -56,6 +68,39 @@ export default function SellerEscrowPage() {
     }
     if (escrow?.receipts) {
       fetchReceiptImages()
+    }
+    // compute expiry timestamp: prefer expires_at, otherwise fallback to created_at + 30 minutes
+    const expiresIso = (escrow as any)?.expires_at ?? null
+    let expiryTs: number | null = null
+
+    if (expiresIso) {
+      expiryTs = new Date(expiresIso).getTime()
+    } else if (escrow?.created_at) {
+      expiryTs = new Date(escrow.created_at).getTime() + 30 * 60 * 1000
+    }
+
+    // only show a countdown for active waiting_payment escrows with a future expiry
+    if (escrow?.status === 'waiting_payment' && expiryTs && expiryTs > Date.now()) {
+      const diff = Math.max(0, Math.floor((expiryTs - Date.now()) / 1000))
+      setTimeLeft(diff)
+
+      // start countdown tick
+      const tid = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev === null) return null
+          if (prev <= 1) {
+            // expired - refresh
+            fetchEscrow()
+            clearInterval(tid)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+
+      return () => clearInterval(tid)
+    } else {
+      setTimeLeft(null)
     }
   }, [escrow])
 
@@ -73,6 +118,18 @@ export default function SellerEscrowPage() {
       setError('Failed to load transaction')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/auth/me')
+      if (response.ok) {
+        const data = await response.json()
+        setCurrentUser(data)
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error)
     }
   }
 
@@ -209,6 +266,9 @@ export default function SellerEscrowPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold">Transaction {escrow.code}</h1>
+              {timeLeft !== null && (
+                <div className="text-sm text-gray-600 mt-1">Time left to pay: {new Date(timeLeft * 1000).toISOString().substr(11, 8)}</div>
+              )}
               <button 
                 onClick={copyCode}
                 className="text-sm text-blue-600 hover:text-blue-800 mt-1"
@@ -337,6 +397,18 @@ export default function SellerEscrowPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Communication Chat */}
+        {escrow.buyer && currentUser && (
+          <div className="card mb-6">
+            <h2 className="text-xl font-semibold mb-4">💬 Communication</h2>
+            <EscrowChat 
+              escrowId={escrow.id}
+              currentUserId={currentUser.id}
+              isAdmin={false}
+            />
           </div>
         )}
 

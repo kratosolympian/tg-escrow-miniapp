@@ -23,6 +23,8 @@ export default function SellerPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [createdEscrow, setCreatedEscrow] = useState<CreatedEscrow | null>(null)
+  const [onlineAdmins, setOnlineAdmins] = useState<Array<any>>([])
+  const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null)
   
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -36,7 +38,20 @@ export default function SellerPage() {
   // Check authentication on load
   useEffect(() => {
     checkAuthStatus()
+    fetchOnlineAdmins()
   }, [])
+
+  const fetchOnlineAdmins = async () => {
+    try {
+      const res = await fetch('/api/admin/online-admins')
+      if (res.ok) {
+        const data = await res.json()
+        setOnlineAdmins(data.admins || [])
+      }
+    } catch (e) {
+      console.error('Error fetching admins', e)
+    }
+  }
 
   const checkAuthStatus = async () => {
     try {
@@ -150,6 +165,9 @@ export default function SellerPage() {
       if (form.image) {
         formData.append('image', form.image)
       }
+      if (selectedAdmin) {
+        formData.append('assigned_admin_id', selectedAdmin)
+      }
 
       const response = await fetch('/api/escrow/create', {
         method: 'POST',
@@ -181,6 +199,33 @@ export default function SellerPage() {
     setCreatedEscrow(null)
     setForm({ description: '', price: '' })
     setError('')
+  }
+
+  const handleLogout = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST'
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(false)
+        setShowAuthForm(true)
+        setAuthForm({ email: '', password: '', name: '' })
+        setAuthMode('signup')
+        setError('')
+        router.push('/')
+      } else {
+        const data = await response.json()
+        setError(data.error || 'Logout failed')
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Show authentication form
@@ -434,6 +479,19 @@ export default function SellerPage() {
               </p>
             </div>
 
+            {onlineAdmins && onlineAdmins.length > 0 && (
+              <div>
+                <label htmlFor="assigned_admin" className="label">Assign an Online Admin (optional)</label>
+                <select id="assigned_admin" value={selectedAdmin || ''} onChange={(e) => setSelectedAdmin(e.target.value)} className="input">
+                  <option value="">-- Choose an online admin --</option>
+                  {onlineAdmins.map((a: any) => (
+                    <option key={a.id} value={a.id}>{a.full_name || a.email || a.telegram_id}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-500">Pick an online admin to handle this transaction (optional).</p>
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">
                 {error}
@@ -469,6 +527,8 @@ export default function SellerPage() {
             </div>
           )}
         </div>
+
+  {isAuthenticated && <button onClick={handleLogout} className="btn-secondary mt-4">🚪 Logout</button>}
       </div>
     </div>
   )

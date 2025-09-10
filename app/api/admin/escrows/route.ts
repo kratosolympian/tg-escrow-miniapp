@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
-import { requireRole } from '@/lib/rbac'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
-    
-    // Require admin role
-    await requireRole(supabase, 'admin')
+    // Use service role client for admin operations
+    const supabase = createServiceRoleClient()
     
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -72,4 +69,18 @@ export async function GET(request: NextRequest) {
     console.error('Admin escrows error:', error)
     return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 })
   }
+}
+
+export async function POST(request: Request) {
+  // Create Supabase service role client
+  const supabase = createServiceRoleClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  const userEmail = session?.user?.email
+
+  // Only super admin can add/remove admins
+  if (userEmail !== 'ceo@kratos.ng') {
+    return NextResponse.json({ error: 'Forbidden: Only super admin can manage admins.' }, { status: 403 })
+  }
+
+  // ...existing code for admin management (add/remove)...
 }

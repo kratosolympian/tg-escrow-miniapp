@@ -1,0 +1,12 @@
+PAYMENT RECEIPT
+===============
+Date: September 8, 2025
+Amount: ₦5,300.00
+From: Shady John (shadyjohn@yahoo.com)
+To: ESCROW SERVICES LTD
+Account: 1234567890
+Bank: First Bank of Nigeria
+Transaction Reference: TXN12345678
+Status: SUCCESSFUL
+
+This is a test receipt for escrow transaction MFBATB37RNN7

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
-import { requireRole } from '@/lib/rbac'
+import { createServiceRoleClient } from '@/lib/supabaseServer'
 import { ESCROW_STATUS, canTransition } from '@/lib/status'
 import { z } from 'zod'
 import { Escrow } from '@/lib/types'
@@ -11,10 +10,8 @@ const confirmPaymentSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
-    
-    // Require admin role
-    const profile = await requireRole(supabase, 'admin')
+    // Use service role client for admin operations
+    const supabase = createServiceRoleClient()
     
     const body = await request.json()
     const { escrowId } = confirmPaymentSchema.parse(body)
@@ -54,7 +51,7 @@ export async function POST(request: NextRequest) {
         escrow_id: escrow.id,
         old_status: escrow.status,
         new_status: ESCROW_STATUS.PAYMENT_CONFIRMED,
-        changed_by: profile.id,
+        changed_by: null, // Admin action
         reason: 'Payment confirmed by admin'
       })
 

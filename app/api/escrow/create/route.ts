@@ -20,10 +20,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
     
-    const formData = await request.formData()
-    const description = formData.get('description') as string
-    const price = parseFloat(formData.get('price') as string)
-    const imageFile = formData.get('image') as File | null
+  const formData = await request.formData()
+  const description = formData.get('description') as string
+  const price = parseFloat(formData.get('price') as string)
+  const imageFile = formData.get('image') as File | null
+  // Optional assigned admin chosen by seller
+  const assignedAdminId = (formData.get('assigned_admin_id') as string) || null
 
     // Validate input
     const { description: validDescription, price: validPrice } = createEscrowSchema.parse({
@@ -81,6 +83,9 @@ export async function POST(request: NextRequest) {
       codeExists = !!existing
     }
 
+    // Set expiry to 30 minutes from now for buyer to pay
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+
     // Create escrow using service client to bypass RLS issues
     const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
@@ -91,7 +96,9 @@ export async function POST(request: NextRequest) {
         price: validPrice,
         admin_fee: 300,
         product_image_url: productImageUrl,
-        status: ESCROW_STATUS.CREATED
+        assigned_admin_id: assignedAdminId,
+        expires_at: expiresAt,
+        status: ESCROW_STATUS.WAITING_PAYMENT
       })
       .select()
       .single()
@@ -115,10 +122,12 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if logging fails
     }
 
-    return NextResponse.json({
-      id: escrow.id,
-      code: escrow.code
-    })
+  // Set a short-lived HTTP-only cookie to help redirect seller after login if they sign out
+  const response = NextResponse.json({ id: escrow.id, code: escrow.code })
+  // cookie expires in 30 minutes
+  const expiresDate = new Date(Date.now() + 30 * 60 * 1000)
+  response.cookies.set('redirect_escrow', escrow.id, { path: '/', httpOnly: true, sameSite: 'lax', expires: expiresDate })
+  return response
 
   } catch (error) {
     console.error('Create escrow error:', error)
