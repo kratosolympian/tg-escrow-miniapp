@@ -5,7 +5,9 @@ export async function POST() {
   try {
     const supabase = createServiceRoleClient()
     
-    console.log('Starting database migration to add super_admin role...')
+    if (process.env.DEBUG || process.env.NEXT_PUBLIC_DEBUG === '1') {
+      console.log('Starting database migration to add super_admin role...')
+    }
     
     // Step 1: Remove old constraint
     const { error: dropError } = await (supabase as any)
