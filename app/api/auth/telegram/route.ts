@@ -33,11 +33,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('Telegram user verified:', {
-      id: telegramUser.id,
-      first_name: telegramUser.first_name,
-      username: telegramUser.username
-    })
+  if (process.env.DEBUG) console.log('Telegram user verified: id=', telegramUser.id)
 
     // Create service role client for admin operations
     const serviceClient = createServiceRoleClient()
@@ -64,8 +60,8 @@ export async function POST(request: NextRequest) {
       })
 
       if (createError || !newUser.user) {
-        console.error('Error creating user:', createError)
-        console.error('User creation failed for email:', email)
+        console.error('Error creating user')
+        console.error('User creation failed')
         return NextResponse.json({ 
           error: 'Failed to create user', 
           details: createError?.message || 'Unknown error'
@@ -85,8 +81,8 @@ export async function POST(request: NextRequest) {
         })
 
       if (profileError) {
-        console.error('Error creating profile:', profileError)
-        console.error('Profile creation failed for user:', newUser.user.id)
+        console.error('Error creating profile')
+        console.error('Profile creation failed for user id:', newUser.user.id)
         return NextResponse.json({ 
           error: 'Failed to create profile', 
           details: profileError.message || 'Unknown error'
@@ -112,7 +108,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (clientSignInError) {
-      console.error('Error signing in user:', clientSignInError)
+      console.error('Error signing in user')
       return NextResponse.json({ error: 'Failed to sign in' }, { status: 500 })
     }
 

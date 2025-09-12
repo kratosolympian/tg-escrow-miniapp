@@ -7,8 +7,13 @@ import { generateUUID, getFileExtension, isValidReceiptType } from '@/lib/utils'
 import { ESCROW_STATUS, canTransition } from '@/lib/status'
 
 export async function POST(request: NextRequest) {
+  // Ensure route is only used for POST requests
+  if (request.method !== 'POST') {
+    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
+  }
   try {
-    console.log('Receipt upload API called')
+  // Minimal audit log
+  if (process.env.DEBUG) console.log('Receipt upload API called')
     
     const supabase = createServerClientWithCookies()
     const serviceClient = createServiceRoleClient()
@@ -18,18 +23,13 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
-    console.log('User authenticated:', user.id)
     
     const formData = await request.formData()
     const escrowId = formData.get('escrowId') as string
     const receiptFile = formData.get('file') as File
     
-    console.log('Form data received:', {
-      escrowId,
-      hasFile: !!receiptFile,
-      fileName: receiptFile?.name,
-      fileType: receiptFile?.type
-    })
+  // Do not log file contents or full filenames to avoid leaking sensitive data
+  if (process.env.DEBUG) console.log('Form data received: escrowId=', escrowId, 'hasFile=', !!receiptFile)
 
     if (!escrowId || !receiptFile) {
       return NextResponse.json({ error: 'Escrow ID and file are required' }, { status: 400 })
@@ -68,12 +68,7 @@ export async function POST(request: NextRequest) {
     const fileName = `${fileId}.${extension}`
     const filePath = `${escrow.id}/${user.id}/${fileName}`
 
-    console.log('Starting file upload...', {
-      fileName: receiptFile.name,
-      fileType: receiptFile.type,
-      fileSize: receiptFile.size,
-      filePath: filePath
-    })
+  if (process.env.DEBUG) console.log('Starting file upload for escrow:', escrow.id)
 
     // Upload to storage using service client
     const { error: uploadError } = await serviceClient.storage
@@ -84,14 +79,14 @@ export async function POST(request: NextRequest) {
       })
 
     if (uploadError) {
-      console.error('Error uploading receipt:', uploadError)
+      console.error('Error uploading receipt: uploadError')
       return NextResponse.json({ 
         error: 'Failed to upload receipt', 
         details: uploadError.message 
       }, { status: 500 })
     }
 
-    console.log('File uploaded successfully!')
+  if (process.env.DEBUG) console.log('File uploaded successfully')
 
     // Insert receipt record
     const { error: receiptError } = await (serviceClient as any)
@@ -103,7 +98,7 @@ export async function POST(request: NextRequest) {
       })
 
     if (receiptError) {
-      console.error('Error creating receipt record:', receiptError)
+      console.error('Error creating receipt record')
       
       // Clean up uploaded file
       await serviceClient.storage
