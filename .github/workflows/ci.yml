@@ -19,6 +19,7 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
+        shell: bash
         run: |
           if [ -f package-lock.json ]; then
             npm ci
