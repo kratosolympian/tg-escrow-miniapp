@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createServerClientWithCookies } from '@/lib/supabaseServer'
 
 // Get individual message with sender info
 export async function GET(
@@ -7,20 +8,7 @@ export async function GET(
   { params }: { params: { messageId: string } }
 ) {
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          },
-        },
-      }
-    )
+  const supabase = createServerClientWithCookies() as any
 
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -29,7 +17,7 @@ export async function GET(
     }
 
     // Get message with sender info
-    const { data: message, error: messageError } = await supabase
+  const { data: message, error: messageError } = await supabase
       .from('chat_messages')
       .select(`
         id,
@@ -52,7 +40,7 @@ export async function GET(
     const { data: escrow, error: escrowError } = await supabase
       .from('escrows')
       .select('seller_id, buyer_id')
-      .eq('id', message.escrow_id)
+      .eq('id', (message as any).escrow_id)
       .single()
 
     if (escrowError || !escrow) {
@@ -66,8 +54,8 @@ export async function GET(
       .eq('id', session.user.id)
       .single()
 
-    const isAdmin = userProfile?.role === 'admin'
-    const hasAccess = isAdmin || escrow.seller_id === session.user.id || escrow.buyer_id === session.user.id
+  const isAdmin = userProfile && (userProfile as any).role === 'admin'
+  const hasAccess = isAdmin || (escrow as any).seller_id === session.user.id || (escrow as any).buyer_id === session.user.id
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })

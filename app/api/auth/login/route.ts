@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies } from '@/lib/supabaseServer'
 import { z } from 'zod'
@@ -44,14 +46,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication failed' }, { status: 401 })
     }
 
-    // On success, issue a redirect so the Set-Cookie (HTTP-only) and navigation
-    // happen in the same response. This avoids fetch + client-side navigation
-    // races where the cookie may not be present on the next server-side request.
-    // If a redirect_escrow cookie exists and the user is a seller, redirect them to that escrow.
+    // If the request was JSON (fetch from client), return a JSON payload so
+    // client-side code can continue (e.g., auto-join after login). For classic
+    // form posts, continue to redirect so Set-Cookie and navigation happen
+    // together in the same response.
+    if (contentType.includes('application/json')) {
+      // Prefer to attach the Supabase session cookie explicitly to the JSON response
+      // so fetch-based sign-ins receive the cookie. If the cookie isn't available
+      // from the Supabase client, fall back to issuing a one-time token.
+      try {
+        // Supabase client with cookie adapter should have set cookies on the response
+        // but in some environments they may not be forwarded; attempt to read from
+        // the client's internal cookie store by calling getUser (which will also
+        // refresh tokens if needed) and then create a response and set the
+        // same cookie value ourselves.
+        // Note: createServerClientWithCookies uses Next's cookie store internally;
+        // we will attempt to read the session via getUser and, if present, set a
+        // session cookie named 'sb:token' carrying the access token (short-lived).
+        // This mirrors Supabase's cookie behavior enough for local flows.
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session && (session as any).access_token) {
+          // Create a signed one-time token as well so JSON clients always receive a token
+          try {
+            const { createSignedToken } = await import('@/lib/signedAuth')
+            const token = createSignedToken(authData.user.id, 300)
+            const resp = NextResponse.json({ user: authData.user, __one_time_token: token })
+            // set a short-lived cookie containing the access token so subsequent
+            // fetch requests from the client will include it for server-side helpers
+            resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
+            return resp
+          } catch (e) {
+            // If token creation fails for any reason, still return user and cookie
+            const resp = NextResponse.json({ user: authData.user })
+            resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
+            return resp
+          }
+        }
+      } catch (e) {
+        console.warn('Could not attach session cookie to JSON login response:', e)
+      }
+
+      // If we couldn't attach a cookie, fall back to a one-time token for client flows
+      // Always include a one-time token so fetch clients can continue even
+      // if the cookie wasn't set on the response. This is safe for tests and
+      // small client flows because the token is short-lived.
+      try {
+        const { createSignedToken } = await import('@/lib/signedAuth')
+        const token = createSignedToken(authData.user.id, 300)
+        const resp = NextResponse.json({ user: authData.user, __one_time_token: token })
+        // If we were able to attach a session cookie above, it was returned earlier.
+        return resp
+      } catch (e) {
+        const resp = NextResponse.json({ user: authData.user })
+        return resp
+      }
+    }
+
+    // On non-JSON (form) requests, keep the redirect behavior. If a redirect_escrow cookie
+    // exists and the user is a seller, redirect them to that escrow.
     const redirectCookie = request.cookies.get('redirect_escrow')?.value
     if (redirectCookie) {
       // determine user role
-      const supabase = createServerClientWithCookies()
       const { data: { user: currentUser } } = await supabase.auth.getUser()
       if (currentUser) {
         // fetch profile role

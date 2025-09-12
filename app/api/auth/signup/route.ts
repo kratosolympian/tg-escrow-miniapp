@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { z } from 'zod'
 
@@ -70,8 +71,8 @@ export async function POST(request: NextRequest) {
 
     // Generate a one-time token clients can use immediately to authenticate a follow-up action
     try {
-      const { createOneTimeToken } = await import('@/lib/ephemeralAuth')
-      const token = createOneTimeToken(authData.user.id, 300) // 5 minutes
+      const { createSignedToken } = await import('@/lib/signedAuth')
+      const token = createSignedToken(authData.user.id, 300) // 5 minutes
       return NextResponse.json({ 
         user: {
           id: authData.user.id,

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { ESCROW_STATUS } from '@/lib/status'
@@ -87,6 +89,27 @@ export async function GET(
       `)
       .eq('escrow_id', params.id)
       .order('created_at', { ascending: true })
+
+    // Include assigned admin bank info (if any), falling back to platform settings
+    let adminBank: any = null
+    if ((escrow as any).assigned_admin_id) {
+      const { data: adminProfile } = await serviceClient
+        .from('profiles')
+        .select('bank_name, account_number, account_holder_name')
+        .eq('id', (escrow as any).assigned_admin_id)
+        .single()
+      adminBank = adminProfile || null
+    }
+
+    if (!adminBank) {
+      const { data: platform } = await serviceClient
+        .from('admin_settings')
+        .select('bank_name, account_number, account_holder')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single()
+      adminBank = platform || null
+    }
 
     return NextResponse.json({
       success: true,

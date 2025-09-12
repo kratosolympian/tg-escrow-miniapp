@@ -398,6 +398,22 @@ export default function BuyerEscrowPage() {
               <h3 className="font-semibold text-gray-900">Total Amount</h3>
               <p className="text-2xl font-bold text-green-600">{formatNaira(totalAmount)}</p>
             </div>
+
+            {/* Show admin bank details for buyer payments */}
+            {(escrow as any).admin_bank && (
+              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <h3 className="font-semibold text-gray-900">Pay To</h3>
+                <div>
+                  <span className="font-medium">Bank Name:</span> {(escrow as any).admin_bank.bank_name}
+                </div>
+                <div>
+                  <span className="font-medium">Account Number:</span> {(escrow as any).admin_bank.account_number}
+                </div>
+                <div>
+                  <span className="font-medium">Account Holder:</span> {(escrow as any).admin_bank.account_holder || (escrow as any).admin_bank.account_holder_name}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

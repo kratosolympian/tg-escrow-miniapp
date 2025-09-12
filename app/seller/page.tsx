@@ -25,6 +25,9 @@ export default function SellerPage() {
   const [createdEscrow, setCreatedEscrow] = useState<CreatedEscrow | null>(null)
   const [onlineAdmins, setOnlineAdmins] = useState<Array<any>>([])
   const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null)
+  const [productImagePreview, setProductImagePreview] = useState<string | null>(null)
+  const [productImagePath, setProductImagePath] = useState<string | null>(null)
+  const [draftRestored, setDraftRestored] = useState(false)
   
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -39,6 +42,46 @@ export default function SellerPage() {
   useEffect(() => {
     checkAuthStatus()
     fetchOnlineAdmins()
+  }, [])
+
+  // Restore draft from localStorage (description, price, selected admin, temp image path)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('seller:create-escrow:draft')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        setForm(prev => ({ ...prev, ...parsed }))
+        if (parsed.selectedAdmin) setSelectedAdmin(parsed.selectedAdmin)
+        if (parsed.productImagePath) setProductImagePath(parsed.productImagePath)
+        if (parsed.productImagePreview) setProductImagePreview(parsed.productImagePreview)
+        setDraftRestored(true)
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [])
+
+  // Check if the current user has bank details set
+  const [hasBankDetails, setHasBankDetails] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const checkBank = async () => {
+      try {
+        const res = await fetch('/api/profile/banking')
+        if (res.ok) {
+          const data = await res.json()
+          const profile = data.profile ?? data
+          const hasBank = !!(profile && (profile.bank_name || profile.account_number || profile.account_holder_name))
+          setHasBankDetails(hasBank)
+        } else {
+          setHasBankDetails(false)
+        }
+      } catch (e) {
+        console.error('Error checking bank details', e)
+        setHasBankDetails(false)
+      }
+    }
+    checkBank()
   }, [])
 
   const fetchOnlineAdmins = async () => {
@@ -80,7 +123,8 @@ export default function SellerPage() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(authForm)
+  body: JSON.stringify(authForm),
+  credentials: 'include'
       })
 
       const data = await response.json()
@@ -141,19 +185,69 @@ export default function SellerPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
+    setForm(prev => {
+      const next = { ...prev, [name]: value }
+      try {
+        localStorage.setItem('seller:create-escrow:draft', JSON.stringify({ description: next.description, price: next.price, selectedAdmin, productImagePath, productImagePreview }))
+      } catch {}
+      return next
+    })
+  }
+
+  const handleSelectedAdminChange = (id: string) => {
+    setSelectedAdmin(id)
+    try {
+      localStorage.setItem('seller:create-escrow:draft', JSON.stringify({ description: form.description, price: form.price, selectedAdmin: id, productImagePath, productImagePreview }))
+    } catch {}
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setForm(prev => ({ ...prev, image: file }))
+      // Upload a temporary image so it persists across navigations
+      ;(async () => {
+        try {
+          const fd = new FormData()
+          fd.append('image', file)
+          const resp = await fetch('/api/escrow/upload-temp', { method: 'POST', body: fd, credentials: 'include' })
+          const json = await resp.json().catch(() => null)
+          if (resp.ok && json?.path) {
+            const path = json.path
+            setProductImagePath(path)
+            // get a signed URL for preview
+            try {
+              const signResp = await fetch('/api/storage/sign-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, bucket: 'product-images' }), credentials: 'include' })
+              const signJson = await signResp.json().catch(() => null)
+              if (signResp.ok && signJson?.signedUrl) {
+                setProductImagePreview(signJson.signedUrl)
+              }
+            } catch (e) {
+              // ignore
+            }
+
+            setForm(prev => ({ ...prev, image: file }))
+            try {
+              localStorage.setItem('seller:create-escrow:draft', JSON.stringify({ description: form.description, price: form.price, selectedAdmin, productImagePath: path, productImagePreview }))
+            } catch {}
+          } else {
+            // fallback: keep file in memory only
+            setForm(prev => ({ ...prev, image: file }))
+          }
+        } catch (err) {
+          console.error('Temp upload failed', err)
+          setForm(prev => ({ ...prev, image: file }))
+        }
+      })()
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.description.trim() || !form.price.trim()) return
+    if (hasBankDetails === false) {
+      setError('Please complete your bank details before creating an escrow.')
+      return
+    }
 
     setLoading(true)
     setError('')
@@ -168,6 +262,9 @@ export default function SellerPage() {
       if (selectedAdmin) {
         formData.append('assigned_admin_id', selectedAdmin)
       }
+      if (productImagePath) {
+        formData.append('productImagePath', productImagePath)
+      }
 
       const response = await fetch('/api/escrow/create', {
         method: 'POST',
@@ -178,6 +275,7 @@ export default function SellerPage() {
 
       if (response.ok) {
         setCreatedEscrow(data)
+  try { localStorage.removeItem('seller:create-escrow:draft') } catch {}
       } else {
         setError(data.error || 'Failed to create transaction')
       }
@@ -198,7 +296,8 @@ export default function SellerPage() {
   const startNewTransaction = () => {
     setCreatedEscrow(null)
     setForm({ description: '', price: '' })
-    setError('')
+  try { localStorage.removeItem('seller:create-escrow:draft') } catch {}
+  setError('')
   }
 
   const handleLogout = async () => {
@@ -482,7 +581,7 @@ export default function SellerPage() {
             {onlineAdmins && onlineAdmins.length > 0 && (
               <div>
                 <label htmlFor="assigned_admin" className="label">Assign an Online Admin (optional)</label>
-                <select id="assigned_admin" value={selectedAdmin || ''} onChange={(e) => setSelectedAdmin(e.target.value)} className="input">
+                <select id="assigned_admin" value={selectedAdmin || ''} onChange={(e) => handleSelectedAdminChange(e.target.value)} className="input">
                   <option value="">-- Choose an online admin --</option>
                   {onlineAdmins.map((a: any) => (
                     <option key={a.id} value={a.id}>{a.full_name || a.email || a.telegram_id}</option>
@@ -492,9 +591,45 @@ export default function SellerPage() {
               </div>
             )}
 
+            {draftRestored && (
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-yellow-900">A draft was restored from a previous session.</div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => {
+                      try { localStorage.removeItem('seller:create-escrow:draft') } catch {}
+                      setForm({ description: '', price: '' })
+                      setSelectedAdmin(null)
+                      setProductImagePath(null)
+                      setProductImagePreview(null)
+                      setDraftRestored(false)
+                    }} className="px-3 py-1 bg-red-100 text-red-800 rounded">Discard draft</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {productImagePreview && (
+              <div className="mt-3">
+                <label className="label">Image preview</label>
+                <img src={productImagePreview} alt="preview" className="w-full rounded-md" />
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">
-                {error}
+                <div>{error}</div>
+                {error.includes('bank details') && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => router.push('/settings/profile')}
+                      className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Update banking info
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

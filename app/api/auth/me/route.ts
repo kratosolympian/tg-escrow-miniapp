@@ -1,22 +1,12 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createServerClientWithCookies } from '@/lib/supabaseServer'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          },
-        },
-      }
-    )
+  const supabase = createServerClientWithCookies()
 
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -36,11 +26,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
     }
 
+    // Normalize profile to an object before spreading to satisfy TypeScript
+    const profileData = (profile && typeof profile === 'object' && !Array.isArray(profile)) ? profile : {}
     return NextResponse.json({
       user: {
         id: session.user.id,
         email: session.user.email,
-        ...profile
+        ...profileData
       }
     })
 

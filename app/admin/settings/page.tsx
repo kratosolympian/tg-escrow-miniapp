@@ -43,17 +43,25 @@ export default function AdminSettingsPage() {
       const response = await fetch('/api/settings/bank')
       if (response.ok) {
         const data = await response.json()
-        setCurrentSettings(data)
-        setForm({
-          bank_name: data.bank_name,
-          account_number: data.account_number,
-          account_holder: data.account_holder
-        })
+        // API may return either the settings directly or wrapped as { settings: {...} }
+        const settings = data?.settings ?? data
+        if (settings && (settings.bank_name || settings.account_number || settings.account_holder)) {
+          setCurrentSettings(settings)
+          setForm({
+            bank_name: settings.bank_name || '',
+            account_number: settings.account_number || '',
+            account_holder: settings.account_holder || ''
+          })
+        } else {
+          setCurrentSettings(null)
+        }
         // fetch profile banking via dedicated endpoint
         const pb = await fetch('/api/profile/banking')
         if (pb.ok) {
           const pjson = await pb.json()
-          setProfileBank({ bank_name: pjson.profile?.bank_name || '', account_number: pjson.profile?.account_number || '', account_holder: pjson.profile?.account_holder_name || '' })
+          // profile endpoint may return { profile: { ... } } or profile directly
+          const profile = pjson?.profile ?? pjson
+          setProfileBank({ bank_name: profile?.bank_name || '', account_number: profile?.account_number || '', account_holder: profile?.account_holder_name || '' })
         }
       }
     } catch (error) {
@@ -80,17 +88,21 @@ export default function AdminSettingsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(form)
+        // this form is intended to update the platform canonical bank settings
+        body: JSON.stringify({ ...form, scope: 'platform' })
       })
       const data = await response.json().catch(() => null)
-      if (response.ok && data && data.settings) {
+      // Accept either { settings: {...} } or { profile: {...} } or direct row
+      const payload = data ?? {}
+      const respSettings = payload.settings ?? payload.profile ?? payload
+      if (response.ok && respSettings) {
         setSuccess('Bank settings updated successfully!')
         // Update UI from POST response instead of refetching
-        setCurrentSettings(data.settings)
+        setCurrentSettings(respSettings)
         setForm({
-          bank_name: data.settings.bank_name,
-          account_number: data.settings.account_number,
-          account_holder: data.settings.account_holder
+          bank_name: respSettings.bank_name || '',
+          account_number: respSettings.account_number || '',
+          account_holder: respSettings.account_holder || respSettings.account_holder_name || ''
         })
       } else {
         setError((data && data.error) || 'Failed to update settings')

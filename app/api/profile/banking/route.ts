@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createServerClientWithCookies } from '@/lib/supabaseServer'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          },
-        },
-      }
-    )
+  const supabase = createServerClientWithCookies() as any
 
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session) {
+    // Get current user (authenticated against Supabase Auth server)
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -30,12 +18,11 @@ export async function POST(request: NextRequest) {
       phone_number,
       bank_name,
       account_number,
-      account_holder_name,
-      bvn
+      account_holder_name
     } = body
 
-    // Validate required fields
-    if (!full_name || !phone_number || !bank_name || !account_number || !account_holder_name || !bvn) {
+    // Validate required fields (BVN removed)
+    if (!full_name || !phone_number || !bank_name || !account_number || !account_holder_name) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 })
     }
 
@@ -44,10 +31,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account number must be exactly 10 digits' }, { status: 400 })
     }
 
-    // Validate BVN format (11 digits)
-    if (!/^\d{11}$/.test(bvn)) {
-      return NextResponse.json({ error: 'BVN must be exactly 11 digits' }, { status: 400 })
-    }
 
     // Validate phone number (Nigerian format)
     if (!/^(\+234|234|0)[789]\d{9}$/.test(phone_number)) {
@@ -63,11 +46,10 @@ export async function POST(request: NextRequest) {
         bank_name,
         account_number,
         account_holder_name,
-        bvn,
         profile_completed: true,
         updated_at: new Date().toISOString()
-      })
-      .eq('id', session.user.id)
+      } as any)
+      .eq('id', user.id)
       .select()
       .single()
 
@@ -90,31 +72,18 @@ export async function POST(request: NextRequest) {
 // Get current profile information
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          },
-        },
-      }
-    )
+  const supabase = createServerClientWithCookies()
 
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session) {
+    // Get current user (authenticated against Supabase Auth server)
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (error) {
