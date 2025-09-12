@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (signUpError) {
-      console.error('Signup error:', signUpError)
+      console.error('Signup error')
       return NextResponse.json({ error: signUpError.message }, { status: 400 })
     }
 
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
         console.warn('Sign-in after signup failed:', signInError)
         // continue — signup succeeded but no session was created
       } else {
-        // signInData may contain session info; cookies are set via the server client
-        console.log('User signed in after signup:', signInData?.user?.id)
+  // signInData may contain session info; cookies are set via the server client
+  if (process.env.DEBUG) console.log('User signed in after signup, id:', signInData?.user?.id)
       }
     } catch (e) {
       console.warn('Error signing in after signup:', e)
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       })
 
     if (profileError) {
-      console.error('Profile creation error:', profileError)
+      console.error('Profile creation error')
       // Continue anyway, profile might be created by trigger
     }
 
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Signup route error:', error)
+  console.error('Signup route error')
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
     }

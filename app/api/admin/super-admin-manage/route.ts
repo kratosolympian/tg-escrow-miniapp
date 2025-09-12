@@ -3,6 +3,9 @@ import { createServiceRoleClient } from '@/lib/supabaseServer'
 import { isSuperAdmin } from '@/lib/rbac'
 
 export async function POST(request: NextRequest) {
+  if (request.method !== 'POST') {
+    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
+  }
   try {
     const { email, action = 'add', requester_email } = await request.json()
     
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest) {
     const newRole = action === 'add' ? 'admin' : 'buyer' // Default to buyer when removing admin role
     const roleType = isSuperAdmin(email) ? 'Super Admin' : 'Admin'
     
-    console.log(`${action === 'add' ? 'Adding' : 'Removing'} ${roleType} ${action === 'add' ? 'to' : 'from'} user:`, targetUser.id, targetUser.email)
+  if (process.env.DEBUG) console.log(`${action === 'add' ? 'Adding' : 'Removing'} ${roleType} ${action === 'add' ? 'to' : 'from'} user id:`, targetUser.id)
     
     // First, check if profile exists
     const { data: existingProfile, error: checkError } = await (supabase as any)
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
       .single()
     
     if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking profile:', checkError)
+      console.error('Error checking profile')
       return NextResponse.json({ error: 'Failed to check profile' }, { status: 500 })
     }
     
@@ -69,8 +72,8 @@ export async function POST(request: NextRequest) {
         .single()
       
       if (updateError) {
-        console.error('Error updating profile role:', updateError)
-        return NextResponse.json({ error: 'Failed to update role' }, { status: 500 })
+        console.error('Error updating profile role')
+        return NextResponse.json({ error: 'Failed to update role', details: updateError?.message || 'Unknown' }, { status: 500 })
       }
       
       const message = action === 'add' ? 
@@ -100,8 +103,8 @@ export async function POST(request: NextRequest) {
         .single()
       
       if (createError) {
-        console.error('Error creating profile:', createError)
-        return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
+        console.error('Error creating profile')
+        return NextResponse.json({ error: 'Failed to create profile', details: createError?.message || 'Unknown' }, { status: 500 })
       }
       
       return NextResponse.json({ 
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Role management error:', error)
+    console.error('Role management error')
     return NextResponse.json({ error: 'Failed to manage role' }, { status: 500 })
   }
 }

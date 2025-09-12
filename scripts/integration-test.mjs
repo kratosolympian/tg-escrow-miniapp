@@ -34,6 +34,17 @@ async function createEscrowWithCookie(cookie, description, price) {
   return res
 }
 
+function maskToken(token) {
+  if (!token) return null
+  if (process.env.DEBUG) return token
+  return token.slice(0, 24) + '...'
+}
+
+function safeLog(label, data) {
+  if (process.env.DEBUG) console.log(label, data)
+  else console.log(label, data)
+}
+
 async function main() {
   console.log('Starting integration test (ESM)')
 
@@ -43,11 +54,13 @@ async function main() {
 
   console.log('Signing up seller...')
   const s1 = await signupOrGetToken(seller.email, seller.password, seller.name)
-  console.log('Seller signup status:', s1.res.status, s1.json)
+  if (process.env.DEBUG) console.log('Seller signup status:', s1.res.status, s1.json)
+  else console.log('Seller signup status:', s1.res.status, { user: s1.json?.user, __one_time_token: maskToken(s1.json?.__one_time_token) })
 
   console.log('Signing up buyer...')
   const b1 = await signupOrGetToken(buyer.email, buyer.password, buyer.name)
-  console.log('Buyer signup status:', b1.res.status, b1.json)
+  if (process.env.DEBUG) console.log('Buyer signup status:', b1.res.status, b1.json)
+  else console.log('Buyer signup status:', b1.res.status, { user: b1.json?.user, __one_time_token: maskToken(b1.json?.__one_time_token) })
 
   console.log('Logging in seller via form...')
   const loginRes = await loginForm(seller.email, seller.password)
@@ -58,7 +71,8 @@ async function main() {
     process.exit(2)
   }
   const cookie = setCookie.split(';')[0]
-  console.log('Captured cookie:', cookie)
+  if (process.env.DEBUG) console.log('Captured cookie:', cookie)
+  else console.log('Captured cookie: <redacted - set DEBUG=1 to view>')
 
   // Ensure seller has bank details (profile completion) so escrow creation succeeds
   console.log('Updating seller banking details...')
@@ -80,7 +94,8 @@ async function main() {
     console.error('Create headers:', Object.fromEntries(createRes.headers.entries()))
     console.error('Create body text:', text)
   }
-  console.log('Create status:', createRes.status, createJson)
+  if (process.env.DEBUG) console.log('Create status:', createRes.status, createJson)
+  else console.log('Create status:', createRes.status, createJson ? { id: createJson.id, code: createJson.code } : createJson)
   if (!createJson || !createJson.code) {
     console.error('Escrow creation failed', createJson?.details || '')
     process.exit(3)
@@ -107,7 +122,8 @@ async function main() {
     credentials: 'include'
   })
   const loginFetchJson = await loginFetchResp.json().catch(() => null)
-  console.log('Login fetch status:', loginFetchResp.status, loginFetchJson)
+  if (process.env.DEBUG) console.log('Login fetch status:', loginFetchResp.status, loginFetchJson)
+  else console.log('Login fetch status:', loginFetchResp.status, { user: loginFetchJson?.user, __one_time_token: maskToken(loginFetchJson?.__one_time_token) })
 
   // Prefer using the one-time token returned by JSON login for the join flow.
   let finalBuyerCookie = null
@@ -164,7 +180,8 @@ async function main() {
   }
   console.log('Join after auth status:', joinWithCreds.status)
   const joinJson = await joinWithCreds.json().catch(() => null)
-  console.log('Join response:', joinJson)
+  if (process.env.DEBUG) console.log('Join response:', joinJson)
+  else console.log('Join response:', joinJson && joinJson.ok ? { ok: true, escrowId: joinJson.escrowId } : joinJson)
 
   if (joinWithCreds.ok) {
     console.log('Integration test succeeded')
