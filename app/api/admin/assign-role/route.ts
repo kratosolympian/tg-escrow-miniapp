@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabaseServer'
 
 export async function POST(request: NextRequest) {
+  if (request.method !== 'POST') {
+    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
+  }
   try {
     const { email, action = 'add' } = await request.json()
     
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `User with email ${email} not found in auth` }, { status: 404 })
     }
     
-    console.log(`${action === 'add' ? 'Adding admin to' : 'Removing admin from'} user:`, targetUser.id, targetUser.email)
+  if (process.env.DEBUG) console.log(`${action === 'add' ? 'Adding admin to' : 'Removing admin from'} user id:`, targetUser.id)
     
     // Determine the role based on email and action
     let newRole: string
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
     
     if (existingProfile) {
-      console.log('Profile exists, updating role:', existingProfile)
+  if (process.env.DEBUG) console.log('Profile exists for user id:', targetUser.id, 'updating role')
       // Update existing profile role
       const { data: updatedProfile, error: updateError } = await (supabase as any)
         .from('profiles')
@@ -75,8 +78,8 @@ export async function POST(request: NextRequest) {
         .single()
       
       if (updateError) {
-        console.error('Error updating profile role:', updateError)
-        return NextResponse.json({ error: 'Failed to update role' }, { status: 500 })
+        console.error('Error updating profile role')
+        return NextResponse.json({ error: 'Failed to update role', details: updateError?.message || 'Unknown' }, { status: 500 })
       }
       
       const message = newRole === 'super_admin' ? 'Super admin role assigned' :
@@ -92,7 +95,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
       }
       
-      console.log('Profile does not exist, creating new profile')
+  if (process.env.DEBUG) console.log('Profile does not exist for user id:', targetUser.id, 'creating new profile')
       // Create new profile with specified role
       const { data: newProfile, error: createError } = await (supabase as any)
         .from('profiles')
@@ -106,8 +109,8 @@ export async function POST(request: NextRequest) {
         .single()
       
       if (createError) {
-        console.error('Error creating profile:', createError)
-        return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
+        console.error('Error creating profile')
+        return NextResponse.json({ error: 'Failed to create profile', details: createError?.message || 'Unknown' }, { status: 500 })
       }
       
       const message = newRole === 'super_admin' ? 'Super admin profile created' :

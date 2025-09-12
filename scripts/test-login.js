@@ -17,12 +17,18 @@ async function main() {
   console.log('Status:', res.status)
   const setCookie = res.headers.get('set-cookie')
   const location = res.headers.get('location')
-  console.log('set-cookie:', setCookie)
-  console.log('location:', location)
+  if (process.env.DEBUG) {
+    console.log('set-cookie:', setCookie)
+    console.log('location:', location)
+  } else {
+    console.log('set-cookie: <redacted - set DEBUG=1 to view>')
+    console.log('location:', location)
+  }
 
   if (setCookie) {
-    const cookie = setCookie.split(';')[0]
-    console.log('Using cookie:', cookie)
+  const cookie = setCookie.split(';')[0]
+  if (process.env.DEBUG) console.log('Using cookie:', cookie)
+  else console.log('Using cookie: <redacted - set DEBUG=1 to view>')
 
     if (location) {
       const followUrl = location.startsWith('http') ? location : 'http://localhost:3000' + location
