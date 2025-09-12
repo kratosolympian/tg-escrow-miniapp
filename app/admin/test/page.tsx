@@ -29,7 +29,9 @@ export default function AdminManagementTestPage() {
         <AdminManagement 
           currentUserEmail="johnayodele01@gmail.com"
           onAdminUpdate={() => {
-            console.log('Admin data updated')
+            if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
+              console.log('Admin data updated')
+            }
           }}
         />
       </div>
