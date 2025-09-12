@@ -1,4 +1,10 @@
 {
+  "build": {
+    "installCommand": "npm install",
+    "command": "npm run build"
+  }
+}
+{
   "version": 2,
   "builds": [
     {
