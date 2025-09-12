@@ -1,9 +1,4 @@
-{
-  "build": {
-    "installCommand": "npm install",
-    "command": "npm run build"
-  }
-}
+
 {
   "version": 2,
   "builds": [
@@ -11,5 +6,9 @@
       "src": "package.json",
       "use": "@vercel/next"
     }
-  ]
+  ],
+  "build": {
+    "installCommand": "npm install",
+    "command": "npm run build"
+  }
 }
