@@ -7,8 +7,6 @@
       "use": "@vercel/next"
     }
   ],
-  "build": {
-    "installCommand": "npm install",
-    "command": "npm run build"
-  }
+  "installCommand": "npm install",
+  "buildCommand": "npm run build"
 }
