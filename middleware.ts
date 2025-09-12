@@ -1,26 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createServerClientWithCookies, createServiceRoleClient } from './lib/supabaseServer'
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
-  // Create a Supabase client configured to use cookies
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          response.cookies.set(name, value, options)
-        },
-        remove(name: string, options: any) {
-          response.cookies.set(name, '', { ...options, maxAge: 0 })
-        },
-      },
-    }
-  )
+  // Create a Supabase client configured to use Next's cookie adapter
+  const supabase = createServerClientWithCookies()
     // Debug logging
     console.log('--- Middleware Debug ---')
     const url = request.nextUrl.pathname
@@ -46,23 +31,7 @@ export async function middleware(request: NextRequest) {
       !request.nextUrl.pathname.startsWith('/admin/init-admin') &&
       !request.nextUrl.pathname.startsWith('/admin/check-access')) {
     // Check if user is admin
-    const serviceClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return request.cookies.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            response.cookies.set(name, value, options)
-          },
-          remove(name: string, options: any) {
-            response.cookies.set(name, '', { ...options, maxAge: 0 })
-          },
-        },
-      }
-    )
+  const serviceClient = createServiceRoleClient()
     const { data: profile, error: profileError } = await (serviceClient as any)
       .from('profiles')
       .select('role')

@@ -12,7 +12,6 @@ create table if not exists profiles (
   bank_name text,
   account_number text,
   account_holder_name text,
-  bvn text, -- Bank Verification Number for Nigerian banks
   phone_number text,
   -- Profile completion tracking
   profile_completed boolean default false,

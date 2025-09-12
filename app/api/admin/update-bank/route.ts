@@ -1,5 +1,7 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireRole, requireAuth } from '@/lib/rbac'
 import { z } from 'zod'
 
@@ -14,12 +16,13 @@ const updateBankSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
+  const supabase = createServerClientWithCookies()
     
   // Require authentication; we'll allow admins or super_admins
   const profile = await requireAuth(supabase)
 
   const body = await request.json()
+  console.log('[update-bank] request body:', JSON.stringify(body))
   // server logging removed
     // Validate input with detailed errors
     const parsed = updateBankSchema.safeParse(body)
@@ -31,13 +34,16 @@ export async function POST(request: NextRequest) {
 
     // If caller requested platform-level update, only super_admin may do this
     if (scope === 'platform') {
+      console.log('[update-bank] platform update requested by profile id', profile.id, 'role=', profile.role)
       const roleStr = String(profile.role)
       if (roleStr !== 'super_admin') {
         console.error('[update-bank] Forbidden: only super_admin may update platform bank settings')
         return NextResponse.json({ error: 'Only super admin may update platform bank settings' }, { status: 403 })
       }
 
-      const { data: updated, error } = await (supabase as any)
+      // Use service role client for platform-level writes to bypass RLS and ensure persistence
+  const service = createServiceRoleClient()
+  const { data: updated, error } = await (service as any)
         .from('admin_settings')
         .upsert({
           id: 1,
@@ -50,9 +56,11 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (error) {
-        console.error('[update-bank] Error updating bank settings:', error)
+        console.error('[update-bank] Error updating bank settings (service):', error)
         return NextResponse.json({ error: 'Failed to update bank settings' }, { status: 500 })
       }
+
+      console.log('[update-bank] platform upsert result:', updated)
 
       return NextResponse.json({ ok: true, settings: updated }, { status: 200 })
     }

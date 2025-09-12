@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createServerClientWithCookies } from '@/lib/supabaseServer'
 
 // Get chat messages for an escrow
 export async function GET(
@@ -7,20 +8,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          },
-        },
-      }
-    )
+  const supabase = createServerClientWithCookies() as any
 
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -46,8 +34,8 @@ export async function GET(
       .eq('id', session.user.id)
       .single()
 
-    const isAdmin = userProfile?.role === 'admin'
-    const hasAccess = isAdmin || escrow.seller_id === session.user.id || escrow.buyer_id === session.user.id
+  const isAdmin = userProfile && (userProfile as any).role === 'admin'
+  const hasAccess = isAdmin || (escrow as any).seller_id === session.user.id || (escrow as any).buyer_id === session.user.id
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -78,7 +66,7 @@ export async function GET(
     if (!isAdmin) {
       await supabase
         .from('chat_messages')
-        .update({ is_read: true })
+        .update({ is_read: true } as any)
         .eq('escrow_id', params.id)
         .neq('sender_id', session.user.id)
     }
@@ -100,20 +88,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          },
-        },
-      }
-    )
+  const supabase = createServerClientWithCookies() as any
 
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -150,8 +125,8 @@ export async function POST(
       .eq('id', session.user.id)
       .single()
 
-    const isAdmin = userProfile?.role === 'admin'
-    const hasAccess = isAdmin || escrow.seller_id === session.user.id || escrow.buyer_id === session.user.id
+  const isAdmin = userProfile && (userProfile as any).role === 'admin'
+  const hasAccess = isAdmin || (escrow as any).seller_id === session.user.id || (escrow as any).buyer_id === session.user.id
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -166,7 +141,7 @@ export async function POST(
         message: message.trim(),
         message_type,
         is_read: false
-      })
+      } as any)
       .select()
       .single()
 
@@ -184,7 +159,7 @@ export async function POST(
           escrow_id: params.id,
           user_id: session.user.id,
           last_read_at: new Date().toISOString()
-        },
+        } as any,
         { onConflict: 'escrow_id,user_id' }
       )
 

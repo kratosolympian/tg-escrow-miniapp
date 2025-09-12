@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { verifyTelegramInitData, deriveEmailAndPassword } from '@/lib/telegram'

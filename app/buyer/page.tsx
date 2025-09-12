@@ -91,8 +91,17 @@ export default function BuyerPage() {
     try {
       const { supabase } = await import('@/lib/supabaseClient')
       if (authMode === 'login') {
-        const { error, data } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
-        if (error) throw error
+        // Use server login so the HTTP-only cookie is set on the server response
+        const resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: authEmail, password: authPassword }),
+          credentials: 'include'
+        })
+        const respJson = await resp.json().catch(() => null)
+        if (!resp.ok) {
+          throw new Error(respJson?.error || 'Login failed')
+        }
       } else {
         // register via server API so we receive the one-time token that allows
         // an immediate server-side join without relying on cookie plumbing.

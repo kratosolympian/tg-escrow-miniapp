@@ -10,6 +10,7 @@ interface AdminProfile {
   created_at: string
   updated_at: string
   is_super_admin: boolean
+  profile?: { role?: string }
 }
 
 interface AdminManagementData {
@@ -41,10 +42,54 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
   const [isMainAdmin, setIsMainAdmin] = useState(false)
   const [detectedEmail, setDetectedEmail] = useState<string | null>(null)
   const [detectedRole, setDetectedRole] = useState<string | null>(null)
+  // User management state
+  const [users, setUsers] = useState<AdminProfile[] | null>(null)
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [userActionLoading, setUserActionLoading] = useState<string | null>(null)
+
+  // Escrow management state
+  const [escrows, setEscrows] = useState<any[] | null>(null)
+  const [escrowQuery, setEscrowQuery] = useState('')
+  const [escrowLoading, setEscrowLoading] = useState(false)
+  const [escrowActionLoading, setEscrowActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAdminData()
+    // fetch initial users and escrows for management panel
+    fetchUsers()
+    fetchEscrows()
   }, [])
+
+  async function fetchUsers() {
+    setUsersLoading(true)
+    try {
+      const res = await fetch('/api/admin/users')
+      if (!res.ok) throw new Error('Failed to fetch users')
+      const json = await res.json()
+      setUsers(json.users || [])
+    } catch (e: any) {
+      console.error(e)
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  async function fetchEscrows(q?: string) {
+    setEscrowLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (q) params.set('q', q)
+      params.set('limit', '20')
+      const res = await fetch(`/api/admin/escrows?${params.toString()}`)
+      if (!res.ok) throw new Error('Failed to fetch escrows')
+      const json = await res.json()
+      setEscrows(json.escrows || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setEscrowLoading(false)
+    }
+  }
 
   // Fetch current user from server-side endpoint to ensure we detect
   // the signed-in user even if client-side supabase session isn't ready.
@@ -201,6 +246,37 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     }
   }
 
+  async function handleDeleteUser(userId: string, email?: string) {
+    if (!confirm(`Permanently delete user ${email || userId} and all related records?`)) return
+    setUserActionLoading(userId)
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete user')
+      setSuccess(`User ${email || userId} deleted`)
+      await fetchUsers()
+      await fetchAdminData()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setUserActionLoading(null)
+    }
+  }
+
+  async function handleDeleteEscrow(escrowId: string) {
+    if (!confirm(`Delete escrow ${escrowId} and all related records? This cannot be undone.`)) return
+    setEscrowActionLoading(escrowId)
+    try {
+      const res = await fetch(`/api/admin/escrows/${escrowId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete escrow')
+      setSuccess(`Escrow ${escrowId} deleted`)
+      await fetchEscrows(escrowQuery)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setEscrowActionLoading(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="card">
@@ -354,6 +430,66 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      {/* User Management */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">User Management</h3>
+          <button onClick={fetchUsers} className="btn-secondary">Refresh</button>
+        </div>
+
+        {usersLoading ? (
+          <div className="text-center py-6">Loading users...</div>
+        ) : users && users.length > 0 ? (
+          <div className="space-y-3">
+            {users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between border rounded-lg p-3">
+                <div>
+                  <div className="font-semibold">{u.email || u.id}</div>
+                  <div className="text-sm text-gray-500">{u.profile?.role || 'no profile'}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleRemoveAdmin(u.email || '')} className="btn-secondary text-sm">Toggle Admin</button>
+                  <button onClick={() => handleDeleteUser(u.id, u.email)} className="btn-secondary text-red-600">{userActionLoading === u.id ? 'Deleting...' : '🗑️ Delete'}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-500">No users found</div>
+        )}
+      </div>
+
+      {/* Escrow Management */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Escrow Management</h3>
+          <div className="flex items-center gap-2">
+            <input value={escrowQuery} onChange={(e) => setEscrowQuery(e.target.value)} placeholder="search description..." className="input" />
+            <button onClick={() => fetchEscrows(escrowQuery)} className="btn-secondary">Search</button>
+          </div>
+        </div>
+
+        {escrowLoading ? (
+          <div className="text-center py-6">Loading escrows...</div>
+        ) : escrows && escrows.length > 0 ? (
+          <div className="space-y-3">
+            {escrows.map((e) => (
+              <div key={e.id} className="flex items-center justify-between border rounded-lg p-3">
+                <div>
+                  <div className="font-mono font-semibold">{e.code} • {e.status}</div>
+                  <div className="text-sm text-gray-500">{e.description?.slice(0, 80)}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleDeleteEscrow(e.id)} className="btn-secondary text-red-600">{escrowActionLoading === e.id ? 'Deleting...' : '🗑️ Delete'}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-500">No escrows found</div>
         )}
       </div>
     </div>

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'

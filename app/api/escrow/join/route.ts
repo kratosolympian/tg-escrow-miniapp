@@ -1,4 +1,6 @@
 // @ts-nocheck
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { ESCROW_STATUS, canTransition } from '@/lib/status'
@@ -20,24 +22,34 @@ export async function POST(request: NextRequest) {
     let authenticatedUser = user
     if (!authenticatedUser) {
       const bodyPeek = await request.clone().json().catch(() => ({}))
-      const token = (bodyPeek && bodyPeek.__one_time_token) || null
+      // Prefer token in body, but also accept header forms for more robust clients
+      let token = (bodyPeek && bodyPeek.__one_time_token) || null
+      if (!token) {
+        const headerToken = request.headers.get('x-one-time-token') || null
+        if (headerToken) token = headerToken
+      }
+      if (!token) {
+        const authHeader = request.headers.get('authorization') || ''
+        if (authHeader.toLowerCase().startsWith('bearer ')) {
+          token = authHeader.slice(7).trim()
+        }
+      }
       console.debug('Join route: peeked body, token=', token, 'bodyPeek=', bodyPeek)
 
   if (token) {
         try {
-          const { consumeOneTimeToken } = await import('@/lib/ephemeralAuth')
-          const userId = consumeOneTimeToken(token)
-          console.debug('Join route: consumeOneTimeToken result=', userId)
+          const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+          const userId = verifyAndConsumeSignedToken(token)
+          console.debug('Join route: verifyAndConsumeSignedToken result=', userId)
           if (userId) {
             // attach a lightweight user object for downstream logic
             authenticatedUser = { id: userId }
-          }
-          else {
+          } else {
             console.warn('Join route: one-time token present but not valid/expired')
             return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
           }
         } catch (e) {
-          console.warn('Error importing/consuming one-time token', e)
+          console.warn('Error importing/verifying one-time token', e)
         }
       }
     }
@@ -75,8 +87,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'You cannot join your own transaction as a buyer' }, { status: 400 })
     }
 
-    // Check status transition
-    if (!canTransition((escrow as any).status, ESCROW_STATUS.WAITING_PAYMENT)) {
+    // Check status transition. Allow no-op when status already equals desired status
+    const currentStatus = (escrow as any).status
+    if (currentStatus !== ESCROW_STATUS.WAITING_PAYMENT && !canTransition(currentStatus as any, ESCROW_STATUS.WAITING_PAYMENT)) {
       return NextResponse.json({ error: 'Cannot join transaction in current status' }, { status: 400 })
     }
 

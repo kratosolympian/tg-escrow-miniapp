@@ -108,14 +108,13 @@ export default function AdminDashboard() {
             <Link href="/admin/settings" className="btn-secondary">
               ⚙️ Settings
             </Link>
-              {/* Debug: show detected current user email */}
-              {currentUserEmail && (
-                <div className="text-sm text-gray-500 ml-2">{currentUserEmail}</div>
-              )}
-            {user && (
-              <button onClick={handleLogout} className="btn-secondary">
-                🚪 Logout
-              </button>
+            {/* Always show logout beside Settings for visibility */}
+            <button onClick={handleLogout} className="btn-danger" title="Logout" aria-label="Logout">
+              🚪 Logout
+            </button>
+            {/* Debug: show detected current user email */}
+            {currentUserEmail && (
+              <div className="text-sm text-gray-500 ml-2">{currentUserEmail}</div>
             )}
           </div>
         </div>

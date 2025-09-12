@@ -15,6 +15,7 @@ interface EscrowDetail {
   description: string
   price: number
   admin_fee: number
+  expires_at?: string | null
   product_image_url: string | null
   status: string
   created_at: string
@@ -66,6 +67,35 @@ export default function AdminEscrowDetailPage() {
   const [success, setSuccess] = useState('')
   const [adminNotes, setAdminNotes] = useState('')
   const [showNotesForm, setShowNotesForm] = useState(false)
+
+  // Countdown state: show time until escrow expires (uses `expires_at` if present,
+  // otherwise falls back to created_at + 30 minutes)
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
+
+  const computeExpiry = (e: EscrowDetail | null) => {
+    if (!e) return null
+    if (e.expires_at) return new Date(e.expires_at)
+    return new Date(new Date(e.created_at).getTime() + 30 * 60 * 1000)
+  }
+
+  useEffect(() => {
+    if (!escrow) {
+      setSecondsLeft(null)
+      return
+    }
+
+    const expiry = computeExpiry(escrow)
+    if (!expiry) return
+
+    const update = () => {
+      const s = Math.max(0, Math.ceil((expiry.getTime() - Date.now()) / 1000))
+      setSecondsLeft(s)
+    }
+
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [escrow?.expires_at, escrow?.created_at, escrow])
 
   useEffect(() => {
     if (escrowId) {
@@ -266,6 +296,18 @@ export default function AdminEscrowDetailPage() {
 
   const availableActions = getAvailableActions()
 
+  const expiryDate = escrow ? computeExpiry(escrow) : null
+
+  const formatCountdown = (secs: number) => {
+    if (secs <= 0) return '00:00:00'
+    const days = Math.floor(secs / 86400)
+    const hours = Math.floor((secs % 86400) / 3600)
+    const minutes = Math.floor((secs % 3600) / 60)
+    const seconds = secs % 60
+    if (days > 0) return `${days}d ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -329,6 +371,16 @@ export default function AdminEscrowDetailPage() {
                     <div><span className="text-gray-500">Code:</span> <span className="font-mono font-semibold">{escrow.code}</span></div>
                     <div><span className="text-gray-500">Created:</span> {formatDateTime(escrow.created_at)}</div>
                     <div><span className="text-gray-500">Updated:</span> {formatDateTime(escrow.updated_at)}</div>
+                    {expiryDate && (
+                      <div>
+                        <span className="text-gray-500">Expires:</span> <span className="font-semibold">{formatDateTime(expiryDate.toISOString())}</span>
+                      </div>
+                    )}
+                    {secondsLeft !== null && (
+                      <div>
+                        <span className="text-gray-500">Time until close:</span> <span className="font-mono font-semibold">{formatCountdown(secondsLeft)}</span>
+                      </div>
+                    )}
                     <div><span className="text-gray-500">Status:</span> <span className={getStatusColor(escrow.status)}>{escrow.status.replace('_', ' ').toUpperCase()}</span></div>
                   </div>
                 </div>

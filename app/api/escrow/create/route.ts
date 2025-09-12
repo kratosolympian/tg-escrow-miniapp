@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { shortCode, generateUUID, getFileExtension, isValidImageType } from '@/lib/utils'
@@ -20,13 +22,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
     
-  const formData = await request.formData()
-  const description = formData.get('description') as string
-  const price = parseFloat(formData.get('price') as string)
-  const imageFile = formData.get('image') as File | null
-  // Optional assigned admin chosen by seller
-  const assignedAdminId = (formData.get('assigned_admin_id') as string) || null
+    // Accept either JSON or multipart form data. Some clients may not set
+    // Content-Type reliably, so try JSON first and fall back to formData.
+    let description: string
+    let price: number
+    let imageFile: File | null = null
+    let assignedAdminId: string | null = null
+    // Preuploaded path (from temp upload)
+    let preuploadedPath: string | null = null
 
+      // Parse body: try JSON first, then fall back to FormData. Some clients omit Content-Type.
+      const contentType = (request.headers.get('content-type') || '').toLowerCase()
+      let parsedJson: any = null
+      try {
+        parsedJson = await request.clone().json()
+      } catch (e) {
+        parsedJson = null
+      }
+
+      if (parsedJson && (parsedJson.description || parsedJson.price)) {
+        description = parsedJson.description
+        price = Number(parsedJson.price)
+        assignedAdminId = parsedJson.assigned_admin_id || parsedJson.assignedAdminId || null
+        preuploadedPath = parsedJson.productImagePath || parsedJson.product_image_path || null
+      } else {
+        // Try FormData as a fallback (covers multipart/form-data and urlencoded). Guard with try/catch to avoid uncaught undici errors.
+        try {
+          const formData = await request.formData()
+          description = formData.get('description') as string
+          price = parseFloat(formData.get('price') as string)
+          imageFile = formData.get('image') as File | null
+          assignedAdminId = (formData.get('assigned_admin_id') as string) || null
+          preuploadedPath = (formData.get('productImagePath') as string) || (formData.get('product_image_path') as string) || null
+        } catch (fdErr) {
+          console.error('Failed to parse request body as JSON or FormData', fdErr, 'content-type=', contentType)
+          return NextResponse.json({ error: 'Failed to parse request body', details: contentType }, { status: 400 })
+        }
+      }
     // Validate input
     const { description: validDescription, price: validPrice } = createEscrowSchema.parse({
       description,
@@ -35,8 +67,8 @@ export async function POST(request: NextRequest) {
 
     let productImageUrl: string | null = null
 
-    // Handle image upload if provided
-    if (imageFile && imageFile.size > 0) {
+  // Handle image upload if provided (file upload)
+  if ((!preuploadedPath) && imageFile && (imageFile as any).size > 0) {
       if (!isValidImageType(imageFile.type)) {
         return NextResponse.json({ error: 'Invalid image type. Only JPEG, PNG, and WebP are allowed.' }, { status: 400 })
       }
@@ -67,6 +99,11 @@ export async function POST(request: NextRequest) {
       productImageUrl = filePath
     }
 
+    // If client supplied a preuploaded path (from temp upload), use that
+    if (preuploadedPath) {
+      productImageUrl = preuploadedPath
+    }
+
     // Generate unique transaction code
     let code: string
     let codeExists = true
@@ -86,6 +123,22 @@ export async function POST(request: NextRequest) {
     // Set expiry to 30 minutes from now for buyer to pay
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
 
+    // Ensure seller has bank details set before creating an escrow
+    const { data: sellerProfile, error: profileErr } = await (serviceClient as any)
+      .from('profiles')
+      .select('bank_name, account_number, account_holder_name, profile_completed')
+      .eq('id', user.id)
+      .single()
+
+    if (profileErr) {
+      console.error('Error fetching seller profile:', profileErr)
+      return NextResponse.json({ error: 'Failed to verify profile' }, { status: 500 })
+    }
+
+    const hasBank = !!(sellerProfile && (sellerProfile.bank_name || sellerProfile.account_number || sellerProfile.account_holder_name || sellerProfile.profile_completed))
+    if (!hasBank) {
+      return NextResponse.json({ error: 'Please complete your profile bank details before creating an escrow' }, { status: 400 })
+    }
     // Create escrow using service client to bypass RLS issues
     const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
@@ -104,8 +157,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (escrowError) {
-      console.error('Error creating escrow:', escrowError)
-      return NextResponse.json({ error: 'Failed to create escrow' }, { status: 500 })
+  console.error('Error creating escrow:', escrowError)
+  try { console.error('Escrow error JSON:', JSON.stringify(escrowError)) } catch {}
+  // Return DB error details in dev to aid debugging
+  const msg = (escrowError && (escrowError as any).message) ? (escrowError as any).message : 'Failed to create escrow'
+  return NextResponse.json({ error: 'Failed to create escrow', details: msg }, { status: 500 })
     }
 
     // Log status change using service client to bypass RLS
@@ -132,8 +188,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Create escrow error:', error)
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Failed to create escrow' }, { status: 500 })
+    const msg = (error && (error as any).message) ? (error as any).message : 'Failed to create escrow'
+    return NextResponse.json({ error: 'Failed to create escrow', details: msg, stack: (error as any).stack }, { status: 500 })
   }
 }
