@@ -20,12 +20,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          if (Test-Path package-lock.json) {
+          if [ -f package-lock.json ]; then
             npm ci
-          } else {
+          else
             echo "package-lock.json not found, running npm install with legacy-peer-deps"
             npm install --legacy-peer-deps
-          }
+          fi
 
       - name: Build
         run: npm run build
