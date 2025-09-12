@@ -334,18 +334,16 @@ export default function BuyerEscrowPage() {
   const isUserSeller = user && escrow.seller_id === user.id
   const needsAuthentication = (canJoinTransaction || canJoinPublic) && !user
 
-  console.log('DEBUG - Conditional variables:', {
-    escrowStatus: escrow.status,
-    buyerId: escrow.buyer_id,
-    sellerId: escrow.seller_id,
-    hasBuyer: (escrow as any).has_buyer,
-    userId: user?.id,
-    canJoinTransaction,
-    canJoinPublic,
-    isUserBuyer,
-    isUserSeller,
-    needsAuthentication
-  })
+  if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
+    // Minimal debug output. Avoid printing full user/escrow objects in logs.
+    console.log('DEBUG - BuyerEscrow flags:', {
+      escrowStatus: escrow.status,
+      hasBuyer: !!(escrow as any).has_buyer,
+      userPresent: !!user,
+      canJoinTransaction,
+      needsAuthentication
+    })
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">

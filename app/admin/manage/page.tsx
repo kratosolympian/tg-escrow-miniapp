@@ -84,7 +84,9 @@ export default function AdminManagementPage() {
           currentUserEmail={currentUser?.email}
           onAdminUpdate={() => {
             // Refresh or update any parent state if needed
-            console.log('Admin data updated')
+            if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
+              console.log('Admin data updated')
+            }
           }}
         />
       </div>

@@ -269,10 +269,12 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'admin-management' && (
-          <AdminManagement 
+            <AdminManagement 
             currentUserEmail={currentUserEmail || undefined}
             onAdminUpdate={() => {
-              console.log('Admin data updated')
+              if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
+                console.log('Admin data updated')
+              }
             }}
           />
         )}
