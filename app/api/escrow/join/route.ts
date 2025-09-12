@@ -34,13 +34,16 @@ export async function POST(request: NextRequest) {
           token = authHeader.slice(7).trim()
         }
       }
-      console.debug('Join route: peeked body, token=', token, 'bodyPeek=', bodyPeek)
+  // Do not log full body or token values; only log presence for audit
+  console.debug('Join route: peeked body, token present=', !!token)
 
-  if (token) {
+      if (token) {
         try {
           const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
-          const userId = verifyAndConsumeSignedToken(token)
-          console.debug('Join route: verifyAndConsumeSignedToken result=', userId)
+          // Do not log the full token; only note presence
+          console.debug('Join route: one-time token present')
+          const userId = await verifyAndConsumeSignedToken(token)
+          console.debug('Join route: verifyAndConsumeSignedToken result ok=', !!userId)
           if (userId) {
             // attach a lightweight user object for downstream logic
             authenticatedUser = { id: userId }
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
           }
         } catch (e) {
-          console.warn('Error importing/verifying one-time token', e)
+          console.warn('Error importing/verifying one-time token')
         }
       }
     }

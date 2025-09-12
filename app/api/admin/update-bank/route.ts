@@ -15,6 +15,9 @@ const updateBankSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  if (request.method !== 'POST') {
+    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
+  }
   try {
   const supabase = createServerClientWithCookies()
     
@@ -22,22 +25,23 @@ export async function POST(request: NextRequest) {
   const profile = await requireAuth(supabase)
 
   const body = await request.json()
-  console.log('[update-bank] request body:', JSON.stringify(body))
+  // Avoid logging sensitive banking details
+  if (process.env.DEBUG) console.log('[update-bank] request received')
   // server logging removed
     // Validate input with detailed errors
     const parsed = updateBankSchema.safeParse(body)
     if (!parsed.success) {
-      console.error('[update-bank] Validation failed:', parsed.error.format())
+      console.error('[update-bank] Validation failed')
       return NextResponse.json({ error: 'Invalid input data', details: parsed.error.format() }, { status: 400 })
     }
     const { bank_name, account_number, account_holder, scope } = parsed.data
 
     // If caller requested platform-level update, only super_admin may do this
     if (scope === 'platform') {
-      console.log('[update-bank] platform update requested by profile id', profile.id, 'role=', profile.role)
+  if (process.env.DEBUG) console.log('[update-bank] platform update requested by profile id', profile.id, 'role=', profile.role)
       const roleStr = String(profile.role)
       if (roleStr !== 'super_admin') {
-        console.error('[update-bank] Forbidden: only super_admin may update platform bank settings')
+        console.error('[update-bank] Forbidden: only super_admin may update platform bank settings for user:', profile.id)
         return NextResponse.json({ error: 'Only super admin may update platform bank settings' }, { status: 403 })
       }
 
@@ -56,11 +60,11 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (error) {
-        console.error('[update-bank] Error updating bank settings (service):', error)
-        return NextResponse.json({ error: 'Failed to update bank settings' }, { status: 500 })
+        console.error('[update-bank] Error updating bank settings')
+        return NextResponse.json({ error: 'Failed to update bank settings', details: error?.message || 'Unknown' }, { status: 500 })
       }
 
-      console.log('[update-bank] platform upsert result:', updated)
+  if (process.env.DEBUG) console.log('[update-bank] platform upsert succeeded')
 
       return NextResponse.json({ ok: true, settings: updated }, { status: 200 })
     }
@@ -69,7 +73,7 @@ export async function POST(request: NextRequest) {
     // Allow only admins or super_admins to update their profile bank details
     const roleStr2 = String(profile.role)
     if (!(roleStr2 === 'admin' || roleStr2 === 'super_admin')) {
-      console.error('[update-bank] Forbidden: admin role required')
+      console.error('[update-bank] Forbidden: admin role required for user:', profile.id)
       return NextResponse.json({ error: 'admin role required' }, { status: 403 })
     }
 
@@ -86,8 +90,8 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (updateError) {
-      console.error('[update-bank] Error updating profile bank:', updateError)
-      return NextResponse.json({ error: 'Failed to update profile bank details' }, { status: 500 })
+      console.error('[update-bank] Error updating profile bank')
+      return NextResponse.json({ error: 'Failed to update profile bank details', details: updateError?.message || 'Unknown' }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true, profile: updatedProfile }, { status: 200 })

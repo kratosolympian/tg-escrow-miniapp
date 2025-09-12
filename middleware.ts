@@ -6,17 +6,28 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
   // Create a Supabase client configured to use Next's cookie adapter
   const supabase = createServerClientWithCookies()
-    // Debug logging
-    console.log('--- Middleware Debug ---')
-    const url = request.nextUrl.pathname
-    console.log('Request URL:', url)
+  // Minimal debug logging (avoid printing tokens)
+  const url = request.nextUrl.pathname
+  if (process.env.DEBUG) console.log('Middleware request:', url)
 
-  // Get session
+  // Get session (do not log full session object)
   const { data: { session } } = await supabase.auth.getSession()
-  const userEmail = session?.user?.email
+  const userId = session?.user?.id
 
-    console.log('Session:', session)
-    console.log('User Email:', userEmail)
+  // If a session exists, verify it with a trusted call to getUser
+  let verifiedUser: any = null
+  if (session?.access_token) {
+    try {
+      const { data: userResult, error: userError } = await supabase.auth.getUser()
+      if (userError) {
+        if (process.env.DEBUG) console.log('Warning: supabase.auth.getUser() error in middleware', userError.message ?? userError)
+      } else {
+        verifiedUser = userResult?.user ?? null
+      }
+    } catch (err) {
+      if (process.env.DEBUG) console.log('Warning: failed to verify user in middleware', err)
+    }
+  }
 
   // If no session, redirect to login for protected admin routes
   if (!session && request.nextUrl.pathname.startsWith('/admin') &&
@@ -35,20 +46,17 @@ export async function middleware(request: NextRequest) {
     const { data: profile, error: profileError } = await (serviceClient as any)
       .from('profiles')
       .select('role')
-      .eq('id', session?.user?.id)
+      .eq('id', userId)
       .single()
-      
-    console.log('Profile:', profile)
-    console.log('Profile Error:', profileError)
 
     // Allow both regular admins and super admins
     const role = profile?.role
     if (profileError || !profile || (role !== 'admin' && role !== 'super_admin')) {
-      console.log('Access denied: Not an admin or profile error')
+      if (process.env.DEBUG) console.log('Access denied: admin check failed for userId present=', !!userId)
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
     
-    console.log('Access granted: Admin')
+    if (process.env.DEBUG) console.log('Access granted: Admin for userId present=', !!userId)
     return response
   }
   return response
