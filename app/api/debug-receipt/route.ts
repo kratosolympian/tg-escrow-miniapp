@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       }
       if (process.env.DEBUG) console.log('✅ Basic authentication successful for user id:', user.id)
     } catch (authError: any) {
-      console.log('❌ Authentication failed')
+      if (process.env.DEBUG) console.log('❌ Authentication failed')
       return NextResponse.json({ error: 'Auth failed', details: authError?.message || 'Unknown auth error' }, { status: 401 })
     }
 
