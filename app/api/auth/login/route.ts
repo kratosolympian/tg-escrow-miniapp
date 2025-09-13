@@ -137,20 +137,16 @@ export async function POST(request: NextRequest) {
     }
 
   const redirectUrl = new URL('/admin/dashboard', request.url)
-  // For HTML form flows, return a small HTML page that performs a client-side redirect
-  // to guarantee a GET navigation even if some intermediate preserves the POST method.
-  try {
-    const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
-    const html = `<!doctype html><html><head><meta charset="utf-8"></head><body><script>window.location.replace('${redirectUrl.href}')</script></body></html>`
-    const resp = new NextResponse(html, { headers: { 'content-type': 'text/html; charset=utf-8' } })
-    if (session && (session as any).access_token) {
-      resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
-    }
-    return resp
-  } catch (e) {
-    // Fallback to a standard 303 redirect if anything goes wrong
-    return NextResponse.redirect(redirectUrl, 303)
+  // For HTML form flows, respond with an explicit 303 See Other redirect so
+  // browsers follow with GET and do not re-POST to the target page.
+  // Attach the Supabase session cookie when available so subsequent requests
+  // include the authenticated session.
+  const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
+  const resp = NextResponse.redirect(redirectUrl, 303)
+  if (session && (session as any).access_token) {
+    resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
   }
+  return resp
 
   } catch (error) {
     console.error('Login route error:', error)
