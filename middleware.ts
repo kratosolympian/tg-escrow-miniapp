@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
 import { createServerClientWithCookies, createServiceRoleClient } from './lib/supabaseServer'
 
 export async function middleware(request: NextRequest) {
@@ -13,6 +12,15 @@ export async function middleware(request: NextRequest) {
     const cookieHeader = request.headers.get('cookie')
     const cookieCount = cookieHeader ? cookieHeader.split(';').filter(Boolean).length : 0
     console.log('Middleware request:', request.method, url, 'cookies=', cookieCount)
+  }
+
+  // Defensive: if an old HTML form POST is replayed to the dashboard path,
+  // convert it into a GET by returning a 303 See Other. This prevents
+  // POST replays from reaching the dashboard page and triggering unexpected
+  // behavior or noisy SDK warnings in logs.
+  if (request.method === 'POST' && url === '/admin/dashboard') {
+    const redirectUrl = new URL('/admin/dashboard', request.url)
+    return NextResponse.redirect(redirectUrl, 303)
   }
 
   // Prefer calling getUser which authenticates the session with Supabase Auth
