@@ -31,8 +31,8 @@ export async function middleware(request: NextRequest) {
 
   const userId = verifiedUser?.id ?? null
 
-  // If no session, redirect to login for protected admin routes
-  if (!session && request.nextUrl.pathname.startsWith('/admin') &&
+  // If no verified user, redirect to login for protected admin routes
+  if (!verifiedUser && request.nextUrl.pathname.startsWith('/admin') &&
       !request.nextUrl.pathname.startsWith('/admin/login') &&
       !request.nextUrl.pathname.startsWith('/admin/test')) {
     return NextResponse.redirect(new URL('/admin/login', request.url))
