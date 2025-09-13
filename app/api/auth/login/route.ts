@@ -11,6 +11,10 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    if (process.env.DEBUG) {
+      const ct = request.headers.get('content-type') || ''
+      console.log('Login route invoked:', request.method, 'content-type=', ct)
+    }
     // Support both JSON (fetch) and form submissions (classic HTML form)
     const contentType = (request.headers.get('content-type') || '').toLowerCase()
     let email: string

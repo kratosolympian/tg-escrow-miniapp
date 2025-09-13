@@ -8,7 +8,12 @@ export async function middleware(request: NextRequest) {
   const supabase = createServerClientWithCookies()
   // Minimal debug logging (avoid printing tokens)
   const url = request.nextUrl.pathname
-  if (process.env.DEBUG) console.log('Middleware request:', url)
+  if (process.env.DEBUG) {
+    // Log HTTP method and a harmless cookie count (do not print cookie values)
+    const cookieHeader = request.headers.get('cookie')
+    const cookieCount = cookieHeader ? cookieHeader.split(';').filter(Boolean).length : 0
+    console.log('Middleware request:', request.method, url, 'cookies=', cookieCount)
+  }
 
   // Get session (do not log full session object)
   const { data: { session } } = await supabase.auth.getSession()
