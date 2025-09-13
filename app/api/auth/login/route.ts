@@ -68,24 +68,11 @@ export async function POST(request: NextRequest) {
         // we will attempt to read the session via getUser and, if present, set a
         // session cookie named 'sb:token' carrying the access token (short-lived).
         // This mirrors Supabase's cookie behavior enough for local flows.
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session && (session as any).access_token) {
-          // Create a signed one-time token as well so JSON clients always receive a token
-          try {
-            const { createSignedToken } = await import('@/lib/signedAuth')
-            const token = createSignedToken(authData.user.id, 300)
-            const resp = NextResponse.json({ user: authData.user, __one_time_token: token })
-            // set a short-lived cookie containing the access token so subsequent
-            // fetch requests from the client will include it for server-side helpers
-            resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
-            return resp
-          } catch (e) {
-            // If token creation fails for any reason, still return user and cookie
-            const resp = NextResponse.json({ user: authData.user })
-            resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
-            return resp
-          }
-        }
+        // Avoid calling supabase.auth.getSession() here because it reads session
+        // data directly from storage (cookies) and the Supabase SDK warns that
+        // this may be insecure. We prefer to return a short-lived signed one-time
+        // token to JSON clients so they can continue (the token is HMAC-signed
+        // and validated server-side).
       } catch (e) {
         console.warn('Could not attach session cookie to JSON login response:', e)
       }
@@ -122,13 +109,11 @@ export async function POST(request: NextRequest) {
           .single()
         if ((profile as any)?.role === 'seller') {
           const redirectUrl = new URL(`/seller/escrow/${redirectCookie}`, request.url)
-          // Attempt to attach session cookie if available, then respond with an HTML JS redirect
-          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
+          // Respond with an HTML JS redirect. Do not read session via getSession()
+          // (unsafe per Supabase SDK). If the caller needs a token, the client
+          // should use the JSON / fetch flow which receives a signed token above.
           const html = `<!doctype html><html><head><meta charset="utf-8"></head><body><script>window.location.replace('${redirectUrl.href}')</script></body></html>`
           const resp = new NextResponse(html, { headers: { 'content-type': 'text/html; charset=utf-8' } })
-          if (session && (session as any).access_token) {
-            resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
-          }
           // clear cookie
           resp.cookies.set('redirect_escrow', '', { path: '/', httpOnly: true, sameSite: 'lax', expires: new Date(0) })
           return resp
@@ -141,8 +126,6 @@ export async function POST(request: NextRequest) {
   // a conservative HTML+JS fallback that forces a client GET navigation
   // to the dashboard. Some caches or older clients may re-POST the
   // Location target; the fallback ensures a GET is issued instead.
-  const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
-
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Redirecting...</title></head><body>
   <noscript><meta http-equiv="refresh" content="0;url=${redirectUrl.href}" /></noscript>
   <form id="redir" method="get" action="${redirectUrl.href}"></form>
@@ -157,9 +140,9 @@ export async function POST(request: NextRequest) {
     }
   })
 
-  if (session && (session as any).access_token) {
-    resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
-  }
+  // Do not set raw access_token cookies here; JSON clients receive a
+  // signed one-time token earlier in the flow. This avoids reading session
+  // storage directly on the server which the Supabase SDK warns against.
   return resp
 
   } catch (error) {
