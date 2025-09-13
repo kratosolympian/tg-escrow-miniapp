@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
           .single()
         if ((profile as any)?.role === 'seller') {
           const redirectUrl = new URL(`/seller/escrow/${redirectCookie}`, request.url)
-          const resp = NextResponse.redirect(redirectUrl)
+          const resp = NextResponse.redirect(redirectUrl, 303)
           // clear cookie
           resp.cookies.set('redirect_escrow', '', { path: '/', httpOnly: true, sameSite: 'lax', expires: new Date(0) })
           return resp
@@ -130,8 +130,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const redirectUrl = new URL('/admin/dashboard', request.url)
-    return NextResponse.redirect(redirectUrl)
+  const redirectUrl = new URL('/admin/dashboard', request.url)
+  return NextResponse.redirect(redirectUrl, 303)
 
   } catch (error) {
     console.error('Login route error:', error)
