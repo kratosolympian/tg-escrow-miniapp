@@ -4,8 +4,14 @@ import fetch from 'node-fetch'
 async function main() {
   const url = 'http://localhost:3000/api/auth/login'
   const params = new URLSearchParams()
-  params.append('email', 'ceo@kratos.ng')
-  params.append('password', 'letmein')
+  const EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.ADMIN_EMAIL || ''
+  const PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || ''
+  if (!EMAIL || !PASSWORD) {
+    console.error('Missing TEST_ADMIN_EMAIL or TEST_ADMIN_PASSWORD environment variables. Aborting.')
+    process.exit(2)
+  }
+  params.append('email', EMAIL)
+  params.append('password', PASSWORD)
 
   console.log('Posting login form...')
   const res = await fetch(url, {
@@ -22,7 +28,7 @@ async function main() {
     console.log('location:', location)
   } else {
     console.log('set-cookie: <redacted - set DEBUG=1 to view>')
-    console.log('location:', location)
+    console.log('location: <redacted - set DEBUG=1 to view>')
   }
 
   if (setCookie) {

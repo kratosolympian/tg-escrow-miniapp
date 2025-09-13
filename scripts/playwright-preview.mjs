@@ -33,8 +33,14 @@ import { chromium } from 'playwright';
   await page.goto(`${url}/admin/login`, { waitUntil: 'networkidle', timeout: 90000 });
 
   // Fill known test admin credentials (super admin provided)
-  await page.fill('input[name=email]', 'ceo@kratos.ng', { timeout: 90000 });
-  await page.fill('input[name=password]', 'letmein', { timeout: 90000 });
+  const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.ADMIN_EMAIL || ''
+  const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || ''
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.error('Missing TEST_ADMIN_EMAIL or TEST_ADMIN_PASSWORD environment variables. Aborting.')
+    process.exit(2)
+  }
+  await page.fill('input[name=email]', ADMIN_EMAIL, { timeout: 90000 });
+  await page.fill('input[name=password]', ADMIN_PASSWORD, { timeout: 90000 });
 
   // Submit form (will use client-side handler since we changed it)
   await Promise.all([

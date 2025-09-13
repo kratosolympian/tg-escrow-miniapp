@@ -28,6 +28,8 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+#.prevent committing production env files with live secrets
+.env.production
 
 # vercel
 .vercel

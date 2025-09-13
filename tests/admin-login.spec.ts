@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test'
 
-const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || 'johnayodele01@gmail.com'
-const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'password123'
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || ''
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || ''
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  throw new Error('TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD must be set in the environment to run admin login tests')
+}
 
 test.describe('admin login', () => {
   test('admin login flow', async ({ page }) => {
