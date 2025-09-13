@@ -56,9 +56,10 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="card">
-          {/* Use a plain HTML form so the server can set the HTTP-only cookie and return a redirect
-              in the same response. This avoids fetch + client-side navigation timing issues. */}
-          <form method="post" action="/api/auth/login" className="space-y-6">
+      {/* Use client-side submit (fetch) to control navigation and avoid
+        relying on server redirects which can cause browsers to re-POST
+        to a page URL in some environments. */}
+      <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label htmlFor="email" className="label">
                 Email Address
