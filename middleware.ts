@@ -15,24 +15,21 @@ export async function middleware(request: NextRequest) {
     console.log('Middleware request:', request.method, url, 'cookies=', cookieCount)
   }
 
-  // Get session (do not log full session object)
-  const { data: { session } } = await supabase.auth.getSession()
-  const userId = session?.user?.id
-
-  // If a session exists, verify it with a trusted call to getUser
+  // Prefer calling getUser which authenticates the session with Supabase Auth
+  // rather than trusting session data read directly from cookies.
   let verifiedUser: any = null
-  if (session?.access_token) {
-    try {
-      const { data: userResult, error: userError } = await supabase.auth.getUser()
-      if (userError) {
-        if (process.env.DEBUG) console.log('Warning: supabase.auth.getUser() error in middleware', userError.message ?? userError)
-      } else {
-        verifiedUser = userResult?.user ?? null
-      }
-    } catch (err) {
-      if (process.env.DEBUG) console.log('Warning: failed to verify user in middleware', err)
+  try {
+    const { data: userResult, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      if (process.env.DEBUG) console.log('Warning: supabase.auth.getUser() error in middleware', userError.message ?? userError)
+    } else {
+      verifiedUser = userResult?.user ?? null
     }
+  } catch (err) {
+    if (process.env.DEBUG) console.log('Warning: failed to verify user in middleware', err)
   }
+
+  const userId = verifiedUser?.id ?? null
 
   // If no session, redirect to login for protected admin routes
   if (!session && request.nextUrl.pathname.startsWith('/admin') &&
