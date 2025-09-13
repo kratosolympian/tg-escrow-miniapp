@@ -121,7 +121,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-  const redirectUrl = new URL('/admin/dashboard', request.url)
+  // Add a cache-busting query so CDNs/newer deployments don't serve an
+  // old cached /admin/dashboard HTML that responds 405 to POSTs.
+  const redirectUrl = new URL(`/admin/dashboard?_ts=${Date.now()}`, request.url)
   // For HTML form flows, respond with an explicit 303 See Other and include
   // a conservative HTML+JS fallback that forces a client GET navigation
   // to the dashboard. Some caches or older clients may re-POST the
