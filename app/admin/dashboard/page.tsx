@@ -42,6 +42,12 @@ export default function AdminDashboard() {
         console.error('Failed to get user on mount', e)
       }
     })()
+    if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
+      // Minimal client-side debug hint to confirm dashboard mounted
+      // Do not print user/session data.
+      // eslint-disable-next-line no-console
+      console.debug('AdminDashboard mounted (client)')
+    }
   }, [filter, search])
 
   const detectCurrentUser = async () => {

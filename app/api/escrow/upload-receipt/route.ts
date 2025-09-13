@@ -9,6 +9,7 @@ import { ESCROW_STATUS, canTransition } from '@/lib/status'
 export async function POST(request: NextRequest) {
   // Ensure route is only used for POST requests
   if (request.method !== 'POST') {
+    if (process.env.DEBUG) console.log('405 - Method Not Allowed:', request.method, request.url)
     return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
   }
   try {
