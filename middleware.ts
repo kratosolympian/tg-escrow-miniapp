@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
 import { createServerClientWithCookies, createServiceRoleClient } from './lib/supabaseServer'
 
 export async function middleware(request: NextRequest) {
@@ -8,29 +7,40 @@ export async function middleware(request: NextRequest) {
   const supabase = createServerClientWithCookies()
   // Minimal debug logging (avoid printing tokens)
   const url = request.nextUrl.pathname
-  if (process.env.DEBUG) console.log('Middleware request:', url)
-
-  // Get session (do not log full session object)
-  const { data: { session } } = await supabase.auth.getSession()
-  const userId = session?.user?.id
-
-  // If a session exists, verify it with a trusted call to getUser
-  let verifiedUser: any = null
-  if (session?.access_token) {
-    try {
-      const { data: userResult, error: userError } = await supabase.auth.getUser()
-      if (userError) {
-        if (process.env.DEBUG) console.log('Warning: supabase.auth.getUser() error in middleware', userError.message ?? userError)
-      } else {
-        verifiedUser = userResult?.user ?? null
-      }
-    } catch (err) {
-      if (process.env.DEBUG) console.log('Warning: failed to verify user in middleware', err)
-    }
+  if (process.env.DEBUG) {
+    // Log HTTP method and a harmless cookie count (do not print cookie values)
+    const cookieHeader = request.headers.get('cookie')
+    const cookieCount = cookieHeader ? cookieHeader.split(';').filter(Boolean).length : 0
+    console.log('Middleware request:', request.method, url, 'cookies=', cookieCount)
   }
 
-  // If no session, redirect to login for protected admin routes
-  if (!session && request.nextUrl.pathname.startsWith('/admin') &&
+  // Defensive: if an old HTML form POST is replayed to the dashboard path,
+  // convert it into a GET by returning a 303 See Other. This prevents
+  // POST replays from reaching the dashboard page and triggering unexpected
+  // behavior or noisy SDK warnings in logs.
+  if (request.method === 'POST' && url === '/admin/dashboard') {
+    const redirectUrl = new URL('/admin/dashboard', request.url)
+    return NextResponse.redirect(redirectUrl, 303)
+  }
+
+  // Prefer calling getUser which authenticates the session with Supabase Auth
+  // rather than trusting session data read directly from cookies.
+  let verifiedUser: any = null
+  try {
+    const { data: userResult, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      if (process.env.DEBUG) console.log('Warning: supabase.auth.getUser() error in middleware', userError.message ?? userError)
+    } else {
+      verifiedUser = userResult?.user ?? null
+    }
+  } catch (err) {
+    if (process.env.DEBUG) console.log('Warning: failed to verify user in middleware', err)
+  }
+
+  const userId = verifiedUser?.id ?? null
+
+  // If no verified user, redirect to login for protected admin routes
+  if (!verifiedUser && request.nextUrl.pathname.startsWith('/admin') &&
       !request.nextUrl.pathname.startsWith('/admin/login') &&
       !request.nextUrl.pathname.startsWith('/admin/test')) {
     return NextResponse.redirect(new URL('/admin/login', request.url))

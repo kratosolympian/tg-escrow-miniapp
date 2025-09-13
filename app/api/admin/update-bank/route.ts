@@ -16,7 +16,8 @@ const updateBankSchema = z.object({
 
 export async function POST(request: NextRequest) {
   if (request.method !== 'POST') {
-    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
+  if (process.env.DEBUG) console.log('405 - Method Not Allowed:', request.method, request.url)
+  return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
   }
   try {
   const supabase = createServerClientWithCookies()
