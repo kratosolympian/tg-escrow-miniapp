@@ -14,12 +14,13 @@ export async function middleware(request: NextRequest) {
     console.log('Middleware request:', request.method, url, 'cookies=', cookieCount)
   }
 
-  // Defensive: if an old HTML form POST is replayed to the dashboard path,
-  // convert it into a GET by returning a 303 See Other. This prevents
-  // POST replays from reaching the dashboard page and triggering unexpected
-  // behavior or noisy SDK warnings in logs.
-  if (request.method === 'POST' && url === '/admin/dashboard') {
-    const redirectUrl = new URL('/admin/dashboard', request.url)
+  // Defensive: convert POSTs to any /admin/* path into a 303 See Other
+  // to the same path with a cache-busting timestamp. This prevents
+  // cached/stale form POSTs from reaching App Router pages (which reject
+  // non-GETs) and causing 405 responses or noisy SDK warnings.
+  if (request.method === 'POST' && url.startsWith('/admin')) {
+    const redirectUrl = new URL(url, request.url)
+    redirectUrl.searchParams.set('_ts', String(Date.now()))
     return NextResponse.redirect(redirectUrl, 303)
   }
 
