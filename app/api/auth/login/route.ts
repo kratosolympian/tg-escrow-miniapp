@@ -137,12 +137,26 @@ export async function POST(request: NextRequest) {
     }
 
   const redirectUrl = new URL('/admin/dashboard', request.url)
-  // For HTML form flows, respond with an explicit 303 See Other redirect so
-  // browsers follow with GET and do not re-POST to the target page.
-  // Attach the Supabase session cookie when available so subsequent requests
-  // include the authenticated session.
+  // For HTML form flows, respond with an explicit 303 See Other and include
+  // a conservative HTML+JS fallback that forces a client GET navigation
+  // to the dashboard. Some caches or older clients may re-POST the
+  // Location target; the fallback ensures a GET is issued instead.
   const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
-  const resp = NextResponse.redirect(redirectUrl, 303)
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Redirecting...</title></head><body>
+  <noscript><meta http-equiv="refresh" content="0;url=${redirectUrl.href}" /></noscript>
+  <form id="redir" method="get" action="${redirectUrl.href}"></form>
+  <script>try{document.getElementById('redir').submit();}catch(e){location.replace('${redirectUrl.href}')}</script>
+</body></html>`
+
+  const resp = new NextResponse(html, {
+    status: 303,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store'
+    }
+  })
+
   if (session && (session as any).access_token) {
     resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
   }
