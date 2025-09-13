@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       })
 
       if (createError || !newUser.user) {
-        console.error('Error creating user')
+        if (process.env.DEBUG) console.error('Error creating user:', createError)
         console.error('User creation failed')
         return NextResponse.json({ 
           error: 'Failed to create user', 
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         })
 
       if (profileError) {
-        console.error('Error creating profile')
+        if (process.env.DEBUG) console.error('Error creating profile:', profileError)
         console.error('Profile creation failed for user id:', newUser.user.id)
         return NextResponse.json({ 
           error: 'Failed to create profile', 
