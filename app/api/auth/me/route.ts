@@ -8,9 +8,9 @@ export async function GET(request: NextRequest) {
   try {
   const supabase = createServerClientWithCookies()
 
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session) {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (profileError) {
@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
     const profileData = (profile && typeof profile === 'object' && !Array.isArray(profile)) ? profile : {}
     return NextResponse.json({
       user: {
-        id: session.user.id,
-        email: session.user.email,
+        id: user.id,
+        email: user.email,
         ...profileData
       }
     })

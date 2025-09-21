@@ -51,8 +51,9 @@ export async function POST(request: NextRequest) {
         escrow_id: escrow.id,
         old_status: escrow.status,
         new_status: ESCROW_STATUS.PAYMENT_CONFIRMED,
-        changed_by: null, // Admin action
-        reason: 'Payment confirmed by admin'
+        changed_by: null,
+        reason: 'Payment confirmed by admin',
+        status: ESCROW_STATUS.PAYMENT_CONFIRMED
       })
 
     if (logError) {

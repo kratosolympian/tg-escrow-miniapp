@@ -44,6 +44,12 @@ interface EscrowDetail {
     uploaded_at: string
     filename: string
   }>
+  status_logs?: Array<{
+    id: string
+    status: string
+    created_at: string
+    changed_by: string | null
+  }>
 }
 
 interface AdminAction {
@@ -167,41 +173,54 @@ export default function AdminEscrowDetailPage() {
     setSuccess('')
 
     try {
-      const endpoint = action === 'confirm-payment' ? '/api/admin/confirm-payment' 
-                    : action === 'release-funds' ? '/api/admin/release-funds'
-                    : action === 'refund' ? '/api/admin/refund'
-                    : null
+      // Map action to endpoint and request body key
+      let endpoint: string | null = null;
+      let body: any = {};
+      if (action === 'confirm-payment') {
+        endpoint = '/api/admin/confirm-payment';
+        body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
+      } else if (action === 'release-funds') {
+        endpoint = '/api/admin/release-funds';
+        body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
+      } else if (action === 'refund') {
+        endpoint = '/api/admin/refund';
+        body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
+      } else if (action === 'put-on-hold') {
+        endpoint = '/api/admin/put-on-hold';
+        body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
+      } else if (action === 'close') {
+        endpoint = '/api/admin/close';
+        body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
+      }
 
       if (!endpoint) {
-        setError('Invalid action')
-        return
+        setError('Invalid action');
+        return;
       }
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          escrow_id: escrow.id,
-          admin_notes: notes || adminNotes || undefined
-        })
-      })
+        body: JSON.stringify(body)
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
-      if (response.ok && result.success) {
-        setSuccess(result.message || `${action.replace('-', ' ')} completed successfully`)
-        fetchEscrowDetails() // Refresh escrow details
-        fetchAdminActions() // Refresh admin actions
-        setAdminNotes('')
-        setShowNotesForm(false)
+      // Accept both { ok: true } and { success: true } for compatibility
+      if (response.ok && (result.success || result.ok)) {
+        setSuccess(result.message || `${action.replace('-', ' ')} completed successfully`);
+        fetchEscrowDetails(); // Refresh escrow details
+        fetchAdminActions(); // Refresh admin actions
+        setAdminNotes('');
+        setShowNotesForm(false);
       } else {
-        setError(result.error || `Failed to ${action.replace('-', ' ')}`)
+        setError(result.error || `Failed to ${action.replace('-', ' ')}`);
       }
     } catch (error) {
-      console.error(`Error ${action}:`, error)
-      setError(`Failed to ${action.replace('-', ' ')}`)
+      console.error(`Error ${action}:`, error);
+      setError(`Failed to ${action.replace('-', ' ')}`);
     } finally {
-      setActionLoading(null)
+      setActionLoading(null);
     }
   }
 
@@ -238,19 +257,15 @@ export default function AdminEscrowDetailPage() {
     }
   }
 
+  // Expanded admin actions for all statuses
   const getAvailableActions = () => {
-    if (!escrow) return []
-    
-    switch (escrow.status) {
-      case 'waiting_admin':
-        return ['confirm-payment']
-      case 'payment_confirmed':
-        return ['release-funds', 'refund']
-      case 'delivered':
-        return ['release-funds', 'refund']
-      default:
-        return []
-    }
+    if (!escrow) return [];
+    const actions = [];
+    if (escrow.status === 'waiting_admin') actions.push('confirm-payment');
+    if (escrow.status === 'payment_confirmed' || escrow.status === 'delivered') actions.push('release-funds', 'refund');
+    if (escrow.status !== 'on_hold' && escrow.status !== 'completed' && escrow.status !== 'refunded' && escrow.status !== 'closed') actions.push('put-on-hold');
+    if (escrow.status !== 'completed' && escrow.status !== 'refunded' && escrow.status !== 'closed') actions.push('close');
+    return Array.from(new Set(actions));
   }
 
   if (loading) {
@@ -325,11 +340,7 @@ export default function AdminEscrowDetailPage() {
             <Link href="/admin/settings" className="btn-secondary">
               ⚙️ Settings
             </Link>
-            {currentUser && (
-              <button onClick={handleLogout} className="btn-secondary">
-                🚪 Logout
-              </button>
-            )}
+            {/* Logout button removed; only in header */}
           </div>
         </div>
       </div>
@@ -369,19 +380,42 @@ export default function AdminEscrowDetailPage() {
                   <h3 className="font-semibold text-gray-700 mb-3">Basic Information</h3>
                   <div className="space-y-2 text-sm">
                     <div><span className="text-gray-500">Code:</span> <span className="font-mono font-semibold">{escrow.code}</span></div>
-                    <div><span className="text-gray-500">Created:</span> {formatDateTime(escrow.created_at)}</div>
-                    <div><span className="text-gray-500">Updated:</span> {formatDateTime(escrow.updated_at)}</div>
-                    {expiryDate && (
-                      <div>
-                        <span className="text-gray-500">Expires:</span> <span className="font-semibold">{formatDateTime(expiryDate.toISOString())}</span>
-                      </div>
-                    )}
-                    {secondsLeft !== null && (
-                      <div>
-                        <span className="text-gray-500">Time until close:</span> <span className="font-mono font-semibold">{formatCountdown(secondsLeft)}</span>
-                      </div>
-                    )}
-                    <div><span className="text-gray-500">Status:</span> <span className={getStatusColor(escrow.status)}>{escrow.status.replace('_', ' ').toUpperCase()}</span></div>
+                    <div><span className="text-gray-500">Created:</span> {isNaN(Date.parse(escrow.created_at)) ? 'N/A' : formatDateTime(escrow.created_at)}</div>
+                    <div><span className="text-gray-500">Updated:</span> {isNaN(Date.parse(escrow.updated_at)) ? 'N/A' : formatDateTime(escrow.updated_at)}</div>
+                    {/* Timer Section using status_logs */}
+                    {(() => {
+                      let timerLabel = ''
+                      let timerEnd: Date | null = null
+                      if (escrow.status === 'waiting_payment') {
+                        timerLabel = 'Time left for buyer to pay:'
+                        timerEnd = new Date(new Date(escrow.created_at).getTime() + 30 * 60 * 1000)
+                      } else if (escrow.status === 'payment_confirmed') {
+                        const log = escrow.status_logs?.find((l: any) => l.status === 'payment_confirmed')
+                        if (log) {
+                          timerLabel = 'Time left for seller to deliver:'
+                          timerEnd = new Date(new Date(log.created_at).getTime() + 30 * 60 * 1000)
+                        }
+                      } else if (escrow.status === 'in_progress') {
+                        const log = escrow.status_logs?.find((l: any) => l.status === 'delivered')
+                        if (log) {
+                          timerLabel = 'Time left for buyer to confirm receipt:'
+                          timerEnd = new Date(new Date(log.created_at).getTime() + 5 * 60 * 1000)
+                        }
+                      }
+                      if (timerLabel && timerEnd) {
+                        const now = Date.now()
+                        const secs = Math.max(0, Math.floor((timerEnd.getTime() - now) / 1000))
+                        const h = Math.floor(secs / 3600)
+                        const m = Math.floor((secs % 3600) / 60)
+                        const s = secs % 60
+                        return (
+                          <div>
+                            <span className="text-gray-500">{timerLabel}</span> <span className="font-mono font-semibold">{`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`}</span>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
                   </div>
                 </div>
 
@@ -514,7 +548,6 @@ export default function AdminEscrowDetailPage() {
                       {actionLoading === 'confirm-payment' ? 'Confirming...' : '✅ Confirm Payment'}
                     </button>
                   )}
-                  
                   {availableActions.includes('release-funds') && (
                     <button
                       onClick={() => handleAdminAction('release-funds')}
@@ -524,7 +557,6 @@ export default function AdminEscrowDetailPage() {
                       {actionLoading === 'release-funds' ? 'Releasing...' : '💰 Release Funds'}
                     </button>
                   )}
-                  
                   {availableActions.includes('refund') && (
                     <button
                       onClick={() => handleAdminAction('refund')}
@@ -532,6 +564,24 @@ export default function AdminEscrowDetailPage() {
                       className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
                     >
                       {actionLoading === 'refund' ? 'Processing...' : '↩️ Refund to Buyer'}
+                    </button>
+                  )}
+                  {availableActions.includes('put-on-hold') && (
+                    <button
+                      onClick={() => handleAdminAction('put-on-hold')}
+                      disabled={!!actionLoading}
+                      className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
+                    >
+                      {actionLoading === 'put-on-hold' ? 'Putting on Hold...' : '⏸️ Put on Hold'}
+                    </button>
+                  )}
+                  {availableActions.includes('close') && (
+                    <button
+                      onClick={() => handleAdminAction('close')}
+                      disabled={!!actionLoading}
+                      className="w-full bg-gray-500 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
+                    >
+                      {actionLoading === 'close' ? 'Closing...' : '❌ Close/Cancel Escrow'}
                     </button>
                   )}
                 </div>
@@ -594,13 +644,26 @@ export default function AdminEscrowDetailPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-500">Days Active:</span>
                   <span className="font-semibold">
-                    {Math.ceil((new Date().getTime() - new Date(escrow.created_at).getTime()) / (1000 * 3600 * 24))}
+                    {(() => {
+                      const created = Date.parse(escrow.created_at)
+                      if (isNaN(created)) return 'N/A'
+                      return Math.max(1, Math.ceil((Date.now() - created) / (1000 * 3600 * 24)))
+                    })()}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Last Updated:</span>
                   <span className="font-semibold">
-                    {Math.ceil((new Date().getTime() - new Date(escrow.updated_at).getTime()) / (1000 * 3600))}h ago
+                    {(() => {
+                      const updated = Date.parse(escrow.updated_at)
+                      if (isNaN(updated)) return 'N/A'
+                      const hours = Math.floor((Date.now() - updated) / (1000 * 3600))
+                      if (hours < 1) {
+                        const mins = Math.floor((Date.now() - updated) / (1000 * 60))
+                        return mins <= 0 ? 'just now' : `${mins}m ago`
+                      }
+                      return `${hours}h ago`
+                    })()}
                   </span>
                 </div>
               </div>

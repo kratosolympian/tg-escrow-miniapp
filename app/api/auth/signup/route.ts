@@ -18,75 +18,108 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClientWithCookies()
     const serviceClient = createServiceRoleClient()
 
-    // Sign up the user
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name
+    // Sign up the user using the server cookie client first. In some
+    // environments (RLS / trigger setup) this can fail with a DB error
+    // during the auth.user creation. If that happens, fall back to the
+    // service-role admin API which has privileges to create the auth user
+    // and associated profile rows.
+    let authData: any = null
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) throw error
+      authData = data
+    } catch (err: any) {
+      // Attempt fallback with service role admin.createUser
+      console.warn('Signup via server-client failed, will fallback to service role if allowed:', err)
+      try {
+        const { data: created, error: adminErr } = await serviceClient.auth.admin.createUser({
+          email,
+          password,
+          user_metadata: { full_name: name }
+        } as any)
+        if (adminErr) {
+          console.error('Service-role createUser failed:', adminErr)
+          return NextResponse.json({ error: adminErr.message || 'Failed to create user' }, { status: 500 })
         }
+        authData = { user: created.user }
+        // Ensure profile exists (service role can write profiles directly)
+        const userId = created.user?.id
+        if (userId) {
+          try {
+            await serviceClient.from('profiles').insert({ id: userId, email, full_name: name, role: 'seller' }).select()
+          } catch (e) {
+            // non-fatal; log but continue
+            console.warn('Failed to create profile via service role after admin.createUser:', e)
+          }
+        }
+      } catch (e2) {
+        console.error('Fallback service-role signup failed:', e2)
+        return NextResponse.json({ error: (e2 && (e2 as any).message) || 'Signup failed' }, { status: 500 })
       }
-    })
-
-    if (signUpError) {
-      console.error('Signup error')
-      return NextResponse.json({ error: signUpError.message }, { status: 400 })
     }
 
-    if (!authData.user) {
+    if (!authData?.user) {
       return NextResponse.json({ error: 'Failed to create user' }, { status: 400 })
     }
 
     // Attempt to sign the user in immediately so a session cookie is established
+    let signInData: any = null
     try {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      const signed = await supabase.auth.signInWithPassword({ email, password })
+      signInData = signed.data
+      const signInError = signed.error
       if (signInError) {
         console.warn('Sign-in after signup failed:', signInError)
         // continue — signup succeeded but no session was created
       } else {
-  // signInData may contain session info; cookies are set via the server client
-  if (process.env.DEBUG) console.log('User signed in after signup, id:', signInData?.user?.id)
+        // signInData may contain session info; cookies are set via the server client
+        if (process.env.DEBUG) console.log('User signed in after signup, id:', signInData?.user?.id)
       }
     } catch (e) {
       console.warn('Error signing in after signup:', e)
     }
 
-    // Create profile using service client
-    const { error: profileError } = await (serviceClient as any)
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
-        email: email,
-        full_name: name,
-        role: 'seller',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-
-    if (profileError) {
-      console.error('Profile creation error')
-      // Continue anyway, profile might be created by trigger
-    }
-
+    // Profile will be created automatically by database trigger
     // Generate a one-time token clients can use immediately to authenticate a follow-up action
     try {
       const { createSignedToken } = await import('@/lib/signedAuth')
       const token = createSignedToken(authData.user.id, 300) // 5 minutes
-      return NextResponse.json({ 
+      if (process.env.NEXT_PUBLIC_DEBUG) console.log('Signup route: created one-time token for user', authData.user.id)
+      // Build response and, when possible, attach auth cookies so JSON clients receive httpOnly cookies
+      const resp = NextResponse.json({
         user: {
           id: authData.user.id,
           email: authData.user.email
         },
         __one_time_token: token
       })
+      try {
+        const { setAuthCookies } = await import('@/lib/cookies')
+        // Prefer session from signInData if available, otherwise check authData.session
+        const session = signInData?.session || (authData as any).session
+        if (session && session.access_token) {
+          setAuthCookies(resp, session.access_token, session.refresh_token)
+        }
+      } catch (e) {
+        // ignore cookie attach failures
+      }
+      return resp
     } catch (e) {
-      return NextResponse.json({ 
+      if (process.env.NEXT_PUBLIC_DEBUG) console.log('Signup route: created user but failed to create one-time token, user id=', authData.user.id)
+      const resp = NextResponse.json({
         user: {
           id: authData.user.id,
           email: authData.user.email
         }
       })
+      try {
+        const { setAuthCookies } = await import('@/lib/cookies')
+        const session = signInData?.session || (authData as any).session
+        if (session && session.access_token) {
+          setAuthCookies(resp, session.access_token, session.refresh_token)
+        }
+      } catch (e) {}
+      return resp
     }
 
   } catch (error) {

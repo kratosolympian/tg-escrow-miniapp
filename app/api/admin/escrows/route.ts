@@ -76,8 +76,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
   // Create Supabase service role client
   const supabase = createServiceRoleClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  const userEmail = session?.user?.email
+  const { data: { user } } = await supabase.auth.getUser()
+  const userEmail = user?.email
 
   // Only super admin can add/remove admins
   if (userEmail !== 'ceo@kratos.ng') {

@@ -10,27 +10,12 @@ export async function middleware(request: NextRequest) {
   const url = request.nextUrl.pathname
   if (process.env.DEBUG) console.log('Middleware request:', url)
 
-  // Get session (do not log full session object)
-  const { data: { session } } = await supabase.auth.getSession()
-  const userId = session?.user?.id
+  // Get user (do not log full user object)
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const userId = user?.id
 
-  // If a session exists, verify it with a trusted call to getUser
-  let verifiedUser: any = null
-  if (session?.access_token) {
-    try {
-      const { data: userResult, error: userError } = await supabase.auth.getUser()
-      if (userError) {
-        if (process.env.DEBUG) console.log('Warning: supabase.auth.getUser() error in middleware', userError.message ?? userError)
-      } else {
-        verifiedUser = userResult?.user ?? null
-      }
-    } catch (err) {
-      if (process.env.DEBUG) console.log('Warning: failed to verify user in middleware', err)
-    }
-  }
-
-  // If no session, redirect to login for protected admin routes
-  if (!session && request.nextUrl.pathname.startsWith('/admin') &&
+  // If no user, redirect to login for protected admin routes
+  if (!user && request.nextUrl.pathname.startsWith('/admin') &&
       !request.nextUrl.pathname.startsWith('/admin/login') &&
       !request.nextUrl.pathname.startsWith('/admin/test')) {
     return NextResponse.redirect(new URL('/admin/login', request.url))

@@ -64,21 +64,23 @@ export async function POST(request: NextRequest) {
         // we will attempt to read the session via getUser and, if present, set a
         // session cookie named 'sb:token' carrying the access token (short-lived).
         // This mirrors Supabase's cookie behavior enough for local flows.
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session && (session as any).access_token) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user && authData.session && (authData.session as any).access_token) {
           // Create a signed one-time token as well so JSON clients always receive a token
           try {
             const { createSignedToken } = await import('@/lib/signedAuth')
             const token = createSignedToken(authData.user.id, 300)
             const resp = NextResponse.json({ user: authData.user, __one_time_token: token })
-            // set a short-lived cookie containing the access token so subsequent
-            // fetch requests from the client will include it for server-side helpers
-            resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
+            // set short-lived cookies for access and refresh tokens so subsequent
+            // server helpers can use them via centralized helper
+            const { setAuthCookies } = await import('@/lib/cookies')
+            setAuthCookies(resp, (authData.session as any).access_token, (authData.session as any).refresh_token)
             return resp
           } catch (e) {
             // If token creation fails for any reason, still return user and cookie
             const resp = NextResponse.json({ user: authData.user })
-            resp.cookies.set('sb:token', (session as any).access_token, { path: '/', httpOnly: true, sameSite: 'lax' })
+            const { setAuthCookies } = await import('@/lib/cookies')
+            setAuthCookies(resp, (authData.session as any).access_token, (authData.session as any).refresh_token)
             return resp
           }
         }
@@ -94,7 +96,9 @@ export async function POST(request: NextRequest) {
         const { createSignedToken } = await import('@/lib/signedAuth')
         const token = createSignedToken(authData.user.id, 300)
         const resp = NextResponse.json({ user: authData.user, __one_time_token: token })
-        // If we were able to attach a session cookie above, it was returned earlier.
+        // Also attempt to set cookies if session info is available
+        const { setAuthCookies } = await import('@/lib/cookies')
+        setAuthCookies(resp, (authData.session as any)?.access_token, (authData.session as any)?.refresh_token)
         return resp
       } catch (e) {
         const resp = NextResponse.json({ user: authData.user })
@@ -120,7 +124,8 @@ export async function POST(request: NextRequest) {
           const redirectUrl = new URL(`/seller/escrow/${redirectCookie}`, request.url)
           const resp = NextResponse.redirect(redirectUrl)
           // clear cookie
-          resp.cookies.set('redirect_escrow', '', { path: '/', httpOnly: true, sameSite: 'lax', expires: new Date(0) })
+          const { clearRedirectCookie } = await import('@/lib/cookies')
+          clearRedirectCookie(resp)
           return resp
         }
       }

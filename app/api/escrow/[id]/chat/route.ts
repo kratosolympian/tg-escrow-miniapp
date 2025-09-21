@@ -8,16 +8,20 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-  const supabase = createServerClientWithCookies() as any
-
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session) {
+  const supabase = createServerClientWithCookies()
+  const sb: any = supabase
+    // Get current user (guarded)
+    let user = null
+    try {
+      const r = await supabase.auth.getUser()
+      user = r?.data?.user ?? null
+    } catch (e) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     // Verify user has access to this escrow
-    const { data: escrow, error: escrowError } = await supabase
+    const { data: escrow, error: escrowError } = await sb
       .from('escrows')
       .select('seller_id, buyer_id')
       .eq('id', params.id)
@@ -28,21 +32,22 @@ export async function GET(
     }
 
     // Check if user is admin
-    const { data: userProfile } = await supabase
+    const { data: userProfile } = await sb
       .from('profiles')
       .select('role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
-
-  const isAdmin = userProfile && (userProfile as any).role === 'admin'
-  const hasAccess = isAdmin || (escrow as any).seller_id === session.user.id || (escrow as any).buyer_id === session.user.id
+  const userProfileAny: any = userProfile
+  const escrowAny: any = escrow
+  const isAdmin = userProfileAny && userProfileAny.role === 'admin'
+  const hasAccess = isAdmin || escrowAny.seller_id === user.id || escrowAny.buyer_id === user.id
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
     // Get chat messages with sender info
-    const { data: messages, error: messagesError } = await supabase
+  const { data: messages, error: messagesError } = await sb
       .from('chat_messages')
       .select(`
         id,
@@ -58,17 +63,18 @@ export async function GET(
       .order('created_at', { ascending: true })
 
     if (messagesError) {
-      console.error('Messages fetch error:', messagesError)
+  // ...removed for production...
       return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 })
     }
 
     // Mark messages as read for current user
     if (!isAdmin) {
-      await supabase
+      const updateObj: any = { is_read: true }
+      await sb
         .from('chat_messages')
-        .update({ is_read: true } as any)
+        .update(updateObj)
         .eq('escrow_id', params.id)
-        .neq('sender_id', session.user.id)
+        .neq('sender_id', user.id)
     }
 
     return NextResponse.json({
@@ -77,7 +83,7 @@ export async function GET(
     })
 
   } catch (error) {
-    console.error('Get chat messages error:', error)
+  // ...removed for production...
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -88,13 +94,17 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-  const supabase = createServerClientWithCookies() as any
-
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session) {
+  const supabase = createServerClientWithCookies()
+  const sb: any = supabase
+    // Get current user (guarded)
+    let user = null
+    try {
+      const r = await supabase.auth.getUser()
+      user = r?.data?.user ?? null
+    } catch (e) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json()
     const { message, message_type = 'text' } = body
@@ -108,7 +118,7 @@ export async function POST(
     }
 
     // Verify user has access to this escrow
-    const { data: escrow, error: escrowError } = await supabase
+    const { data: escrow, error: escrowError } = await sb
       .from('escrows')
       .select('seller_id, buyer_id')
       .eq('id', params.id)
@@ -119,49 +129,50 @@ export async function POST(
     }
 
     // Check if user is admin
-    const { data: userProfile } = await supabase
+    const { data: userProfile } = await sb
       .from('profiles')
       .select('role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
-  const isAdmin = userProfile && (userProfile as any).role === 'admin'
-  const hasAccess = isAdmin || (escrow as any).seller_id === session.user.id || (escrow as any).buyer_id === session.user.id
+  const userProfileAny2: any = userProfile
+  const escrowAny2: any = escrow
+  const isAdmin = userProfileAny2 && userProfileAny2.role === 'admin'
+  const hasAccess = isAdmin || escrowAny2.seller_id === user.id || escrowAny2.buyer_id === user.id
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
     // Insert the message
-    const { data: newMessage, error: insertError } = await supabase
+    const insertObj: any = {
+      escrow_id: params.id,
+      sender_id: user.id,
+      message: message.trim(),
+      message_type,
+      is_read: false
+    }
+    const { data: newMessage, error: insertError } = await sb
       .from('chat_messages')
-      .insert({
-        escrow_id: params.id,
-        sender_id: session.user.id,
-        message: message.trim(),
-        message_type,
-        is_read: false
-      } as any)
+      .insert(insertObj)
       .select()
       .single()
 
     if (insertError) {
-      console.error('Message insert error:', insertError)
+  // ...removed for production...
       return NextResponse.json({ error: 'Failed to send message' }, { status: 500 })
     }
 
 
     // Add user to chat participants if not already there
-    await supabase
+    const upsertObj: any = {
+      escrow_id: params.id,
+      user_id: user.id,
+      last_read_at: new Date().toISOString()
+    }
+    await sb
       .from('chat_participants')
-      .upsert(
-        {
-          escrow_id: params.id,
-          user_id: session.user.id,
-          last_read_at: new Date().toISOString()
-        } as any,
-        { onConflict: 'escrow_id,user_id' }
-      )
+      .upsert(upsertObj, { onConflict: 'escrow_id,user_id' })
 
     return NextResponse.json({
       success: true,
@@ -169,7 +180,7 @@ export async function POST(
     })
 
   } catch (error) {
-    console.error('Send chat message error:', error)
+  // ...removed for production...
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

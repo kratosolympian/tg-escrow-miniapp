@@ -31,9 +31,45 @@ async function persistTokenToDb(tokenId: string, userId: string, expires: number
 async function consumeTokenFromDb(tokenId: string) {
   try {
     const svc = createServiceRoleClient()
-    // Attempt to atomically delete and return the user_id. Use PostgREST returning via delete with returning: ['user_id']
-    const res = await (svc as any).from('one_time_tokens').delete().eq('id', tokenId).select('user_id').single()
-    if (res && res.data && res.data.user_id) return res.data.user_id
+    // Attempt to call an RPC that atomically deletes and returns the user_id.
+    try {
+      const rpcRes = await (svc as any).rpc('consume_one_time_token', { p_id: tokenId })
+      if (rpcRes && rpcRes.data) {
+        // rpc returns raw value or object depending on client; normalize
+        const val = Array.isArray(rpcRes.data) ? rpcRes.data[0] : rpcRes.data
+        if (typeof val === 'string' && val.length > 0) return val
+        if (val && (val as any).user_id) return (val as any).user_id
+      }
+    } catch (rpcErr) {
+      // RPC may not exist in some environments; fall back to REST approach
+      // eslint-disable-next-line no-console
+      console.warn('consumeTokenFromDb: rpc call failed, falling back', rpcErr)
+    }
+
+    // Attempt delete().select() approach; handle gateways that respond with
+    // unexpected content types by falling back to select-then-delete.
+    try {
+      const res = await (svc as any).from('one_time_tokens').delete().eq('id', tokenId).select('user_id').maybeSingle()
+      if (res && res.data && res.data.user_id) return res.data.user_id
+    } catch (e) {
+      // continue to fallback
+      console.warn('consumeTokenFromDb: delete+select failed', e)
+    }
+
+    try {
+      const sel = await (svc as any).from('one_time_tokens').select('user_id').eq('id', tokenId).maybeSingle()
+      if (sel && sel.data && sel.data.user_id) {
+        try {
+          await (svc as any).from('one_time_tokens').delete().eq('id', tokenId)
+        } catch (delErr) {
+          console.warn('consumeTokenFromDb: delete fallback failed', delErr)
+        }
+        return sel.data.user_id
+      }
+    } catch (e) {
+      console.warn('consumeTokenFromDb: fallback select failed', e)
+    }
+
     return null
   } catch (e) {
     console.warn('consumeTokenFromDb failed', e)

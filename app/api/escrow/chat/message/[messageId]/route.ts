@@ -10,9 +10,9 @@ export async function GET(
   try {
   const supabase = createServerClientWithCookies() as any
 
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session) {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -51,11 +51,11 @@ export async function GET(
     const { data: userProfile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
   const isAdmin = userProfile && (userProfile as any).role === 'admin'
-  const hasAccess = isAdmin || (escrow as any).seller_id === session.user.id || (escrow as any).buyer_id === session.user.id
+  const hasAccess = isAdmin || (escrow as any).seller_id === user.id || (escrow as any).buyer_id === user.id
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })

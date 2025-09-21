@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import FeedbackBanner from '../../../../components/FeedbackBanner'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -16,6 +17,7 @@ interface Escrow {
   price: number
   admin_fee: number
   product_image_url?: string
+  delivery_proof_url?: string | null
   status: string
   created_at: string
   seller_id: string
@@ -36,6 +38,34 @@ interface Escrow {
 }
 
 export default function SellerEscrowPage() {
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  // State for Edit Escrow modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editDescription, setEditDescription] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Prefill modal fields when opening
+  const openEditModal = () => {
+    setEditDescription(escrow?.description || '');
+    setEditPrice(escrow?.price?.toString() || '');
+    setEditError('');
+    setEditSuccess('');
+    setShowEditModal(true);
+  };
+  // Feedback auto-dismiss
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError('');
+        setSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
   const params = useParams()
   const id = params.id as string
   
@@ -44,8 +74,10 @@ export default function SellerEscrowPage() {
   const [receiptUrls, setReceiptUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [deliveryProof, setDeliveryProof] = useState<File | null>(null)
+  const [deliveryProofUrl, setDeliveryProofUrl] = useState<string | null>(null)
+  const [deliveryProofSignedUrl, setDeliveryProofSignedUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
 
@@ -68,6 +100,12 @@ export default function SellerEscrowPage() {
     }
     if (escrow?.receipts) {
       fetchReceiptImages()
+    }
+    // Delivery proof signed URL
+    if (escrow?.delivery_proof_url) {
+      fetchDeliveryProofSignedUrl(escrow.delivery_proof_url)
+    } else {
+      setDeliveryProofSignedUrl(null)
     }
     // compute expiry timestamp: prefer expires_at, otherwise fallback to created_at + 30 minutes
     const expiresIso = (escrow as any)?.expires_at ?? null
@@ -104,21 +142,59 @@ export default function SellerEscrowPage() {
     }
   }, [escrow])
 
-  const fetchEscrow = async () => {
+  // Fetch signed URL for delivery proof
+  const fetchDeliveryProofSignedUrl = async (path: string) => {
     try {
-      const response = await fetch(`/api/escrow/by-id/${id}`)
+      const response = await fetch('/api/storage/sign-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, bucket: 'product-images' })
+      })
       if (response.ok) {
         const data = await response.json()
-        setEscrow(data)
+        setDeliveryProofSignedUrl(data.signedUrl)
       } else {
-        setError('Transaction not found')
+        setDeliveryProofSignedUrl(null)
       }
-    } catch (error) {
-      console.error('Error fetching escrow:', error)
-      setError('Failed to load transaction')
-    } finally {
-      setLoading(false)
+    } catch {
+      setDeliveryProofSignedUrl(null)
     }
+  }
+
+  const fetchEscrow = async () => {
+    // Try a few times to tolerate brief eventual consistency between insert and read
+    const maxAttempts = 3
+    const delayMs = 700
+    let attempt = 0
+    let lastError: any = null
+    while (attempt < maxAttempts) {
+      try {
+        const response = await fetch(`/api/escrow/by-id/${id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setEscrow(data.escrow)
+          lastError = null
+          break
+        } else if (response.status === 404) {
+          lastError = 'Transaction not found'
+          // wait and retry
+          attempt++
+          if (attempt < maxAttempts) await new Promise(r => setTimeout(r, delayMs))
+          continue
+        } else {
+          const errJson = await response.json().catch(() => ({}))
+          lastError = errJson.error || 'Transaction not found'
+          break
+        }
+      } catch (error) {
+        lastError = 'Failed to load transaction'
+        console.error('Error fetching escrow:', error)
+        break
+      }
+    }
+
+    if (lastError) setError(lastError)
+    setLoading(false)
   }
 
   const fetchCurrentUser = async () => {
@@ -187,36 +263,89 @@ export default function SellerEscrowPage() {
     setReceiptUrls(urls)
   }
 
-  const handleMarkDelivered = async () => {
-    if (!escrow) return
+  const handleDeliveryProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setDeliveryProof(e.target.files[0]);
+    }
+  };
 
-    setActionLoading(true)
-    setError('')
-    setSuccess('')
-
+  const handleUploadDeliveryProof = async () => {
+    if (!deliveryProof || !escrow) return;
+    setActionLoading(true);
+    setError('');
+    setSuccess('');
     try {
+      // 1. Upload file to temp bucket
+      const formData = new FormData();
+      formData.append('file', deliveryProof);
+      formData.append('escrowId', escrow.id);
+      const uploadResp = await fetch('/api/escrow/upload-temp', {
+        method: 'POST',
+        body: formData
+      });
+      if (!uploadResp.ok) {
+        setError('Failed to upload delivery proof');
+        setActionLoading(false);
+        return;
+      }
+  const { path } = await uploadResp.json();
+  setDeliveryProofUrl(path);
+  setSuccess('Delivery proof uploaded!');
+    } catch (err) {
+      setError('Failed to upload delivery proof');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleMarkDelivered = async () => {
+    if (!escrow) return;
+    setActionLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      let deliveryProofPath = deliveryProofUrl;
+      // If a file is selected but not uploaded yet, upload it now
+      if (deliveryProof && !deliveryProofUrl) {
+        const formData = new FormData();
+        formData.append('file', deliveryProof);
+        formData.append('escrowId', escrow.id);
+        const uploadResp = await fetch('/api/escrow/upload-temp', {
+          method: 'POST',
+          body: formData
+        });
+        if (!uploadResp.ok) {
+          setError('Failed to upload delivery proof');
+          setActionLoading(false);
+          return;
+        }
+        const { tempPath } = await uploadResp.json();
+        deliveryProofPath = tempPath;
+        setDeliveryProofUrl(tempPath);
+      }
+      // 2. Mark as delivered, optionally with proof
       const response = await fetch('/api/escrow/mark-delivered', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ escrowId: escrow.id })
-      })
-
+        body: JSON.stringify({ escrowId: escrow.id, deliveryProof: deliveryProofPath })
+      });
       if (response.ok) {
-        setSuccess('Marked as delivered successfully!')
-        fetchEscrow()
+        setSuccess('Marked as delivered successfully!');
+        setDeliveryProof(null);
+        setDeliveryProofUrl(null);
+        fetchEscrow();
       } else {
-        const data = await response.json()
-        setError(data.error || 'Failed to mark as delivered')
+        const data = await response.json();
+        setError(data.error || 'Failed to mark as delivered');
       }
     } catch (error) {
-      console.error('Error marking as delivered:', error)
-      setError('Failed to mark as delivered')
+      setError('Failed to mark as delivered');
     } finally {
-      setActionLoading(false)
+      setActionLoading(false);
     }
-  }
+  };
 
   const copyCode = () => {
     if (escrow) {
@@ -249,7 +378,10 @@ export default function SellerEscrowPage() {
     )
   }
 
-  const totalAmount = escrow.price + escrow.admin_fee
+  // Defensive: ensure price and admin_fee are valid numbers
+  const price = typeof escrow.price === 'number' && !isNaN(escrow.price) ? escrow.price : 0
+  const adminFee = typeof escrow.admin_fee === 'number' && !isNaN(escrow.admin_fee) ? escrow.admin_fee : 0
+  const totalAmount = price + adminFee
   const canMarkDelivered = escrow.status === 'payment_confirmed'
 
   return (
@@ -261,14 +393,47 @@ export default function SellerEscrowPage() {
           </Link>
         </div>
 
-        {/* Transaction Header */}
+        {/* Transaction Header with dynamic timer */}
         <div className="card mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold">Transaction {escrow.code}</h1>
-              {timeLeft !== null && (
-                <div className="text-sm text-gray-600 mt-1">Time left to pay: {new Date(timeLeft * 1000).toISOString().substr(11, 8)}</div>
-              )}
+              {/* Dynamic Timer Section for Seller */}
+              {(() => {
+                let timerLabel = ''
+                let timerEnd: Date | null = null
+                if ((escrow as any).status_logs) {
+                  if (escrow.status === 'waiting_payment') {
+                    timerLabel = 'Time left for buyer to pay:'
+                    timerEnd = new Date(new Date(escrow.created_at).getTime() + 30 * 60 * 1000)
+                  } else if (escrow.status === 'payment_confirmed') {
+                    const log = (escrow as any).status_logs.find((l: any) => l.status === 'payment_confirmed')
+                    if (log) {
+                      timerLabel = 'Time left for you to deliver:'
+                      timerEnd = new Date(new Date(log.created_at).getTime() + 30 * 60 * 1000)
+                    }
+                  } else if (escrow.status === 'in_progress') {
+                    const log = (escrow as any).status_logs.find((l: any) => l.status === 'delivered')
+                    if (log) {
+                      timerLabel = 'Time left for buyer to confirm receipt:'
+                      timerEnd = new Date(new Date(log.created_at).getTime() + 5 * 60 * 1000)
+                    }
+                  }
+                }
+                if (timerLabel && timerEnd) {
+                  const now = Date.now()
+                  const secs = Math.max(0, Math.floor((timerEnd.getTime() - now) / 1000))
+                  const h = Math.floor(secs / 3600)
+                  const m = Math.floor((secs % 3600) / 60)
+                  const s = secs % 60
+                  return (
+                    <div className="text-sm text-gray-600 mt-1">
+                      {timerLabel} <span className="font-mono font-semibold">{`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`}</span>
+                    </div>
+                  )
+                }
+                return null
+              })()}
               <button 
                 onClick={copyCode}
                 className="text-sm text-blue-600 hover:text-blue-800 mt-1"
@@ -278,7 +443,6 @@ export default function SellerEscrowPage() {
             </div>
             <StatusBadge status={escrow.status as any} />
           </div>
-          
           {productImageUrl && (
             <div className="mb-4">
               <Image
@@ -290,29 +454,25 @@ export default function SellerEscrowPage() {
               />
             </div>
           )}
-
           <div className="space-y-3">
             <div>
               <h3 className="font-semibold text-gray-900">Description</h3>
               <p className="text-gray-600">{escrow.description}</p>
             </div>
-            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h3 className="font-semibold text-gray-900">Price</h3>
-                <p className="text-lg">{formatNaira(escrow.price)}</p>
+                <p className="text-lg">{formatNaira(price)}</p>
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">Service Fee</h3>
-                <p className="text-lg">{formatNaira(escrow.admin_fee)}</p>
+                <p className="text-lg">{formatNaira(adminFee)}</p>
               </div>
             </div>
-            
             <div className="pt-3 border-t">
               <h3 className="font-semibold text-gray-900">Total (Buyer Pays)</h3>
               <p className="text-2xl font-bold text-green-600">{formatNaira(totalAmount)}</p>
             </div>
-
             {escrow.buyer && (
               <div className="pt-3 border-t">
                 <h3 className="font-semibold text-gray-900">Buyer</h3>
@@ -322,16 +482,193 @@ export default function SellerEscrowPage() {
           </div>
         </div>
 
-        {/* Mark as Delivered */}
+        {/* Seller Actions for New Escrows */}
+        {escrow.status === 'waiting_payment' && (
+          <div className="card mb-6">
+            <h2 className="text-xl font-semibold mb-4">🕒 Waiting for Buyer Payment</h2>
+            <p className="text-gray-600 mb-4">
+              This escrow is awaiting payment from the buyer. You can:
+            </p>
+            <div className="flex flex-col gap-2 mb-4">
+              <button
+                    className="btn-secondary"
+                    disabled={actionLoading || escrow.status !== 'waiting_payment'}
+                    onClick={openEditModal}
+                  >
+                    ✏️ Edit Escrow
+                  </button>
+              {/* Edit Escrow Modal */}
+              {showEditModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+                  <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+                    <h2 className="text-xl font-bold mb-4">Edit Escrow</h2>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      setEditError('');
+                      setEditSuccess('');
+                      setEditLoading(true);
+                      try {
+                        const resp = await fetch('/api/escrow/edit', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            escrowId: escrow.id,
+                            description: editDescription,
+                            price: parseFloat(editPrice)
+                          })
+                        });
+                        const data = await resp.json();
+                        if (resp.ok && data.success) {
+                          setEditSuccess('Escrow updated successfully.');
+                          setShowEditModal(false);
+                          fetchEscrow();
+                        } else {
+                          setEditError(data.error || 'Failed to update escrow.');
+                        }
+                      } catch (e) {
+                        setEditError('Failed to update escrow.');
+                      } finally {
+                        setEditLoading(false);
+                      }
+                    }}>
+                      <div className="mb-4">
+                        <label className="block font-semibold mb-1">Description</label>
+                        <textarea
+                          className="w-full border rounded p-2"
+                          value={editDescription}
+                          onChange={e => setEditDescription(e.target.value)}
+                          required
+                          disabled={editLoading}
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <label className="block font-semibold mb-1">Price</label>
+                        <input
+                          type="number"
+                          className="w-full border rounded p-2"
+                          value={editPrice}
+                          onChange={e => setEditPrice(e.target.value)}
+                          min={1}
+                          required
+                          disabled={editLoading}
+                        />
+                      </div>
+                      {editError && <div className="text-red-600 mb-2">{editError}</div>}
+                      {editSuccess && <div className="text-green-600 mb-2">{editSuccess}</div>}
+                      <div className="flex gap-2 justify-end">
+                        <button type="button" className="btn-secondary" onClick={() => setShowEditModal(false)} disabled={editLoading}>Cancel</button>
+                        <button type="submit" className="btn-primary" disabled={editLoading}>Save</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+              <button
+                className="btn-secondary"
+                disabled={actionLoading || !escrow.buyer || !escrow.buyer.telegram_id}
+                onClick={async () => {
+                  if (!escrow || !escrow.buyer || !escrow.buyer.telegram_id) {
+                    setError('Buyer has not linked Telegram.');
+                    return;
+                  }
+                  setActionLoading(true);
+                  setError('');
+                  setSuccess('');
+                  try {
+                    const resp = await fetch('/api/escrow/nudge', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ escrowId: escrow.id })
+                    });
+                    const data = await resp.json();
+                    if (resp.ok && data.success) {
+                      setSuccess('Nudge sent to buyer via Telegram.');
+                    } else {
+                      setError(data.error || 'Failed to nudge buyer.');
+                    }
+                  } catch (e) {
+                    setError('Failed to nudge buyer.');
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+              >
+                🔔 Nudge Buyer
+              </button>
+              <button
+                className="btn-danger"
+                disabled={actionLoading}
+                onClick={async () => {
+                  if (!escrow) return;
+                  if (!window.confirm('Are you sure you want to cancel this escrow? This cannot be undone.')) return;
+                  setActionLoading(true);
+                  setError('');
+                  setSuccess('');
+                  try {
+                    const resp = await fetch('/api/escrow/cancel', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ escrowId: escrow.id })
+                    });
+                    const data = await resp.json();
+                    if (resp.ok && data.success) {
+                      setSuccess('Escrow cancelled successfully.');
+                      fetchEscrow();
+                    } else {
+                      setError(data.error || 'Failed to cancel escrow.');
+                    }
+                  } catch (e) {
+                    setError('Failed to cancel escrow.');
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+              >
+                ❌ Cancel Escrow
+              </button>
+            </div>
+            <div className="text-gray-500 text-sm">
+              You may edit or cancel this escrow before payment is made.
+            </div>
+          </div>
+        )}
+
+        {/* Delivery Proof Upload & Mark as Delivered */}
         {canMarkDelivered && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">🚚 Mark as Delivered</h2>
             <p className="text-gray-600 mb-4">
-              Have you delivered the product/service to the buyer?
+              Please upload delivery proof (image or PDF) if required by admin, then mark as delivered.
             </p>
+            <div className="flex flex-col gap-2 mb-4">
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                ref={fileInputRef}
+                onChange={handleDeliveryProofChange}
+                className="file-input"
+                disabled={actionLoading}
+              />
+              {deliveryProof && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">Selected: {deliveryProof.name}</span>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-xs"
+                    onClick={handleUploadDeliveryProof}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? 'Uploading...' : 'Upload Proof'}
+                  </button>
+                </div>
+              )}
+              {deliveryProofUrl && (
+                <div className="text-green-700 text-sm">Proof uploaded!</div>
+              )}
+            </div>
             <button
               onClick={handleMarkDelivered}
-              disabled={actionLoading}
+              disabled={actionLoading || (!!deliveryProof && !deliveryProofUrl)}
               className="btn-success"
             >
               {actionLoading ? 'Processing...' : 'Mark as Delivered'}
@@ -339,8 +676,8 @@ export default function SellerEscrowPage() {
           </div>
         )}
 
-        {/* Receipts */}
-        {escrow.receipts && escrow.receipts.length > 0 && (
+        {/* Receipts & Delivery Proof */}
+        {(escrow.receipts && escrow.receipts.length > 0) && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">📄 Payment Receipts</h2>
             <div className="space-y-4">
@@ -378,6 +715,34 @@ export default function SellerEscrowPage() {
             </div>
           </div>
         )}
+        {/* Delivery Proof Display (if uploaded and attached to escrow) */}
+        {escrow.delivery_proof_url && (
+          <div className="card mb-6">
+            <h2 className="text-xl font-semibold mb-4">📦 Delivery Proof</h2>
+            <div>
+              {escrow.delivery_proof_url.toLowerCase().endsWith('.pdf') ? (
+                <a
+                  href={deliveryProofSignedUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  📄 View PDF Delivery Proof
+                </a>
+              ) : (
+                deliveryProofSignedUrl && (
+                  <Image
+                    src={deliveryProofSignedUrl}
+                    alt="Delivery Proof"
+                    width={200}
+                    height={150}
+                    className="rounded object-cover"
+                  />
+                )
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Status Timeline */}
         {escrow.status_logs && escrow.status_logs.length > 0 && (
@@ -400,8 +765,8 @@ export default function SellerEscrowPage() {
           </div>
         )}
 
-        {/* Communication Chat */}
-        {escrow.buyer && currentUser && (
+        {/* Communication Chat (always show, even if buyer not present) */}
+        {currentUser && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">💬 Communication</h2>
             <EscrowChat 
@@ -409,20 +774,26 @@ export default function SellerEscrowPage() {
               currentUserId={currentUser.id}
               isAdmin={false}
             />
+            {!escrow.buyer && (
+              <div className="text-gray-500 text-sm mt-2">Waiting for buyer to join. Messages will be delivered when buyer joins.</div>
+            )}
           </div>
         )}
 
-        {/* Messages */}
+        {/* Feedback banners */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800 mb-4">
-            {error}
-          </div>
+          <FeedbackBanner
+            message={error}
+            type="error"
+            onClose={() => setError('')}
+          />
         )}
-        
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-800 mb-4">
-            {success}
-          </div>
+        {success && !error && (
+          <FeedbackBanner
+            message={success}
+            type="success"
+            onClose={() => setSuccess('')}
+          />
         )}
       </div>
     </div>

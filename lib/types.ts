@@ -16,6 +16,7 @@ export interface Escrow {
   price: number
   admin_fee: number
   product_image_url?: string
+  delivery_proof_url?: string // NEW: path to delivery proof file
   status: 'created' | 'waiting_payment' | 'waiting_admin' | 'payment_confirmed' | 'in_progress' | 'completed' | 'on_hold' | 'refunded' | 'closed'
   created_at: string
   updated_at: string

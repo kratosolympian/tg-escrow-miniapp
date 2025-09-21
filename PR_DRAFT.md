@@ -15,11 +15,9 @@ Notes:
 - If you prefer Redis for token storage, I can replace the DB calls with Redis ops.
 
 How to run locally:
-1. Install deps: `npm ci`
+1. Install deps: `pnpm install`
 2. Run the migration in Supabase using the SQL file `SQL/migrations/20250912_create_one_time_tokens.sql`.
-3. Run the app: `npm run dev` or build: `npm run build`.
-4. Run unit tests: `npm run test` (requires `vitest` in dev deps).
-5. Run integration test (dev server must be running): `node .\scripts\integration-test.mjs`
+3. Run the app: `pnpm run dev` or build: `pnpm run build`.
 
 Files changed (high-level):
 - lib/signedAuth.ts (rewritten)
@@ -27,6 +25,8 @@ Files changed (high-level):
 - scripts/integration-test.mjs (updated to exercise headers)
 - test/signedAuth.test.ts (new)
 - package.json (test script + dev deps)
+ - scripts/integration-test.mjs (updated to exercise headers)
+ - package.json (dev deps)
 
 Follow-ups:
 - Add Redis-based storage option for high-throughput deployments.

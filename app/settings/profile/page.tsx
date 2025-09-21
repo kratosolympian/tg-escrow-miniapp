@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import FeedbackBanner from '../../../components/FeedbackBanner'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -79,6 +80,18 @@ const nigerianBanks = [
 ]
 
 export default function ProfileSettings() {
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  // Feedback auto-dismiss
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError('');
+        setSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [formData, setFormData] = useState({
     full_name: '',
@@ -89,8 +102,6 @@ export default function ProfileSettings() {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   const router = useRouter()
   const supabase = createBrowserClient(
@@ -104,8 +115,8 @@ export default function ProfileSettings() {
 
   const loadProfile = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
         router.push('/auth/login')
         return
       }
@@ -125,7 +136,7 @@ export default function ProfileSettings() {
       }
     } catch (err) {
       setError('Failed to load profile')
-      console.error(err)
+  // ...removed for production...
     } finally {
       setLoading(false)
     }
@@ -181,18 +192,11 @@ export default function ProfileSettings() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-800">
-              ← Back
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>
-          </div>
-          {profile && (
-            <button onClick={handleLogout} className="btn-secondary">
-              🚪 Logout
-            </button>
-          )}
+        <div className="container mx-auto flex items-center">
+          <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-800 mr-4">
+            ← Back
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>
         </div>
       </div>
 
@@ -321,6 +325,21 @@ export default function ProfileSettings() {
           </form>
         </div>
 
+        {/* Feedback banners */}
+        {error && (
+          <FeedbackBanner
+            message={error}
+            type="error"
+            onClose={() => setError('')}
+          />
+        )}
+        {success && !error && (
+          <FeedbackBanner
+            message={success}
+            type="success"
+            onClose={() => setSuccess('')}
+          />
+        )}
         {/* Security Notice */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
           <div className="flex">

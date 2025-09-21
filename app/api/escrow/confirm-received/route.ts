@@ -6,6 +6,29 @@ import { requireAuth } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition } from '@/lib/status'
 import { z } from 'zod'
 
+
+/**
+ * POST /api/escrow/confirm-received
+ *
+ * Allows the buyer to confirm receipt of goods/services, completing the escrow.
+ * Steps:
+ *   1. Authenticates the user (cookie/session)
+ *   2. Validates input (escrowId)
+ *   3. Checks that the user is the buyer
+ *   4. Checks that the escrow is in a state that can be completed
+ *   5. Updates the escrow status to completed
+ *   6. Logs the status change
+ *
+ * Request body:
+ *   { escrowId: string }
+ *
+ * Returns:
+ *   200: { ok: true }
+ *   400: { error: string } (validation, status)
+ *   403: { error: string } (not buyer)
+ *   404: { error: string } (not found)
+ *   500: { error: string } (update or server error)
+ */
 const confirmReceivedSchema = z.object({
   escrowId: z.string().uuid()
 })

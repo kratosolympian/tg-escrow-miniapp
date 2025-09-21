@@ -1,11 +1,33 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
+import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib/supabaseServer'
 import { shortCode, generateUUID, getFileExtension, isValidImageType } from '@/lib/utils'
 import { ESCROW_STATUS } from '@/lib/status'
 import { z } from 'zod'
 
+
+/**
+ * POST /api/escrow/create
+ *
+ * Creates a new escrow transaction as a seller.
+ * Handles both cookie-based and one-time token authentication.
+ * Steps:
+ *   1. Authenticates the user (cookie or one-time token)
+ *   2. Validates input (description, price)
+ *   3. Generates a unique code and UUID
+ *   4. Inserts the escrow into the database
+ *   5. Returns the escrow code and ID
+ *
+ * Request body:
+ *   { description: string, price: number, __one_time_token?: string }
+ *
+ * Returns:
+ *   200: { ok: true, code, escrowId }
+ *   400: { error: string } (validation)
+ *   401: { error: string } (authentication)
+ *   500: { error: string } (insert or server error)
+ */
 const createEscrowSchema = z.object({
   description: z.string().min(1).max(1000),
   price: z.number().positive().max(1000000)
@@ -13,12 +35,54 @@ const createEscrowSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
+  const supabase = createServerClientWithAuthHeader(request)
     const serviceClient = createServiceRoleClient()
     
     // Get authenticated user directly to bypass profile lookup issue
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+    let authenticatedUser = user
+
+    // If no user in session, allow one-time token authentication (used after API signup)
+    if (!authenticatedUser) {
+      const bodyPeek = await request.clone().json().catch(() => ({}))
+      // Prefer token in body, but also accept header forms for more robust clients
+      let token = (bodyPeek && bodyPeek.__one_time_token) || null
+      if (!token) {
+        const headerToken = request.headers.get('x-one-time-token') || null
+        if (headerToken) token = headerToken
+      }
+      if (!token) {
+        const authHeader = request.headers.get('authorization') || ''
+        if (authHeader.toLowerCase().startsWith('bearer ')) {
+          token = authHeader.slice(7).trim()
+        }
+      }
+
+      if (token) {
+        try {
+          const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+          console.log('Create route: attempting to verify one-time token')
+          const userId = await verifyAndConsumeSignedToken(token)
+          console.log('Create route: token verification result:', !!userId, 'userId:', userId)
+          if (userId) {
+            // Get user details from service client
+            const { data: userData, error: userFetchError } = await serviceClient
+              .from('profiles')
+              .select('id, email, full_name')
+              .eq('id', userId)
+              .single()
+
+            if (!userFetchError && userData) {
+              authenticatedUser = { id: userId, email: (userData as any).email } as any
+            }
+          }
+        } catch (e) {
+          console.warn('One-time token verification failed:', e)
+        }
+      }
+    }
+
+    if (userError || !authenticatedUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
     
@@ -80,8 +144,8 @@ export async function POST(request: NextRequest) {
       // Generate unique filename
       const fileId = generateUUID()
       const extension = getFileExtension(imageFile.name)
-      const fileName = `${fileId}.${extension}`
-      const filePath = `${user.id}/${fileName}`
+  const fileName = `${fileId}.${extension}`
+  const filePath = `${authenticatedUser.id}/${fileName}`
 
       // Upload to storage using service client
       const { error: uploadError } = await serviceClient.storage
@@ -99,9 +163,55 @@ export async function POST(request: NextRequest) {
       productImageUrl = filePath
     }
 
-    // If client supplied a preuploaded path (from temp upload), use that
+    // If client supplied a preuploaded path (from temp upload), move it into a permanent seller path
     if (preuploadedPath) {
-      productImageUrl = preuploadedPath
+      try {
+        // If the path appears to be a temp upload, attempt to move it into the seller folder
+        if (preuploadedPath.startsWith('temp/')) {
+          // download the temp file
+          const { data: downloaded, error: downloadError } = await serviceClient.storage.from('product-images').download(preuploadedPath)
+          if (downloadError) {
+            console.warn('Failed to download temp upload, will use temp path as-is', downloadError)
+            productImageUrl = preuploadedPath
+          } else {
+            // create a new permanent path and upload the buffer
+            const ext = getFileExtension(preuploadedPath)
+            const newPath = `${authenticatedUser.id}/${generateUUID()}.${ext}`
+            // convert stream/blob to buffer
+            let buffer: Buffer
+            try {
+              const arrayBuffer = await (downloaded as any).arrayBuffer()
+              buffer = Buffer.from(arrayBuffer)
+            } catch (convErr) {
+              console.warn('Failed to convert downloaded file to buffer, using temp path', convErr)
+              productImageUrl = preuploadedPath
+              buffer = null as any
+            }
+
+            if (buffer) {
+              const { error: uploadErr } = await serviceClient.storage.from('product-images').upload(newPath, buffer, { upsert: false })
+              if (uploadErr) {
+                console.warn('Failed to upload moved file, using temp path', uploadErr)
+                productImageUrl = preuploadedPath
+              } else {
+                // remove temp file (best-effort)
+                try {
+                  await serviceClient.storage.from('product-images').remove([preuploadedPath])
+                } catch (remErr) {
+                  console.warn('Failed to remove temp upload after moving', remErr)
+                }
+                productImageUrl = newPath
+              }
+            }
+          }
+        } else {
+          // Not a temp path; treat as already-permanent
+          productImageUrl = preuploadedPath
+        }
+      } catch (e) {
+        console.error('Error handling preuploadedPath:', e)
+        productImageUrl = preuploadedPath
+      }
     }
 
     // Generate unique transaction code
@@ -127,7 +237,7 @@ export async function POST(request: NextRequest) {
     const { data: sellerProfile, error: profileErr } = await (serviceClient as any)
       .from('profiles')
       .select('bank_name, account_number, account_holder_name, profile_completed')
-      .eq('id', user.id)
+      .eq('id', authenticatedUser.id)
       .single()
 
     if (profileErr) {
@@ -139,12 +249,30 @@ export async function POST(request: NextRequest) {
     if (!hasBank) {
       return NextResponse.json({ error: 'Please complete your profile bank details before creating an escrow' }, { status: 400 })
     }
+    // Prevent seller from creating a new escrow while they have an active one
+    // Active statuses: created, waiting_payment, waiting_admin, payment_confirmed, in_progress, on_hold
+    const { data: existingActive, error: existingErr } = await (serviceClient as any)
+      .from('escrows')
+      .select('id, code, status')
+      .eq('seller_id', authenticatedUser.id)
+      .in('status', ['created','waiting_payment','waiting_admin','payment_confirmed','in_progress','on_hold'])
+      .limit(1)
+      .maybeSingle()
+    if (existingErr) {
+      console.error('Error checking existing active escrow for seller:', existingErr)
+      // proceed — be conservative and allow creation if check fails? Return 500 to be safe
+      return NextResponse.json({ error: 'Failed to verify seller active transactions' }, { status: 500 })
+    }
+    if (existingActive && existingActive.id) {
+      return NextResponse.json({ error: 'You already have an active transaction. Please complete it before creating a new one.', activeEscrow: existingActive }, { status: 400 })
+    }
+    
     // Create escrow using service client to bypass RLS issues
     const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
       .insert({
         code: code!,
-        seller_id: user.id,
+        seller_id: authenticatedUser.id,
         description: validDescription,
         price: validPrice,
         admin_fee: 300,
@@ -170,7 +298,7 @@ export async function POST(request: NextRequest) {
       .insert({
         escrow_id: escrow.id,
         status: ESCROW_STATUS.CREATED,
-        changed_by: user.id
+        changed_by: authenticatedUser.id
       })
 
     if (logError) {
@@ -182,7 +310,8 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ id: escrow.id, code: escrow.code })
   // cookie expires in 30 minutes
   const expiresDate = new Date(Date.now() + 30 * 60 * 1000)
-  response.cookies.set('redirect_escrow', escrow.id, { path: '/', httpOnly: true, sameSite: 'lax', expires: expiresDate })
+  const { setRedirectCookie } = await import('@/lib/cookies')
+  setRedirectCookie(response, escrow.id, expiresDate)
   return response
 
   } catch (error) {

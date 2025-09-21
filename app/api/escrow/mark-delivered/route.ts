@@ -1,24 +1,47 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithAuthHeader } from '@/lib/supabaseServer'
 import { requireAuth } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition } from '@/lib/status'
 import { z } from 'zod'
 
+
+/**
+ * POST /api/escrow/mark-delivered
+ *
+ * Allows the seller to mark an escrow as delivered, optionally attaching delivery proof.
+ * Steps:
+ *   1. Authenticates the user (cookie/session)
+ *   2. Validates input (escrowId, deliveryProof)
+ *   3. Checks that the user is the seller
+ *   4. Checks that the escrow is in a state that can be marked as delivered
+ *   5. Updates the escrow status and saves delivery proof if provided
+ *
+ * Request body:
+ *   { escrowId: string, deliveryProof?: string }
+ *
+ * Returns:
+ *   200: { ok: true }
+ *   400: { error: string } (validation, status)
+ *   403: { error: string } (not seller)
+ *   404: { error: string } (not found)
+ *   500: { error: string } (update or server error)
+ */
 const markDeliveredSchema = z.object({
-  escrowId: z.string().uuid()
+  escrowId: z.string().uuid(),
+  deliveryProof: z.string().optional() // file path or URL
 })
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
+  const supabase = createServerClientWithAuthHeader(request)
     
     // Require authentication
     const profile = await requireAuth(supabase)
     
-    const body = await request.json()
-    const { escrowId } = markDeliveredSchema.parse(body)
+  const body = await request.json()
+  const { escrowId, deliveryProof } = markDeliveredSchema.parse(body)
 
     // Get escrow
     const { data: escrow, error: escrowError } = await (supabase as any)
@@ -43,10 +66,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Update escrow status
+    // Update escrow status and save delivery proof if provided
+    const updateFields: any = { status: ESCROW_STATUS.IN_PROGRESS }
+    if (deliveryProof) {
+      updateFields.delivery_proof_url = deliveryProof
+    }
     const { error: updateError } = await (supabase as any)
       .from('escrows')
-      .update({ status: ESCROW_STATUS.IN_PROGRESS })
+      .update(updateFields)
       .eq('id', escrow.id)
 
     if (updateError) {

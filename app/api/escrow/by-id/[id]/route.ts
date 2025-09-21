@@ -4,30 +4,59 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { ESCROW_STATUS } from '@/lib/status'
 
+// Helper to check if string is UUID
+function isUUID(str: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str)
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+
   try {
     const supabase = createServerClientWithCookies()
     const serviceClient = createServiceRoleClient()
-    
+
     // Get authenticated user directly to bypass profile lookup issue
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-  // Find escrow by ID using service client to bypass RLS
-  const { data: escrow, error: findError } = await (serviceClient as any)
-      .from('escrows')
-      .select(`
-        *,
-        seller:profiles!seller_id(telegram_id, email, full_name, bank_name, account_number, account_holder_name, phone_number),
-        buyer:profiles!buyer_id(telegram_id, email, full_name, bank_name, account_number, account_holder_name, phone_number)
-      `)
-      .eq('id', params.id)
-      .single()
+
+
+    let escrow = null
+    let findError = null
+    let idOrCode = params.id
+
+    if (isUUID(idOrCode)) {
+      // Find by UUID
+      const result = await (serviceClient as any)
+        .from('escrows')
+        .select(`
+          *,
+          seller:profiles!seller_id(telegram_id, email, full_name, bank_name, account_number, account_holder_name, phone_number),
+          buyer:profiles!buyer_id(telegram_id, email, full_name, bank_name, account_number, account_holder_name, phone_number)
+        `)
+        .eq('id', idOrCode)
+        .single()
+      escrow = result.data
+      findError = result.error
+    } else {
+      // Try to find by code (case-insensitive)
+      const result = await (serviceClient as any)
+        .from('escrows')
+        .select(`
+          *,
+          seller:profiles!seller_id(telegram_id, email, full_name, bank_name, account_number, account_holder_name, phone_number),
+          buyer:profiles!buyer_id(telegram_id, email, full_name, bank_name, account_number, account_holder_name, phone_number)
+        `)
+        .ilike('code', idOrCode.trim())
+        .single()
+      escrow = result.data
+      findError = result.error
+    }
 
     if (findError || !escrow) {
       console.error('Escrow find error:', findError)
@@ -111,11 +140,20 @@ export async function GET(
       adminBank = platform || null
     }
 
+    // Fetch status logs for timer/action logic
+    const { data: statusLogs } = await serviceClient
+      .from('status_logs')
+      .select('id, status, created_at, changed_by')
+      .eq('escrow_id', params.id)
+      .order('created_at', { ascending: true })
+
     return NextResponse.json({
       success: true,
       escrow: {
         ...(escrow as any),
-        receipts: receipts || []
+        receipts: receipts || [],
+        delivery_proof_url: (escrow as any).delivery_proof_url || null,
+        status_logs: statusLogs || []
       }
     })
 

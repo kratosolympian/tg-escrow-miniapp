@@ -53,6 +53,10 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
   const [escrowLoading, setEscrowLoading] = useState(false)
   const [escrowActionLoading, setEscrowActionLoading] = useState<string | null>(null)
 
+  // Online/offline toggle state
+  const [isOnline, setIsOnline] = useState<boolean>(false);
+  const [presenceLoading, setPresenceLoading] = useState<boolean>(false);
+
   useEffect(() => {
     fetchAdminData()
     // fetch initial users and escrows for management panel
@@ -102,9 +106,11 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
         const json = await res.json()
         const email = json?.user?.email ?? null
         const role = json?.user?.role ?? null
+        const online = json?.user?.online ?? false
         if (!mounted) return
         setDetectedEmail(email)
         setDetectedRole(role)
+        setIsOnline(!!online)
       } catch (e) {
         // ignore
       }
@@ -112,6 +118,27 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     detectMe()
     return () => { mounted = false }
   }, [])
+
+  // Handler for online/offline toggle
+  async function handleToggleOnline() {
+    setPresenceLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch('/api/admin/set-presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_online: !isOnline })
+      });
+      if (!res.ok) throw new Error('Failed to update online status');
+      setIsOnline((prev) => !prev);
+      setSuccess(`You are now ${!isOnline ? 'online' : 'offline'}.`);
+    } catch (e: any) {
+      setError(e.message || 'Failed to update online status');
+    } finally {
+      setPresenceLoading(false);
+    }
+  }
 
   useEffect(() => {
     // Priority: detected server-side user, then parent prop, then fetched adminData
@@ -366,9 +393,20 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
         </div>
       )}
 
-      {/* Current Admins */}
+      {/* Current Admins & Online/Offline Toggle */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Administrators</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Current Administrators</h3>
+          {/* Online/Offline Toggle for current admin */}
+          <button
+            onClick={handleToggleOnline}
+            className={`btn-secondary ${isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+            disabled={presenceLoading}
+            title="Toggle your online/offline status"
+          >
+            {presenceLoading ? 'Updating...' : isOnline ? '🟢 Online (Click to go offline)' : '⚪ Offline (Click to go online)'}
+          </button>
+        </div>
         {adminData && (
           <div className="space-y-4">
             {/* Super Admin */}

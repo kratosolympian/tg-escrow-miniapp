@@ -1,3 +1,24 @@
+import { NextRequest } from 'next/server'
+// Create a Supabase client using the Authorization header (Bearer token) if present, else cookies
+export function createServerClientWithAuthHeader(request?: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  let accessToken: string | undefined;
+  if (request) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.replace('Bearer ', '');
+    }
+  }
+  if (accessToken) {
+    return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  // Fallback to cookies (for SSR or legacy flows)
+  return createServerClientWithCookies();
+}
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'

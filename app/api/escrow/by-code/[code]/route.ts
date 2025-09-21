@@ -1,14 +1,14 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
+import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib/supabaseServer'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { code: string } }
 ) {
   try {
-    const supabase = createServerClientWithCookies()
+  const supabase = createServerClientWithAuthHeader(request)
     const serviceClient = createServiceRoleClient()
     
     // Get user if authenticated (but don't require auth for public escrow view)

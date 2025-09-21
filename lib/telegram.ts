@@ -1,3 +1,31 @@
+// Sends a Telegram message to a user by telegram_id using the bot token from env
+export async function sendTelegramMessage(telegramId: string, message: string): Promise<boolean> {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  if (!botToken) {
+    console.error('TELEGRAM_BOT_TOKEN not set')
+    return false
+  }
+  const url = `https://api.telegram.org/bot${botToken}/sendMessage`
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: telegramId,
+        text: message,
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      })
+    })
+    const data = await resp.json()
+    if (data.ok) return true
+    console.error('Telegram sendMessage error:', data)
+    return false
+  } catch (e) {
+    console.error('Telegram sendMessage exception:', e)
+    return false
+  }
+}
 import { createHmac } from 'crypto'
 
 export interface TelegramUser {

@@ -77,10 +77,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ signedUrl: data.signedUrl })
 
   } catch (error) {
-    console.error('Sign URL error:', error)
+    // Handle common expected errors more gracefully
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
     }
+    // Authentication failures are expected for anonymous requests; return 401 instead of 500
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    console.error('Sign URL error:', error)
     return NextResponse.json({ error: 'Failed to create signed URL' }, { status: 500 })
   }
 }

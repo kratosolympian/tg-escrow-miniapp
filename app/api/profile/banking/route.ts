@@ -1,42 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithAuthHeader } from '@/lib/supabaseServer'
+import { z } from 'zod'
+
+// Zod schema for banking info
+const bankingSchema = z.object({
+  full_name: z.string().min(1, 'Full name is required'),
+  phone_number: z.string().regex(/^(\+234|234|0)[789]\d{9}$/, 'Please enter a valid Nigerian phone number'),
+  bank_name: z.string().min(1, 'Bank name is required'),
+  account_number: z.string().regex(/^\d{10}$/, 'Account number must be exactly 10 digits'),
+  account_holder_name: z.string().min(1, 'Account holder name is required'),
+})
 
 export async function POST(request: NextRequest) {
   try {
-  const supabase = createServerClientWithCookies() as any
+  const supabase = createServerClientWithAuthHeader(request) as any
 
     // Get current user (authenticated against Supabase Auth server)
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
-    const {
-      full_name,
-      phone_number,
-      bank_name,
-      account_number,
-      account_holder_name
-    } = body
-
-    // Validate required fields (BVN removed)
-    if (!full_name || !phone_number || !bank_name || !account_number || !account_holder_name) {
-      return NextResponse.json({ error: 'All fields are required' }, { status: 400 })
+    const parseResult = bankingSchema.safeParse(body)
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
     }
-
-    // Validate account number format (10 digits for Nigerian banks)
-    if (!/^\d{10}$/.test(account_number)) {
-      return NextResponse.json({ error: 'Account number must be exactly 10 digits' }, { status: 400 })
-    }
-
-
-    // Validate phone number (Nigerian format)
-    if (!/^(\+234|234|0)[789]\d{9}$/.test(phone_number)) {
-      return NextResponse.json({ error: 'Please enter a valid Nigerian phone number' }, { status: 400 })
-    }
-
+    const { full_name, phone_number, bank_name, account_number, account_holder_name } = parseResult.data
     // Update profile with banking information
     const { data, error } = await supabase
       .from('profiles')
@@ -72,7 +63,7 @@ export async function POST(request: NextRequest) {
 // Get current profile information
 export async function GET(request: NextRequest) {
   try {
-  const supabase = createServerClientWithCookies()
+  const supabase = createServerClientWithAuthHeader(request)
 
     // Get current user (authenticated against Supabase Auth server)
     const { data: { user }, error: userError } = await supabase.auth.getUser()

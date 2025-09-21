@@ -57,13 +57,13 @@ Run the SQL files in your Supabase dashboard in this order:
 ### 4. Install Dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 5. Run Development Server
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 ## Project Structure

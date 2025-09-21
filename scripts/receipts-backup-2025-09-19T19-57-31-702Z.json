@@ -1,0 +1,16 @@
+[
+  {
+    "id": "494a2930-4ac9-4c1e-a893-faf61e30dc35",
+    "escrow_id": "a1c6d4e7-c530-4b66-8daa-9d5cfd34a085",
+    "file_path": "https://hbphcrwgmxapqrecmunh.supabase.co/storage/v1/object/public/product-images/receipts/a1c6d4e7-c530-4b66-8daa-9d5cfd34a085/2cd6c767-bbb7-4737-aa45-4781d7d3b5e8.jpg",
+    "created_at": "2025-09-17T20:28:10.788844+00:00",
+    "uploaded_by": "850479c4-1c29-4c8b-8efd-ae5840c820d4"
+  },
+  {
+    "id": "f4e4d374-edb4-459a-be8c-b9bc98d71492",
+    "escrow_id": "a1c6d4e7-c530-4b66-8daa-9d5cfd34a085",
+    "file_path": "https://hbphcrwgmxapqrecmunh.supabase.co/storage/v1/object/public/product-images/receipts/a1c6d4e7-c530-4b66-8daa-9d5cfd34a085/90f70d2c-2826-45bb-93c5-c98a906e444e.jpg",
+    "created_at": "2025-09-17T20:34:21.117484+00:00",
+    "uploaded_by": "850479c4-1c29-4c8b-8efd-ae5840c820d4"
+  }
+]
