@@ -6,24 +6,24 @@ export async function GET(request: NextRequest) {
     // Use service role client for public access to bank settings
     const supabase = createServiceRoleClient()
     
-    // First try to read canonical settings row (id = 1)
-    const { data: canonical, error: canonErr } = await (supabase as any)
+    console.log('[settings/bank] Using service role client')
+    
+    // First, let's see all rows in admin_settings
+    const { data: allRows, error: allError } = await (supabase as any)
       .from('admin_settings')
-      .select('bank_name, account_number, account_holder, updated_at')
-      .eq('id', 1)
-      .single()
-
-    if (!canonErr && canonical) {
-      return NextResponse.json(canonical, { status: 200, headers: { 'Cache-Control': 'no-store' } })
-    }
-
-    // Fallback to latest row by updated_at
+      .select('*')
+    
+    console.log('[settings/bank] All admin_settings rows:', { allRows, error: allError })
+    
+    // Get the latest settings row by updated_at
     const { data: settings, error } = await (supabase as any)
       .from('admin_settings')
       .select('bank_name, account_number, account_holder, updated_at')
       .order('updated_at', { ascending: false })
       .limit(1)
       .single()
+
+    console.log('[settings/bank] Latest settings result:', { settings, error })
 
     if (error) {
       console.error('Error fetching bank settings:', error)

@@ -5,22 +5,21 @@ import { redirect } from 'next/navigation'
 
 export const revalidate = 0
 
+console.log('[SSR] seller/page.tsx - file loaded')
+
 export default async function SellerPage({ searchParams }: { searchParams?: Record<string,string> }) {
+  console.log('[SSR] seller/page.tsx - function called')
   // Server-side: check for an authenticated session and query active escrows.
   try {
+    console.log('[SSR] seller/page.tsx - in try block')
+    const { createServerClientWithCookies } = await import('@/lib/supabaseServer')
     const supabase = createServerClientWithCookies()
     const { data } = await supabase.auth.getSession()
     const session = data?.session
 
-    // TEMP LOGGING: surface session presence during SSR for E2E debugging
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[SSR] seller/page.tsx - session present:', !!session)
-      // eslint-disable-next-line no-console
-      if (session) console.log('[SSR] seller/page.tsx - session user id:', session.user?.id)
-    } catch (logErr) {
-      // ignore logging errors
-    }
+    console.log('[SSR] seller/page.tsx - session present:', !!session)
+    console.log('[SSR] seller/page.tsx - session user id:', session?.user?.id)
+    console.log('[SSR] seller/page.tsx - session access_token length:', session?.access_token?.length || 0)
 
     if (!session) {
       // Not authenticated on server; but if a one-time token is present in the URL,
@@ -153,7 +152,7 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
     }
 
     // No active escrow found (or non-200 response): render client UI
-    return <SellerPortalClient />
+    return <SellerPortalClient initialAuthState={{ authenticated: true, user: session.user }} />
   } catch (err) {
     // On error, fall back to client rendering to avoid breaking the page
     // eslint-disable-next-line no-console

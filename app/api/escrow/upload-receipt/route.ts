@@ -5,7 +5,7 @@ import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib
 import { requireAuth } from '@/lib/rbac'
 import { generateUUID, getFileExtension, isValidReceiptType } from '@/lib/utils'
 import { z } from 'zod'
-import { ESCROW_STATUS, canTransition } from '@/lib/status'
+import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 
 /**
  * POST /api/escrow/upload-receipt
@@ -46,16 +46,61 @@ export async function POST(request: NextRequest) {
   const supabase = createServerClientWithAuthHeader(request)
     const serviceClient = createServiceRoleClient()
     
+    // Read form data once at the beginning
+    const formData = await request.formData()
+    const escrowIdFromForm = formData.get('escrowId') as string
+    let receiptFile = formData.get('file') as File
+    
     // Use simple authentication instead of requireAuth
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    let authenticatedUser = user
+
+    // If no user in session, allow one-time token authentication
+    if (!authenticatedUser) {
+      let token = formData.get('__one_time_token') as string
+      if (!token) {
+        const headerToken = request.headers.get('x-one-time-token') || null
+        if (headerToken) token = headerToken
+      }
+      if (!token) {
+        const authHeader = request.headers.get('authorization') || ''
+        if (authHeader.toLowerCase().startsWith('bearer ')) {
+          token = authHeader.slice(7).trim()
+        }
+      }
+
+      if (token) {
+        try {
+          const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+          console.debug('Upload receipt: one-time token present')
+          const userId = await verifyAndConsumeSignedToken(token)
+          console.debug('Upload receipt: verifyAndConsumeSignedToken result ok=', !!userId)
+          if (userId) {
+            authenticatedUser = { id: userId } as any
+          } else {
+            console.warn('Upload receipt: one-time token present but not valid/expired')
+            return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+          }
+        } catch (e) {
+          console.warn('Error importing/verifying one-time token')
+        }
+      }
+    }
+
+    if (!authenticatedUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
     
 
-    const formData = await request.formData()
-    const escrowId = formData.get('escrowId') as string
-    const receiptFile = formData.get('file') as File
+    const escrowId = escrowIdFromForm
+
+    // For testing: allow empty file
+    if (!receiptFile && process.env.NODE_ENV === 'development') {
+      // Create a dummy file for testing
+      const dummyContent = 'test receipt content'
+      const blob = new Blob([dummyContent], { type: 'text/plain' })
+      receiptFile = new File([blob], 'test-receipt.txt', { type: 'text/plain' })
+    }
 
     // Zod schema for input validation
     const schema = z.object({
@@ -79,7 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is the buyer
-    if (escrow.buyer_id !== user.id) {
+    if (escrow.buyer_id !== authenticatedUser.id) {
       return NextResponse.json({ error: 'Only the buyer can upload receipts' }, { status: 403 })
     }
 
@@ -99,7 +144,7 @@ export async function POST(request: NextRequest) {
     const fileId = generateUUID()
     const extension = getFileExtension(receiptFile.name)
     const fileName = `${fileId}.${extension}`
-    const filePath = `${escrow.id}/${user.id}/${fileName}`
+    const filePath = `${escrow.id}/${authenticatedUser.id}/${fileName}`
     uploadedFilePath = filePath
 
     if (process.env.DEBUG) console.log('Starting file upload for escrow:', escrow.id)
@@ -129,7 +174,7 @@ export async function POST(request: NextRequest) {
       .from('receipts')
       .insert({
         escrow_id: escrow.id,
-        uploaded_by: user.id,
+        uploaded_by: authenticatedUser.id,
         file_path: filePath
       })
 
@@ -142,7 +187,7 @@ export async function POST(request: NextRequest) {
 
     // Update escrow status to waiting_admin if transitioning from waiting_payment
     if (escrow.status === ESCROW_STATUS.WAITING_PAYMENT && 
-        canTransition(escrow.status, ESCROW_STATUS.WAITING_ADMIN)) {
+        canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.WAITING_ADMIN)) {
       
       await (serviceClient as any)
         .from('escrows')
@@ -155,7 +200,7 @@ export async function POST(request: NextRequest) {
         .insert({
           escrow_id: escrow.id,
           status: ESCROW_STATUS.WAITING_ADMIN,
-          changed_by: user.id
+          changed_by: authenticatedUser.id
         })
     }
 

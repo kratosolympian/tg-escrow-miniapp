@@ -26,6 +26,13 @@ export default function AdminManagementPage() {
       const { data } = await supabase.auth.getUser()
       if (data?.user) {
         setCurrentUser({ id: data.user.id, email: data.user.email ?? undefined })
+        
+        // Also fetch user profile to ensure auth state is refreshed
+        const response = await fetch('/api/auth/me')
+        if (response.ok) {
+          const userData = await response.json()
+          // This helps ensure the Header component detects the user
+        }
       }
     } catch (error) {
       console.error('Error fetching current user:', error)

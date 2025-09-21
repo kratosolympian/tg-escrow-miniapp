@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'
-import { ESCROW_STATUS, canTransition } from '@/lib/status'
+import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
 
 const releaseFundsSchema = z.object({
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if can transition from completed to closed
-    if (!canTransition(escrow.status, ESCROW_STATUS.CLOSED)) {
+    if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.CLOSED)) {
       return NextResponse.json({ 
         error: 'Cannot release funds in current status' 
       }, { status: 400 })

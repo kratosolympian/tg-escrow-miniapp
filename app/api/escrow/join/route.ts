@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient, getSessionSafe } from '@/lib/supabaseServer'
-import { ESCROW_STATUS, canTransition } from '@/lib/status'
+import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
 
 
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     // Check status transition. Allow no-op when status already equals desired status
     const currentStatus = (escrow as any).status
-    if (currentStatus !== ESCROW_STATUS.WAITING_PAYMENT && !canTransition(currentStatus as any, ESCROW_STATUS.WAITING_PAYMENT)) {
+    if (currentStatus !== ESCROW_STATUS.WAITING_PAYMENT && !canTransition(currentStatus as EscrowStatus, ESCROW_STATUS.WAITING_PAYMENT)) {
       return NextResponse.json({ error: 'Cannot join transaction in current status' }, { status: 400 })
     }
 

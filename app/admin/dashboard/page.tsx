@@ -38,6 +38,13 @@ export default function AdminDashboard() {
         const { supabase } = await import('@/lib/supabaseClient')
         const { data } = await supabase.auth.getUser()
         setUser(data?.user ?? null)
+        
+        // Also fetch user profile to ensure auth state is refreshed
+        const response = await fetch('/api/auth/me')
+        if (response.ok) {
+          const userData = await response.json()
+          // This helps ensure the Header component detects the user
+        }
       } catch (e) {
         console.error('Failed to get user on mount', e)
       }

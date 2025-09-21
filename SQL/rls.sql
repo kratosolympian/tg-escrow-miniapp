@@ -34,7 +34,7 @@ create policy "member read receipts" on receipts for select using (
 );
 
 -- ADMIN SETTINGS
-create policy "read settings (auth users)" on admin_settings for select using (auth.uid() is not null);
+create policy "read settings (public)" on admin_settings for select using (true);
 create policy "admin write settings" on admin_settings for all using (
   exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
 );

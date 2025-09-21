@@ -17,7 +17,11 @@ interface CreatedEscrow {
   code: string
 }
 
-export default function SellerPortalClient() {
+interface SellerPortalClientProps {
+  initialAuthState?: { user: any; authenticated: boolean } | null
+}
+
+export default function SellerPortalClient({ initialAuthState }: SellerPortalClientProps = {}) {
   const [form, setForm] = useState<CreateEscrowForm>({
     description: '',
     price: ''
@@ -59,20 +63,50 @@ export default function SellerPortalClient() {
 
   // Check authentication on load
   useEffect(() => {
-    // Check Supabase auth state
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        setIsAuthenticated(true);
-        setUser(data.user);
-        setShowAuthForm(false);
-      } else {
+    // If server provided initial auth state, use it
+    if (initialAuthState?.authenticated && initialAuthState.user) {
+      setIsAuthenticated(true);
+      setUser(initialAuthState.user);
+      setShowAuthForm(false);
+      return;
+    }
+
+    const checkAuth = async () => {
+      try {
+        // First try getSession (more reliable than getUser for established sessions)
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionData?.session?.user) {
+          setIsAuthenticated(true);
+          setUser(sessionData.session.user);
+          setShowAuthForm(false);
+          return;
+        }
+
+        // Fallback to getUser
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userData?.user) {
+          setIsAuthenticated(true);
+          setUser(userData.user);
+          setShowAuthForm(false);
+          return;
+        }
+
+        // If neither worked, show auth form
+        setIsAuthenticated(false);
+        setUser(null);
+        setShowAuthForm(true);
+      } catch (error) {
+        console.error('Auth check error:', error);
         setIsAuthenticated(false);
         setUser(null);
         setShowAuthForm(true);
       }
-    });
+    };
+
+    checkAuth();
     fetchOnlineAdmins();
     fetchActiveEscrows();
+    
     // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
@@ -85,6 +119,7 @@ export default function SellerPortalClient() {
         setShowAuthForm(true);
       }
     });
+    
     return () => {
       listener?.subscription.unsubscribe();
     };
@@ -419,38 +454,189 @@ export default function SellerPortalClient() {
     }
   };
 
-  if (!isAuthenticated && error && !showAuthForm) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-50 p-4 flex items-center justify-center">
-        <div className="card text-center max-w-md mx-auto">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-semibold mb-2">Authentication Failed</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <p className="text-sm text-gray-500">Please make sure you're accessing this through the Telegram Mini App.</p>
-        </div>
-      </div>
-    )
-  }
-
-  // ...existing UI rendering (kept intact) ...
-  // Render the shared AuthCard component and wire up its handlers
+  // Handle auth form input changes
   const handleAuthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setAuthForm(prev => ({ ...prev, [name]: value }))
   }
 
+  if (!isAuthenticated || showAuthForm) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-white p-6">
+        <div className="max-w-2xl mx-auto">
+          <AuthCard
+            authMode={authMode}
+            authForm={authForm}
+            authLoading={authLoading}
+            error={error}
+            onChange={handleAuthInputChange}
+            onSubmit={handleAuth}
+            setAuthMode={(m) => { setAuthMode(m); setError('') }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Authenticated UI
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-white p-6">
       <div className="max-w-2xl mx-auto">
-        <AuthCard
-          authMode={authMode}
-          authForm={authForm}
-          authLoading={authLoading}
-          error={error}
-          onChange={handleAuthInputChange}
-          onSubmit={handleAuth}
-          setAuthMode={(m) => { setAuthMode(m); setError('') }}
-        />
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-green-800">Seller Dashboard</h1>
+          <p className="text-green-600 mt-1">Create and manage your escrow transactions</p>
+        </div>
+
+        {/* Active Escrows */}
+        {activeEscrows.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-green-800 mb-4">Active Transactions</h2>
+            <div className="space-y-4">
+              {activeEscrows.map((escrow: any) => (
+                <div key={escrow.id} className="bg-white rounded-lg shadow-md p-6 border border-green-100">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-semibold text-lg text-green-800">Transaction #{escrow.code}</h3>
+                      <p className="text-gray-600 mt-1">{escrow.description}</p>
+                      <p className="text-green-600 font-medium mt-2">₦{escrow.price}</p>
+                      <p className="text-sm text-gray-500 mt-1">Status: <span className="capitalize">{escrow.status.replace('_', ' ')}</span></p>
+                    </div>
+                    <Link
+                      href={`/seller/escrow/${escrow.id}`}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                    >
+                      View Details
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Create Escrow Form */}
+        {!blockedCreationInfo && (
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-green-100">
+            <h2 className="text-2xl font-bold text-green-800 mb-6">Create New Transaction</h2>
+
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600">{error}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-green-800 font-semibold mb-2">Product Description</label>
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleInputChange}
+                  className="w-full rounded-xl border border-green-200 px-4 py-3 text-base focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                  placeholder="Describe the product or service you're selling"
+                  rows={4}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-green-800 font-semibold mb-2">Price (₦)</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={form.price}
+                  onChange={handleInputChange}
+                  className="w-full rounded-xl border border-green-200 px-4 py-3 text-base focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                  placeholder="Enter the transaction amount"
+                  min="1"
+                  step="0.01"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-green-800 font-semibold mb-2">Product Image (Optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="w-full rounded-xl border border-green-200 px-4 py-3 text-base focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                />
+                {productImagePreview && (
+                  <div className="mt-4">
+                    <img src={productImagePreview} alt="Product preview" className="max-w-xs rounded-lg shadow-md" />
+                  </div>
+                )}
+              </div>
+
+              {onlineAdmins.length > 0 && (
+                <div>
+                  <label className="block text-green-800 font-semibold mb-2">Assign Admin (Optional)</label>
+                  <select
+                    value={selectedAdmin || ''}
+                    onChange={(e) => handleSelectedAdminChange(e.target.value)}
+                    className="w-full rounded-xl border border-green-200 px-4 py-3 text-base focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                  >
+                    <option value="">Select an admin (optional)</option>
+                    {onlineAdmins.map((admin: any) => (
+                      <option key={admin.id} value={admin.id}>
+                        {admin.full_name || admin.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !form.description.trim() || !form.price.trim()}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-4 rounded-xl transition-colors text-xl"
+              >
+                {loading ? 'Creating Transaction...' : 'Create Transaction'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Blocked Creation Info */}
+        {blockedCreationInfo && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-yellow-800 mb-2">Transaction in Progress</h3>
+            <p className="text-yellow-700 mb-4">{blockedCreationInfo.message}</p>
+            <Link
+              href={`/seller/escrow/${blockedCreationInfo.escrow.id}`}
+              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors"
+            >
+              View Active Transaction
+            </Link>
+          </div>
+        )}
+
+        {/* Success State */}
+        {createdEscrow && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-green-800 mb-2">Transaction Created Successfully!</h3>
+            <p className="text-green-700 mb-4">Share this code with your buyer to complete the transaction.</p>
+            <div className="bg-white rounded-lg p-4 border border-green-200 mb-4">
+              <p className="text-2xl font-mono font-bold text-center text-green-800">{createdEscrow.code}</p>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={copyCode}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+              >
+                Copy Code
+              </button>
+              <button
+                onClick={startNewTransaction}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+              >
+                Create Another
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

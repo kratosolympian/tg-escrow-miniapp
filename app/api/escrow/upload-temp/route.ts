@@ -38,16 +38,53 @@ export async function POST(request: NextRequest) {
   const supabase = createServerClientWithAuthHeader(request)
     const serviceClient = createServiceRoleClient()
 
-  const { data: { user }, error: userErr } = await supabase.auth.getUser()
-    if (userErr || !user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-
-
   const formData = await request.formData()
   // Accept both 'file' and 'image' as field names
   let file = formData.get('file') as File | null
   if (!file) file = formData.get('image') as File | null
+
+  // Extract one-time token if present
+  let token = formData.get('__one_time_token') as string
+  if (!token) {
+    const headerToken = request.headers.get('x-one-time-token') || null
+    if (headerToken) token = headerToken
+  }
+  if (!token) {
+    const authHeader = request.headers.get('authorization') || ''
+    if (authHeader.toLowerCase().startsWith('bearer ')) {
+      token = authHeader.slice(7).trim()
+    }
+  }
+
+  let authenticatedUser = null
+
+  if (token) {
+    try {
+      const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+      console.debug('Upload temp: one-time token present')
+      const userId = await verifyAndConsumeSignedToken(token)
+      console.debug('Upload temp: verifyAndConsumeSignedToken result ok=', !!userId)
+      if (userId) {
+        authenticatedUser = { id: userId }
+      } else {
+        console.warn('Upload temp: one-time token present but not valid/expired')
+        return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+      }
+    } catch (e) {
+      console.warn('Error importing/verifying one-time token')
+    }
+  } else {
+    // Fallback to cookie authentication
+    const { data: { user }, error: userErr } = await supabase.auth.getUser()
+    if (userErr || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    authenticatedUser = user
+  }
+
+  if (!authenticatedUser) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
@@ -60,7 +97,7 @@ export async function POST(request: NextRequest) {
     const id = generateUUID()
     const ext = getFileExtension((file as any).name || 'jpg')
     const fileName = `${id}.${ext}`
-    const path = `temp/${user.id}/${fileName}`
+    const path = `temp/${authenticatedUser.id}/${fileName}`
 
     const { error: uploadError } = await serviceClient.storage.from('product-images').upload(path, file, { upsert: true })
     if (uploadError) {

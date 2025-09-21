@@ -1,2 +1,2 @@
 insert into profiles (id, email, role, created_at)
-values ('4213433b-16c8-4f47-9e79-fdaa3bc254ff', 'johnayodele01@gmail.com', 'admin', now());
+values ('f3d2fdb5-371e-428d-a154-552b9e699c84', 'johnayodele01@gmail.com', 'admin', now());

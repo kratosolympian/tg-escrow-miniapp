@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireAuth } from '@/lib/rbac'
-import { ESCROW_STATUS, canTransition } from '@/lib/status'
+import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
 
 
@@ -30,21 +30,49 @@ import { z } from 'zod'
  *   500: { error: string } (update or server error)
  */
 const confirmReceivedSchema = z.object({
-  escrowId: z.string().uuid()
+  escrowId: z.string().uuid(),
+  __one_time_token: z.string().optional()
 })
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClientWithCookies()
+    const serviceClient = createServiceRoleClient()
     
-    // Require authentication
-    const profile = await requireAuth(supabase)
-    
+    // Check for one-time token first
+    let authenticatedUser = null
     const body = await request.json()
-    const { escrowId } = confirmReceivedSchema.parse(body)
+    const { escrowId, __one_time_token } = body
+
+    if (__one_time_token) {
+      try {
+        const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+        console.debug('Confirm received: one-time token present')
+        const userId = await verifyAndConsumeSignedToken(__one_time_token)
+        console.debug('Confirm received: verifyAndConsumeSignedToken result ok=', !!userId)
+        if (userId) {
+          authenticatedUser = { id: userId }
+        } else {
+          console.warn('Confirm received: one-time token present but not valid/expired')
+          return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+        }
+      } catch (e) {
+        console.warn('Error importing/verifying one-time token')
+      }
+    }
+
+    // Fallback to requireAuth if no token
+    let profile = authenticatedUser
+    if (!profile) {
+      profile = await requireAuth(supabase)
+    }
+    
+    // Parse and validate the request data
+    const validatedData = confirmReceivedSchema.parse(body)
+    const escrowIdValidated = validatedData.escrowId
 
     // Get escrow
-    const { data: escrow, error: escrowError } = await (supabase as any)
+    const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -60,14 +88,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if can transition from in_progress to completed
-    if (!canTransition(escrow.status, ESCROW_STATUS.COMPLETED)) {
+    if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.COMPLETED)) {
       return NextResponse.json({ 
         error: 'Cannot confirm receipt in current status' 
       }, { status: 400 })
     }
 
     // Update escrow status
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await (serviceClient as any)
       .from('escrows')
       .update({ status: ESCROW_STATUS.COMPLETED })
       .eq('id', escrow.id)
@@ -78,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await (supabase as any)
+    await (serviceClient as any)
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,

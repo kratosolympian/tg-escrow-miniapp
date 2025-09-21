@@ -19,34 +19,58 @@ export default function BuyerPage() {
 
   // Check authentication on load
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        setIsAuthenticated(true)
-        setShowAuthForm(false)
-        setUser(data.user)
-      } else {
-        setIsAuthenticated(false)
-        setShowAuthForm(true)
-        setUser(null)
+    const checkAuth = async () => {
+      try {
+        // First try getSession (more reliable than getUser for established sessions)
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionData?.session?.user) {
+          setIsAuthenticated(true);
+          setShowAuthForm(false);
+          setUser(sessionData.session.user);
+          return;
+        }
+
+        // Fallback to getUser
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userData?.user) {
+          setIsAuthenticated(true);
+          setShowAuthForm(false);
+          setUser(userData.user);
+          return;
+        }
+
+        // If neither worked, show auth form
+        setIsAuthenticated(false);
+        setUser(null);
+        setShowAuthForm(true);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setIsAuthenticated(false);
+        setUser(null);
+        setShowAuthForm(true);
       }
-    })
-    fetchActiveEscrows()
+    };
+
+    checkAuth();
+    fetchActiveEscrows();
+    
     // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        setIsAuthenticated(true)
-        setShowAuthForm(false)
-        setUser(session.user)
+        setIsAuthenticated(true);
+        setShowAuthForm(false);
+        setUser(session.user);
       } else {
-        setIsAuthenticated(false)
-        setShowAuthForm(true)
-        setUser(null)
+        setIsAuthenticated(false);
+        setUser(null);
+        setShowAuthForm(true);
       }
-    })
+    });
+    
     return () => {
-      listener?.subscription.unsubscribe()
-    }
-  }, [])
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
 
   const fetchActiveEscrows = async () => {
     try {

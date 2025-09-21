@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabaseServer'
-import { ESCROW_STATUS, canTransition } from '@/lib/status'
+import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
 import { Escrow } from '@/lib/types'
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if can transition from waiting_admin to payment_confirmed
-    if (!canTransition(escrow.status, ESCROW_STATUS.PAYMENT_CONFIRMED)) {
+    if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.PAYMENT_CONFIRMED)) {
       return NextResponse.json({ 
         error: 'Cannot confirm payment in current status' 
       }, { status: 400 })

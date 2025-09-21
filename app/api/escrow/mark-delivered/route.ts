@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithAuthHeader } from '@/lib/supabaseServer'
+import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireAuth } from '@/lib/rbac'
-import { ESCROW_STATUS, canTransition } from '@/lib/status'
+import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
 
 
@@ -30,21 +30,48 @@ import { z } from 'zod'
  */
 const markDeliveredSchema = z.object({
   escrowId: z.string().uuid(),
-  deliveryProof: z.string().optional() // file path or URL
+  deliveryProof: z.string().optional(), // file path or URL
+  __one_time_token: z.string().optional()
 })
 
 export async function POST(request: NextRequest) {
   try {
   const supabase = createServerClientWithAuthHeader(request)
+    const serviceClient = createServiceRoleClient()
     
-    // Require authentication
-    const profile = await requireAuth(supabase)
-    
-  const body = await request.json()
-  const { escrowId, deliveryProof } = markDeliveredSchema.parse(body)
+    // Check for one-time token first
+    let authenticatedUser = null
+    const body = await request.json()
+    const { escrowId: requestEscrowId, deliveryProof: requestDeliveryProof, __one_time_token } = body
+
+    if (__one_time_token) {
+      try {
+        const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+        console.debug('Mark delivered: one-time token present')
+        const userId = await verifyAndConsumeSignedToken(__one_time_token)
+        console.debug('Mark delivered: verifyAndConsumeSignedToken result ok=', !!userId)
+        if (userId) {
+          authenticatedUser = { id: userId }
+        } else {
+          console.warn('Mark delivered: one-time token present but not valid/expired')
+          return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+        }
+      } catch (e) {
+        console.warn('Error importing/verifying one-time token')
+      }
+    }
+
+    // Fallback to requireAuth if no token
+    let profile = authenticatedUser
+    if (!profile) {
+      profile = await requireAuth(supabase)
+    }
+
+    // Parse and validate the request data
+    const { escrowId, deliveryProof } = markDeliveredSchema.parse(body)
 
     // Get escrow
-    const { data: escrow, error: escrowError } = await (supabase as any)
+    const { data: escrow, error: escrowError } = await serviceClient
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -60,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if can transition from payment_confirmed to in_progress
-    if (!canTransition(escrow.status, ESCROW_STATUS.IN_PROGRESS)) {
+    if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.IN_PROGRESS)) {
       return NextResponse.json({ 
         error: 'Cannot mark as delivered in current status' 
       }, { status: 400 })
@@ -71,7 +98,7 @@ export async function POST(request: NextRequest) {
     if (deliveryProof) {
       updateFields.delivery_proof_url = deliveryProof
     }
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await serviceClient
       .from('escrows')
       .update(updateFields)
       .eq('id', escrow.id)
@@ -82,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await (supabase as any)
+    await serviceClient
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,

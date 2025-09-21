@@ -1,4 +1,9 @@
 import { NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from './supabaseClient'
+
 // Create a Supabase client using the Authorization header (Bearer token) if present, else cookies
 export function createServerClientWithAuthHeader(request?: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -19,13 +24,17 @@ export function createServerClientWithAuthHeader(request?: NextRequest) {
   // Fallback to cookies (for SSR or legacy flows)
   return createServerClientWithCookies();
 }
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from './supabaseClient'
 
 export function createServerClientWithCookies() {
   const cookieStore = cookies()
+  
+  // Debug: log all cookies
+  try {
+    const allCookies = cookieStore.getAll()
+    console.log('[DEBUG] createServerClientWithCookies - all cookies:', allCookies.map(c => ({ name: c.name, value: c.value.substring(0, 10) + '...' })))
+  } catch (e) {
+    console.log('[DEBUG] createServerClientWithCookies - error getting cookies:', e)
+  }
   
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
