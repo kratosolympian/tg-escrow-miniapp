@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import FeedbackBanner from '../../../../components/FeedbackBanner'
 import { useParams } from 'next/navigation'
@@ -27,12 +27,20 @@ interface Escrow {
   seller_id: string
   buyer_id?: string
   payment_deadline?: string
+  expires_at?: string
   seller?: { telegram_id: string }
   buyer?: { telegram_id: string }
   receipts?: Array<{
     id: string
     created_at: string
     file_path: string
+    signed_url?: string
+  }>
+  status_logs?: Array<{
+    id: string
+    status: string
+    created_at: string
+    changed_by: string
   }>
 }
 
@@ -67,6 +75,7 @@ export default function BuyerEscrowPage() {
   const [authLoading, setAuthLoading] = useState(false)
   const [joining, setJoining] = useState(false)
   const authFormRef = useRef<HTMLDivElement | null>(null)
+  const escrowPrevStatus = useRef<string | null>(null)
   // Timer hooks (must be declared here)
   const [timerLabel, setTimerLabel] = useState<string>('');
   const [timerEnd, setTimerEnd] = useState<Date | null>(null);
@@ -85,15 +94,38 @@ export default function BuyerEscrowPage() {
       setTimerEnd(null);
       return;
     }
-    if (escrow.status !== 'completed' && escrow.status !== 'cancelled') {
-      if (escrow.payment_deadline) {
-        setTimerLabel('Time left to pay:');
-        setTimerEnd(new Date(escrow.payment_deadline));
-      } else {
-        setTimerLabel('No payment deadline set.');
-        setTimerEnd(null);
+    if (escrow.status === 'waiting_payment') {
+      // Use expires_at if available, otherwise calculate from created_at + 30 minutes
+      const deadline = escrow.expires_at 
+        ? new Date(escrow.expires_at)
+        : new Date(new Date(escrow.created_at).getTime() + 30 * 60 * 1000); // 30 minutes after creation
+      
+      setTimerLabel('Time left to pay:');
+      setTimerEnd(deadline);
+    } else if (escrow.status === 'in_progress') {
+      // Reset auto-confirm flag when entering in_progress status (only if it was previously not in_progress)
+      if (escrowPrevStatus.current !== 'in_progress') {
+        setAutoConfirmTriggered(false);
       }
+      escrowPrevStatus.current = 'in_progress';
+      
+      // Find when escrow entered in_progress status
+      const statusLogs = (escrow as any).status_logs || [];
+      const inProgressLog = statusLogs.find((log: any) => log.status === 'in_progress');
+      
+      // If we have a log entry for in_progress, use that timestamp + 5 minutes
+      // Otherwise, assume it just entered in_progress and start 5-minute countdown from now
+      const inProgressStart = inProgressLog 
+        ? new Date(inProgressLog.created_at)
+        : new Date(); // Fallback to current time
+      
+      const deadline = new Date(inProgressStart.getTime() + 5 * 60 * 1000); // 5 minutes after entering in_progress
+      
+      setTimerLabel('Time left to confirm receipt:');
+      setTimerEnd(deadline);
     } else {
+      // Clear timer for any other status (completed, cancelled, closed, refunded, etc.)
+      escrowPrevStatus.current = escrow.status;
       setTimerLabel('');
       setTimerEnd(null);
     }
@@ -122,7 +154,7 @@ export default function BuyerEscrowPage() {
         setSupabaseUser(null);
       }
     });
-    fetchEscrow();
+    fetchEscrow('initial');
     fetchCurrentUser();
     // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -140,13 +172,108 @@ export default function BuyerEscrowPage() {
     };
   }, [code]);
 
+  // Polling for escrow updates (similar to seller page)
   useEffect(() => {
-    if (escrow?.product_image_url) {
+    if (!escrow) return;
+    
+    // Don't poll for completed/cancelled/refunded escrows
+    if (['completed', 'cancelled', 'refunded', 'closed'].includes(escrow.status)) {
+      return;
+    }
+    
+    const interval = setInterval(() => {
+      // refresh every 5s for better UX
+      fetchEscrow('polling')
+    }, 5000)
+    return () => {
+      clearInterval(interval);
+    }
+  }, [escrow?.id, escrow?.status])
+
+  const escrowProductImageUrl = useMemo(() => escrow?.product_image_url, [escrow?.product_image_url]);
+
+  useEffect(() => {
+    if (escrowProductImageUrl && user) {
       fetchProductImage()
     }
-  }, [escrow])
+  }, [escrowProductImageUrl, user])
 
-  const fetchEscrow = async () => {
+  const [realtimeChannel, setRealtimeChannel] = useState<any>(null)
+
+  const realtimeChannelRef = useRef<any>(null)
+  const currentEscrowIdRef = useRef<string | null>(null)
+
+  // Real-time subscription for escrow status changes
+  useEffect(() => {
+    if (!escrow?.id) {
+      // Clean up channel if escrow becomes unavailable
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current)
+        realtimeChannelRef.current = null
+        currentEscrowIdRef.current = null
+        setRealtimeChannel(null)
+      }
+      return
+    }
+
+    // If we already have a channel for this escrow, don't create another
+    if (realtimeChannelRef.current && currentEscrowIdRef.current === escrow.id) {
+      return
+    }
+
+    // Clean up previous channel if it exists
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current)
+      realtimeChannelRef.current = null
+    }
+
+    currentEscrowIdRef.current = escrow.id
+
+    const channel = supabase
+      .channel(`escrow-${escrow.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows',
+          filter: `id=eq.${escrow.id}`
+        },
+        (payload) => {
+          if (payload.new) {
+            // Update the escrow state directly with the new data
+            setEscrow(prev => prev ? { ...prev, ...payload.new } : null)
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Real-time: Successfully subscribed to escrow updates')
+        }
+      })
+
+    realtimeChannelRef.current = channel
+    setRealtimeChannel(channel)
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [escrow?.id])
+
+  // Clean up channel on unmount
+  useEffect(() => {
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current)
+        realtimeChannelRef.current = null
+        currentEscrowIdRef.current = null
+      }
+    }
+  }, [])
+
+  const fetchEscrow = async (source = 'unknown') => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -155,7 +282,24 @@ export default function BuyerEscrowPage() {
       );
       if (response.ok) {
         const data = await response.json();
-        setEscrow(data);
+        
+        // Only update state if data actually changed
+        setEscrow(prev => {
+          if (!prev) return data;
+          // Compare key fields to avoid unnecessary re-renders
+          const changed = 
+            prev.status !== data.status ||
+            prev.buyer_id !== data.buyer_id ||
+            prev.product_image_url !== data.product_image_url ||
+            JSON.stringify(prev.receipts) !== JSON.stringify(data.receipts) ||
+            JSON.stringify(prev.status_logs) !== JSON.stringify(data.status_logs);
+          
+          if (changed) {
+            return data;
+          } else {
+            return prev;
+          }
+        });
       } else {
         setError('Transaction not found');
       }
@@ -244,7 +388,7 @@ export default function BuyerEscrowPage() {
       const data = await response.json();
       if (response.ok) {
         setSuccess('Successfully joined the transaction!');
-        await fetchEscrow(); // Ensure latest escrow is loaded
+        await fetchEscrow('join'); // Ensure latest escrow is loaded
       } else {
         setError(data.error || 'Failed to join transaction');
       }
@@ -257,16 +401,26 @@ export default function BuyerEscrowPage() {
   }
 
   const fetchProductImage = async () => {
-    if (!escrow?.product_image_url) return
-
+    if (!escrowProductImageUrl || !user) return
+    
+    // If it's already a valid URL (starts with http), use it directly
+    if (escrowProductImageUrl.startsWith('http://') || escrowProductImageUrl.startsWith('https://')) {
+      setProductImageUrl(escrowProductImageUrl)
+      return
+    }
+    
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      
       const response = await fetch('/api/storage/sign-url', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
         },
         body: JSON.stringify({
-          path: escrow.product_image_url,
+          path: escrowProductImageUrl,
           bucket: 'product-images'
         })
       })
@@ -274,9 +428,12 @@ export default function BuyerEscrowPage() {
       if (response.ok) {
         const data = await response.json()
         setProductImageUrl(data.signedUrl)
+      } else {
+        const errorData = await response.json()
+        console.error('Buyer: Sign URL API error:', errorData)
       }
     } catch (error) {
-      console.error('Error fetching product image:', error)
+      console.error('Buyer: Error fetching product image:', error)
     }
   }
 
@@ -333,7 +490,7 @@ export default function BuyerEscrowPage() {
       const { receiptUrl } = await finalizeResp.json();
       setPaymentProofUrl(receiptUrl);
       setSuccess('Payment proof uploaded!');
-      fetchEscrow(); // Refresh escrow to show receipt
+      fetchEscrow('upload-receipt'); // Refresh escrow to show receipt
     } catch (err) {
       setError('Failed to upload payment proof');
     } finally {
@@ -369,7 +526,8 @@ export default function BuyerEscrowPage() {
         setSuccess('Marked as paid!');
         setPaymentProof(null);
         setPaymentProofUrl(null);
-        fetchEscrow();
+        // Immediately refresh escrow data to show updated status
+        await fetchEscrow('mark-paid');
       } else {
         const data = await response.json();
         setError(data.error || 'Failed to mark as paid');
@@ -382,8 +540,15 @@ export default function BuyerEscrowPage() {
   };
 
   const [confirming, setConfirming] = useState(false);
+  const [autoConfirmTriggered, setAutoConfirmTriggered] = useState(false);
   const handleConfirmReceived = async () => {
     if (!escrow) return;
+    
+    // Prevent multiple simultaneous calls
+    if (confirming) {
+      return;
+    }
+    
     setConfirming(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -400,7 +565,7 @@ export default function BuyerEscrowPage() {
         setSuccess('Receipt confirmed successfully!');
         // Wait a moment to ensure DB is updated, then fetch fresh
         setTimeout(() => {
-          fetchEscrow();
+          fetchEscrow('confirm-receipt');
           setConfirming(false);
         }, 800);
       } else {
@@ -415,11 +580,56 @@ export default function BuyerEscrowPage() {
     }
   };
 
+  const expireEscrow = async () => {
+    if (!escrow) return;
+    
+    // Don't attempt to expire if escrow is already in a terminal state
+    if (['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
+      console.log('Escrow is already in terminal state:', escrow.status, '- not attempting to expire');
+      return;
+    }
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/escrow/expire', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ escrowId: escrow.id })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Escrow expired successfully');
+        // Refresh escrow data to show updated status
+        fetchEscrow('expire-escrow');
+      } else {
+        const data = await response.json();
+        console.error('Failed to expire escrow:', data.error);
+        setError(data.error || 'Failed to expire transaction');
+      }
+    } catch (error) {
+      console.error('Error expiring escrow:', error);
+      setError('Failed to expire transaction');
+    }
+  };
+
   useEffect(() => {
     if (!timerEnd || !timerLabel) {
       setTimerValue('');
       return;
     }
+    
+    // Stop timer if escrow is in a terminal state
+    if (escrow && ['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
+      setTimerLabel('');
+      setTimerEnd(null);
+      setTimerValue('');
+      return;
+    }
+    
     const updateTimer = () => {
       const now = Date.now();
       const secs = Math.max(0, Math.floor((timerEnd.getTime() - now) / 1000));
@@ -427,11 +637,36 @@ export default function BuyerEscrowPage() {
       const m = Math.floor((secs % 3600) / 60);
       const s = secs % 60;
       setTimerValue(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+      
+      // Auto-confirm receipt if timer expired and escrow is in_progress
+      if (secs <= 0 && escrow?.status === 'in_progress' && !confirming && !autoConfirmTriggered) {
+        setAutoConfirmTriggered(true);
+        handleConfirmReceived();
+      }
+      
+      // Expire escrow if payment deadline reached and still waiting for payment
+      // Only expire if escrow is still in expirable status
+      if (secs <= 0 && escrow?.status === 'waiting_payment' && timerLabel === 'Time left to pay:' && !['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
+        console.log('Payment deadline reached, expiring escrow');
+        expireEscrow();
+      }
+      
+      // Expire escrow if receipt confirmation deadline reached and still in_progress
+      // Only expire if escrow is still in expirable status
+      if (secs <= 0 && escrow?.status === 'in_progress' && timerLabel === 'Time left to confirm receipt:' && !['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
+        console.log('Receipt confirmation deadline reached, expiring escrow');
+        expireEscrow();
+      } else if (secs <= 0 && timerLabel === 'Time left to pay:' && escrow?.status !== 'waiting_payment') {
+        console.log('Payment timer expired but escrow status changed to:', escrow?.status, '- stopping timer');
+        // Clear the timer when status has changed
+        setTimerLabel('');
+        setTimerEnd(null);
+      }
     };
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [timerEnd, timerLabel]);
+  }, [timerEnd, timerLabel, escrow?.status, confirming]);
 
   if (loading) {
     return (
@@ -493,6 +728,11 @@ export default function BuyerEscrowPage() {
           </div>
           {productImageUrl && (
             <div className="mb-4">
+              {(() => {
+                console.log('Buyer: About to render Image with productImageUrl:', productImageUrl)
+                console.log('Buyer: Is it a valid URL?', productImageUrl.startsWith('http'))
+                return null
+              })()}
               <Image
                 src={productImageUrl}
                 alt="Product"
@@ -824,11 +1064,11 @@ export default function BuyerEscrowPage() {
                       Uploaded on {new Date(receipt.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  {receipt.file_path && (
+                  {receipt.signed_url && (
                     <div>
                       {receipt.file_path.toLowerCase().endsWith('.pdf') ? (
                         <a
-                          href={receipt.file_path}
+                          href={receipt.signed_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800"
@@ -837,7 +1077,7 @@ export default function BuyerEscrowPage() {
                         </a>
                       ) : (
                         <Image
-                          src={receipt.file_path}
+                          src={receipt.signed_url}
                           alt="Payment Receipt"
                           width={200}
                           height={150}
