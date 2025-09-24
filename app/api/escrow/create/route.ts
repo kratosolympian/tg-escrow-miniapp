@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create escrow', details: escrowError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, escrow });
+    return NextResponse.json({ ok: true, code: escrow.code, escrowId: escrow.id });
   } catch (error) {
     console.error('Unhandled error in POST /api/escrow/create:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

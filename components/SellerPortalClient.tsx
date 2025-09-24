@@ -387,14 +387,14 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
 
       if (response.ok) {
         try {
-          if (data?.id) {
-            router.push(`/seller/escrow/${data.id}`)
+          if (data?.escrowId) {
+            router.push(`/seller/escrow/${data.escrowId}`)
             return
           }
         } catch (e) {
           // ignore navigation errors
         }
-        setCreatedEscrow(data)
+        setCreatedEscrow({ code: data.code, id: data.escrowId })
         try { localStorage.removeItem('seller:create-escrow:draft') } catch {}
         setBlockedCreationInfo(null)
       } else {
