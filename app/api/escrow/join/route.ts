@@ -166,8 +166,8 @@ export async function POST(request: NextRequest) {
           console.error('Error counting buyer active escrows:', buyerCountErr)
         } else {
           const count = (buyerActiveCount && (buyerActiveCount as any).length) ? (buyerActiveCount as any).length : 0
-          if (count >= 20) { // Increased for testing - allow up to 20 active escrows
-            return NextResponse.json({ error: 'You have reached the maximum number of active transactions (20). Please finish an existing transaction before joining another.' }, { status: 400 })
+          if (count >= 3) { // Business rule: buyers can only have up to 3 active escrows
+            return NextResponse.json({ error: 'You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.' }, { status: 400 })
           }
         }
       } catch (e) {
@@ -188,14 +188,13 @@ export async function POST(request: NextRequest) {
       .ilike('code', code)
 
     if (updateError) {
-      // Temporarily disabled for testing - allow multiple active escrows
       // Check if this is the specific database constraint error
-      // if (updateError.code === 'P0001' && updateError.message?.includes('Buyer already has an active escrow')) {
-      //   return NextResponse.json({
-      //     error: 'You already have an active escrow. For testing purposes, please complete or cancel your existing escrow first.',
-      //     existingEscrowId: '9b68f1e0-a885-425b-abf7-a2dc25c52a8f'
-      //   }, { status: 400 })
-      // }
+      if (updateError.code === 'P0001' && updateError.message?.includes('Buyer already has an active escrow')) {
+        return NextResponse.json({
+          error: 'You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.',
+          existingEscrowId: '9b68f1e0-a885-425b-abf7-a2dc25c52a8f'
+        }, { status: 400 })
+      }
 
       // Log the update error for debugging. Avoid logging tokens/PII.
       console.error('Error updating escrow (first attempt):', updateError)
