@@ -2,9 +2,9 @@
 
 export interface Profile {
   id: string
-  telegram_id?: string
-  role: 'buyer' | 'seller' | 'admin'
-  created_at: string
+  telegram_id?: string | null // Updated to allow null
+  role: string // Updated to allow any string value
+  created_at: string | null // Updated to allow null
 }
 
 export interface Escrow {

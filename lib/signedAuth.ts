@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { createServiceRoleClient } from '@/lib/supabaseServer'
+import { createServiceRoleClient } from './supabaseServer.ts'
 
 type Entry = {
   userId: string

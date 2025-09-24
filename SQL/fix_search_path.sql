@@ -1,0 +1,11 @@
+-- Fix mutable search paths for functions
+ALTER FUNCTION public.escrow_before_insert() SET search_path = 'public';
+ALTER FUNCTION public.escrow_after_insert() SET search_path = 'public';
+ALTER FUNCTION public.escrow_after_update_set_buyer() SET search_path = 'public';
+ALTER FUNCTION public.escrow_after_update_clear_active() SET search_path = 'public';
+ALTER FUNCTION public.cleanup_expired_tokens() SET search_path = 'public';
+ALTER FUNCTION public.expire_old_escrows() SET search_path = 'public';
+ALTER FUNCTION public.ensure_single_super_admin() SET search_path = 'public';
+ALTER FUNCTION public.expire_escrows() SET search_path = 'public';
+ALTER FUNCTION public.handle_new_user() SET search_path = 'public';
+ALTER FUNCTION public.set_updated_at() SET search_path = 'public';

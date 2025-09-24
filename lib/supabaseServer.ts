@@ -1,6 +1,6 @@
-import { NextRequest } from 'next/server'
+import { NextRequest } from 'next/server.js';
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies } from 'next/headers.js';
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './supabaseClient'
 
@@ -29,11 +29,13 @@ export function createServerClientWithCookies() {
   const cookieStore = cookies()
   
   // Debug: log all cookies
-  try {
-    const allCookies = cookieStore.getAll()
-    console.log('[DEBUG] createServerClientWithCookies - all cookies:', allCookies.map(c => ({ name: c.name, value: c.value.substring(0, 10) + '...' })))
-  } catch (e) {
-    console.log('[DEBUG] createServerClientWithCookies - error getting cookies:', e)
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const allCookies = cookieStore.getAll()
+      console.log('[DEBUG] createServerClientWithCookies - all cookies:', allCookies.map(c => ({ name: c.name, value: c.value.substring(0, 10) + '...' })))
+    } catch (e) {
+      console.log('[DEBUG] createServerClientWithCookies - error getting cookies:', e)
+    }
   }
   
   return createServerClient<Database>(

@@ -103,6 +103,95 @@ create table if not exists chat_participants (
   unique(escrow_id, user_id)
 );
 
+-- Table to store one-time tokens
+create table if not exists one_time_tokens (
+  id uuid primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  expires_at timestamp with time zone not null,
+  created_at timestamp with time zone default now()
+);
+
+-- Enable RLS
+alter table profiles enable row level security;
+alter table escrows enable row level security;
+alter table receipts enable row level security;
+alter table admin_settings enable row level security;
+alter table status_logs enable row level security;
+alter table disputes enable row level security;
+
+-- PROFILES POLICIES
+create policy "own profile read" on profiles for select using (auth.uid() = id);
+create policy "own profile update" on profiles for update using (auth.uid() = id);
+create policy "admin read profiles" on profiles for select using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- ESCROWS POLICIES
+create policy "seller insert escrow" on escrows for insert with check (seller_id = auth.uid());
+create policy "member read escrows" on escrows for select using (
+  seller_id = auth.uid() or buyer_id = auth.uid() or exists (
+    select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'
+  )
+);
+create policy "seller update own" on escrows for update using (seller_id = auth.uid());
+create policy "buyer update own" on escrows for update using (buyer_id = auth.uid());
+create policy "admin all escrows" on escrows for all using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- RECEIPTS POLICIES
+create policy "insert own receipt" on receipts for insert with check (uploaded_by = auth.uid());
+create policy "member read receipts" on receipts for select using (
+  uploaded_by = auth.uid() or exists (
+    select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid())
+  ) or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- ADMIN SETTINGS POLICIES
+create policy "read settings (auth users)" on admin_settings for select using (auth.uid() is not null);
+create policy "admin write settings" on admin_settings for all using (
+  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- STATUS LOGS POLICIES
+create policy "member read logs" on status_logs for select using (
+  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
+  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+create policy "member write logs" on status_logs for insert with check (
+  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
+  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- DISPUTES POLICIES
+create policy "member read disputes" on disputes for select using (
+  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
+  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+create policy "member write disputes" on disputes for all using (
+  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
+  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- Create a function to automatically create profiles for new users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, role)
+  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'full_name', ''), 'seller')
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(EXCLUDED.full_name, profiles.full_name);
+  RETURN new;
+END;
+$$ language plpgsql security definer;
+
+-- Create the trigger for new user signups
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
 -- Simple trigger to keep updated_at fresh
 create or replace function set_updated_at() returns trigger as $$
 begin
