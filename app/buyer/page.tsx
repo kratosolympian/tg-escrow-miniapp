@@ -60,10 +60,13 @@ export default function BuyerPage() {
         setIsAuthenticated(true);
         setShowAuthForm(false);
         setUser(session.user);
+        // Fetch active escrows when user authenticates
+        fetchActiveEscrows();
       } else {
         setIsAuthenticated(false);
         setUser(null);
         setShowAuthForm(true);
+        setActiveEscrows([]);
       }
     });
     
@@ -106,6 +109,8 @@ export default function BuyerPage() {
           setShowAuthForm(false)
           setUser(data.user)
           setAuthForm({ email: '', password: '', name: '' })
+          // Fetch active escrows after login
+          fetchActiveEscrows()
         }
       } else {
         const { data, error } = await supabase.auth.signUp({
@@ -119,6 +124,8 @@ export default function BuyerPage() {
           setShowAuthForm(false)
           setUser(data.user)
           setAuthForm({ email: '', password: '', name: '' })
+          // Fetch active escrows after signup
+          fetchActiveEscrows()
         }
       }
     } catch (error) {
@@ -254,25 +261,6 @@ export default function BuyerPage() {
           {/* Remove in-content Logout button, rely on header only */}
         </div>
 
-        {user && activeEscrows && activeEscrows.length > 0 && (
-          <div className="card mb-6">
-            <div className="p-4">
-              <h3 className="font-semibold mb-3">Your ongoing transactions</h3>
-              <div className="space-y-2">
-                {activeEscrows.map(e => (
-                  <div key={e.id} className="flex justify-between items-center p-2 border rounded">
-                    <div>
-                      <div className="font-mono font-bold">{e.code}</div>
-                      <div className="text-sm text-gray-600">{e.status}</div>
-                    </div>
-                    <Link href={`/buyer/escrow/${e.code}`} className="btn-primary">Open</Link>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {blockedJoinInfo && (
           <div className="card mb-6">
             <div className="p-4">
@@ -346,6 +334,48 @@ export default function BuyerPage() {
             </form>
           )}
         </div>
+
+        {/* Ongoing Transactions Section - Always show when authenticated */}
+        {isAuthenticated && (
+          <div className="card mt-6">
+            <div className="p-4">
+              <h3 className="font-semibold mb-3">Your Transactions</h3>
+              {activeEscrows && activeEscrows.length > 0 ? (
+                <div className="space-y-3">
+                  {activeEscrows.map(e => (
+                    <div key={e.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1">
+                          <div className="font-mono font-bold text-lg text-gray-900">{e.code}</div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Status: <span className="capitalize">{e.status?.replace('_', ' ') || 'Unknown'}</span>
+                          </div>
+                          {e.description && (
+                            <div className="text-sm text-gray-500 mt-1 truncate max-w-xs">
+                              {e.description}
+                            </div>
+                          )}
+                        </div>
+                        <Link
+                          href={`/buyer/escrow/${e.code}`}
+                          className="btn-primary ml-4"
+                        >
+                          Open
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-3">📭</div>
+                  <p className="text-gray-600">No ongoing transactions</p>
+                  <p className="text-sm text-gray-500 mt-1">Enter a transaction code above to join one</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mt-8 text-center">
           <h3 className="font-semibold mb-4">How it works:</h3>
