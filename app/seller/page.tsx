@@ -53,8 +53,8 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
             } catch (logE) {}
 
             if (!sellerErrDev && Array.isArray(sellerDataDev) && sellerDataDev.length > 0) {
-              const escrowId = sellerDataDev[0].id || (sellerDataDev[0] as any).escrow_id
-              if (escrowId) redirect(`/seller/escrow/${escrowId}`)
+              // Don't redirect - let client show the list
+              console.log('[SSR][DEV] Found active escrows but not redirecting')
             }
           } catch (e) {
             // ignore dev helper errors
@@ -94,8 +94,8 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
             } catch (logE) {}
 
             if (!sellerErr && Array.isArray(sellerData) && sellerData.length > 0) {
-              const escrowId = sellerData[0].id || (sellerData[0] as any).escrow_id
-              if (escrowId) redirect(`/seller/escrow/${escrowId}`)
+              // Don't redirect - let client show the list
+              console.log('[SSR][TOKEN] Found active escrows but not redirecting')
             } else if (sellerErr) {
               console.error('[SSR] seller/page.tsx - service-role query error for token path:', sellerErr)
             }
@@ -144,8 +144,8 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
           // eslint-disable-next-line no-console
           console.log('[SSR] seller/page.tsx - found active seller escrows count=', sellerData.length)
         } catch (l) {}
-        const escrowId = sellerData[0].id || (sellerData[0] as any).escrow_id
-        if (escrowId) redirect(`/seller/escrow/${escrowId}`)
+        // Don't redirect - let client show the list
+        console.log('[SSR] seller/page.tsx - found active escrows but not redirecting')
       }
     } catch (e) {
       console.error('[SSR] seller/page.tsx - error during direct DB query', e)

@@ -45,6 +45,9 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
   
   const router = useRouter()
 
+  const [activeEscrows, setActiveEscrows] = useState<Array<any>>([])
+  const [blockedCreationInfo, setBlockedCreationInfo] = useState<any | null>(null)
+
   const fetchOnlineAdmins = async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -61,9 +64,51 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
     }
   };
 
-  // Check authentication on load
+  const fetchActiveEscrows = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch('/api/escrow/my-active', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const sellerEscrows = j.seller || [];
+        setActiveEscrows(sellerEscrows);
+      }
+    } catch (e) {
+      console.error('Error fetching active escrows', e);
+    }
+  };
+
+  // Check if the current user has bank details set
+  const [hasBankDetails, setHasBankDetails] = useState<boolean | null>(null)
+
+  // Extracted so we can call it after authentication completes
+  const checkBank = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch('/api/profile/banking', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const profile = data.profile ?? data;
+        const hasBank = !!(profile && (profile.bank_name || profile.account_number || profile.account_holder_name));
+        setHasBankDetails(hasBank);
+      } else {
+        setHasBankDetails(false);
+      }
+    } catch (e) {
+      console.error('Error checking bank details', e);
+      setHasBankDetails(false);
+    }
+  };
+
+  // Initial auth check and setup
   useEffect(() => {
-    // If server provided initial auth state, use it
     if (initialAuthState?.authenticated && initialAuthState.user) {
       setIsAuthenticated(true);
       setUser(initialAuthState.user);
@@ -113,10 +158,12 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
         setIsAuthenticated(true);
         setUser(session.user);
         setShowAuthForm(false);
+        fetchActiveEscrows();
       } else {
         setIsAuthenticated(false);
         setUser(null);
         setShowAuthForm(true);
+        setActiveEscrows([]);
       }
     });
     
@@ -125,62 +172,12 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
     };
   }, []);
 
-  const [activeEscrows, setActiveEscrows] = useState<Array<any>>([])
-  const [blockedCreationInfo, setBlockedCreationInfo] = useState<any | null>(null)
-
-  const fetchActiveEscrows = async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const res = await fetch('/api/escrow/my-active', {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (res.ok) {
-        const j = await res.json();
-        const sellerEscrows = j.seller || [];
-        setActiveEscrows(sellerEscrows);
-        // Client-side redirect fallback in case server redirect didn't run
-        if (sellerEscrows.length > 0) {
-          try {
-            const first = sellerEscrows[0];
-            const escrowId = first.id || first.escrow_id || first.id;
-            if (!window.location.pathname.startsWith('/seller/escrow')) {
-              router.push(`/seller/escrow/${escrowId}`);
-            }
-          } catch (e) {
-            // ignore redirect errors
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error fetching admins', e);
+  // Fetch active escrows when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchActiveEscrows();
     }
-  };
-
-  // Check if the current user has bank details set
-  const [hasBankDetails, setHasBankDetails] = useState<boolean | null>(null)
-
-  // Extracted so we can call it after authentication completes
-  const checkBank = async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const res = await fetch('/api/profile/banking', {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const profile = data.profile ?? data;
-        const hasBank = !!(profile && (profile.bank_name || profile.account_number || profile.account_holder_name));
-        setHasBankDetails(hasBank);
-      } else {
-        setHasBankDetails(false);
-      }
-    } catch (e) {
-      console.error('Error checking bank details', e);
-      setHasBankDetails(false);
-    }
-  };
+  }, [isAuthenticated]);
 
   // Handle authentication
   const handleAuth = async (e: React.FormEvent) => {
