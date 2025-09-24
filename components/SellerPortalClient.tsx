@@ -33,7 +33,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
   const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null)
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null)
   const [productImagePath, setProductImagePath] = useState<string | null>(null)
-  const [draftRestored, setDraftRestored] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState(false)
   
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -489,9 +489,17 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
         </div>
 
         {/* Active Escrows */}
-        {activeEscrows.length > 0 && (
+        {activeEscrows.length > 0 && !showCreateForm ? (
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-green-800 mb-4">Active Transactions</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-green-800">Active Transactions</h2>
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+              >
+                Create New Transaction
+              </button>
+            </div>
             <div className="space-y-4">
               {activeEscrows.map((escrow: any) => (
                 <div key={escrow.id} className="bg-white rounded-lg shadow-md p-6 border border-green-100">
@@ -513,11 +521,19 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
               ))}
             </div>
           </div>
-        )}
-
-        {/* Create Escrow Form */}
-        {!blockedCreationInfo && (
+        ) : (
+          /* Create Escrow Form */
           <div className="bg-white rounded-2xl shadow-lg p-8 border border-green-100">
+            {activeEscrows.length > 0 && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  className="text-green-600 hover:text-green-800 font-medium"
+                >
+                  ← Back to Active Transactions
+                </button>
+              </div>
+            )}
             <h2 className="text-2xl font-bold text-green-800 mb-6">Create New Transaction</h2>
 
             {error && (
