@@ -263,52 +263,29 @@ export default function SellerEscrowPage() {
     setReceiptUrls(urls)
   }
 
-  const handleDeliveryProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDeliveryProofChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setDeliveryProof(e.target.files[0]);
+      const file = e.target.files[0];
+      setDeliveryProof(file);
+      // Automatically upload and mark as delivered
+      await handleMarkDelivered(file);
     }
   };
 
-  const handleUploadDeliveryProof = async () => {
-    if (!deliveryProof || !escrow) return;
-    setActionLoading(true);
-    setError('');
-    setSuccess('');
-    try {
-      // 1. Upload file to temp bucket
-      const formData = new FormData();
-      formData.append('file', deliveryProof);
-      formData.append('escrowId', escrow.id);
-      const uploadResp = await fetch('/api/escrow/upload-temp', {
-        method: 'POST',
-        body: formData
-      });
-      if (!uploadResp.ok) {
-        setError('Failed to upload delivery proof');
-        setActionLoading(false);
-        return;
-      }
-  const { path } = await uploadResp.json();
-  setDeliveryProofUrl(path);
-  setSuccess('Delivery proof uploaded!');
-    } catch (err) {
-      setError('Failed to upload delivery proof');
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
-  const handleMarkDelivered = async () => {
+
+  const handleMarkDelivered = async (file?: File) => {
     if (!escrow) return;
     setActionLoading(true);
     setError('');
     setSuccess('');
     try {
       let deliveryProofPath = deliveryProofUrl;
-      // If a file is selected but not uploaded yet, upload it now
-      if (deliveryProof && !deliveryProofUrl) {
+      // If a file is provided or selected but not uploaded yet, upload it now
+      const fileToUpload = file || deliveryProof;
+      if (fileToUpload && !deliveryProofUrl) {
         const formData = new FormData();
-        formData.append('file', deliveryProof);
+        formData.append('file', fileToUpload);
         formData.append('escrowId', escrow.id);
         const uploadResp = await fetch('/api/escrow/upload-temp', {
           method: 'POST',
@@ -319,11 +296,11 @@ export default function SellerEscrowPage() {
           setActionLoading(false);
           return;
         }
-        const { tempPath } = await uploadResp.json();
-        deliveryProofPath = tempPath;
-        setDeliveryProofUrl(tempPath);
+        const { path } = await uploadResp.json();
+        deliveryProofPath = path;
+        setDeliveryProofUrl(path);
       }
-      // 2. Mark as delivered, optionally with proof
+      // Mark as delivered, optionally with proof
       const response = await fetch('/api/escrow/mark-delivered', {
         method: 'POST',
         headers: {
@@ -332,7 +309,7 @@ export default function SellerEscrowPage() {
         body: JSON.stringify({ escrowId: escrow.id, deliveryProof: deliveryProofPath })
       });
       if (response.ok) {
-        setSuccess('Marked as delivered successfully!');
+        setSuccess('Successfully marked as delivered! The transaction is now in progress.');
         setDeliveryProof(null);
         setDeliveryProofUrl(null);
         fetchEscrow();
@@ -638,7 +615,7 @@ export default function SellerEscrowPage() {
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">🚚 Mark as Delivered</h2>
             <p className="text-gray-600 mb-4">
-              Please upload delivery proof (image or PDF) if required by admin, then mark as delivered.
+              Upload delivery proof (optional) and mark the transaction as delivered. Upload starts automatically when you select a file.
             </p>
             <div className="flex flex-col gap-2 mb-4">
               <input
@@ -649,30 +626,16 @@ export default function SellerEscrowPage() {
                 className="file-input"
                 disabled={actionLoading}
               />
-              {deliveryProof && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Selected: {deliveryProof.name}</span>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-xs"
-                    onClick={handleUploadDeliveryProof}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? 'Uploading...' : 'Upload Proof'}
-                  </button>
-                </div>
+              <p className="text-sm text-gray-500">
+                Supports: JPEG, PNG, WebP, PDF (max 10MB) - Optional delivery proof
+              </p>
+              {actionLoading && (
+                <div className="text-blue-600 text-sm">Uploading and marking as delivered...</div>
               )}
               {deliveryProofUrl && (
-                <div className="text-green-700 text-sm">Proof uploaded!</div>
+                <div className="text-green-700 text-sm">✅ Delivery proof uploaded and marked as delivered!</div>
               )}
             </div>
-            <button
-              onClick={handleMarkDelivered}
-              disabled={actionLoading || (!!deliveryProof && !deliveryProofUrl)}
-              className="btn-success"
-            >
-              {actionLoading ? 'Processing...' : 'Mark as Delivered'}
-            </button>
           </div>
         )}
 
