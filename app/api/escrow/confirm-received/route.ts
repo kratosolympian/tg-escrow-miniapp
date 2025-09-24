@@ -87,8 +87,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only the buyer can confirm receipt' }, { status: 403 })
     }
 
+    console.log('Confirm received: escrow status is', escrow.status, 'for escrow', escrowId)
+
     // Check if can transition from in_progress to completed
     if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.COMPLETED)) {
+      console.log('Confirm received: cannot transition from', escrow.status, 'to completed')
       return NextResponse.json({ 
         error: 'Cannot confirm receipt in current status' 
       }, { status: 400 })

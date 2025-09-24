@@ -496,6 +496,13 @@ export default function BuyerEscrowPage() {
       return;
     }
     
+    // Double-check status before confirming (prevent race conditions)
+    if (escrow.status !== 'in_progress') {
+      console.log('Cannot confirm receipt: escrow status is', escrow.status);
+      setError('Cannot confirm receipt in current status');
+      return;
+    }
+    
     setConfirming(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -598,12 +605,8 @@ export default function BuyerEscrowPage() {
         expireEscrow();
       }
       
-      // Expire escrow if receipt confirmation deadline reached and still in_progress
-      // Only expire if escrow is still in expirable status
-      if (secs <= 0 && escrow?.status === 'in_progress' && timerLabel === 'Time left to confirm receipt:' && !['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
-        console.log('Receipt confirmation deadline reached, expiring escrow');
-        expireEscrow();
-      } else if (secs <= 0 && timerLabel === 'Time left to pay:' && escrow?.status !== 'waiting_payment') {
+      // Note: No expiration for in_progress status - it auto-completes instead
+      if (secs <= 0 && timerLabel === 'Time left to pay:' && escrow?.status !== 'waiting_payment') {
         console.log('Payment timer expired but escrow status changed to:', escrow?.status, '- stopping timer');
         // Clear the timer when status has changed
         setTimerLabel('');
