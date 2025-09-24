@@ -450,48 +450,30 @@ export default function BuyerEscrowPage() {
     setError('');
     setSuccess('');
     try {
-      // Step 1: Upload to temp
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const formData = new FormData();
       formData.append('file', paymentProof);
       formData.append('escrowId', escrow.id);
-      const uploadResp = await fetch('/api/escrow/upload-temp', {
+
+      const uploadResp = await fetch('/api/escrow/upload-receipt', {
         method: 'POST',
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+
       if (!uploadResp.ok) {
-        setError('Failed to upload payment proof');
+        const errorData = await uploadResp.json().catch(() => ({}));
+        setError(errorData.error || 'Failed to upload payment proof');
         setUploading(false);
         return;
       }
-      const uploadJson = await uploadResp.json();
-      const tempPath = uploadJson.path || uploadJson.tempPath;
-      if (!tempPath) {
-        setError('Upload failed: no temp path returned');
-        setUploading(false);
-        return;
-      }
-      // Step 2: Finalize receipt (move to permanent, update escrow)
-      const finalizeResp = await fetch('/api/escrow/finalize-receipt', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ escrowId: escrow.id, tempPath })
-      });
-      if (!finalizeResp.ok) {
-        setError('Failed to finalize receipt');
-        setUploading(false);
-        return;
-      }
-      const { receiptUrl } = await finalizeResp.json();
-      setPaymentProofUrl(receiptUrl);
-      setSuccess('Payment proof uploaded!');
+
+      setPaymentProofUrl(URL.createObjectURL(paymentProof));
+      setSuccess('Payment proof uploaded successfully!');
       fetchEscrow('upload-receipt'); // Refresh escrow to show receipt
     } catch (err) {
+      console.error('Upload error:', err);
       setError('Failed to upload payment proof');
     } finally {
       setUploading(false);
