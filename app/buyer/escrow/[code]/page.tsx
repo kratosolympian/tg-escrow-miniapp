@@ -437,15 +437,19 @@ export default function BuyerEscrowPage() {
     }
   }
 
-  // New payment proof upload logic
-  const handlePaymentProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // New payment proof upload logic - automatic upload on file selection
+  const handlePaymentProofChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setPaymentProof(e.target.files[0]);
+      const file = e.target.files[0];
+      setPaymentProof(file);
+      // Automatically upload the file
+      await handleUploadPaymentProof(file);
     }
   };
 
-  const handleUploadPaymentProof = async () => {
-    if (!paymentProof || !escrow) return;
+  const handleUploadPaymentProof = async (file?: File) => {
+    const fileToUpload = file || paymentProof;
+    if (!fileToUpload || !escrow) return;
     setUploading(true);
     setError('');
     setSuccess('');
@@ -453,7 +457,7 @@ export default function BuyerEscrowPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const formData = new FormData();
-      formData.append('file', paymentProof);
+      formData.append('file', fileToUpload);
       formData.append('escrowId', escrow.id);
 
       const uploadResp = await fetch('/api/escrow/upload-receipt', {
@@ -469,9 +473,9 @@ export default function BuyerEscrowPage() {
         return;
       }
 
-      setPaymentProofUrl(URL.createObjectURL(paymentProof));
-      setSuccess('Payment proof uploaded successfully!');
-      fetchEscrow('upload-receipt'); // Refresh escrow to show receipt
+      setPaymentProofUrl(URL.createObjectURL(fileToUpload));
+      setSuccess('Payment proof uploaded successfully! Your escrow is now marked as paid and waiting for admin verification.');
+      fetchEscrow('upload-receipt'); // Refresh escrow to show updated status
     } catch (err) {
       console.error('Upload error:', err);
       setError('Failed to upload payment proof');
@@ -480,46 +484,7 @@ export default function BuyerEscrowPage() {
     }
   };
 
-  const handleMarkAsPaid = async () => {
-    if (!escrow) return;
-    setUploading(true);
-    setError('');
-    setSuccess('');
-    try {
-      // Only allow if a receipt is uploaded (either in this session or already present)
-      const hasUploadedReceipt = !!paymentProofUrl || (escrow.receipts && escrow.receipts.length > 0);
-      if (!hasUploadedReceipt) {
-        setError('Please upload a payment receipt before marking as paid.');
-        setUploading(false);
-        return;
-      }
-      // Mark as paid API call (send only escrow_id)
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const response = await fetch('/api/escrow/mark-paid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ escrow_id: escrow.id })
-      });
-      if (response.ok) {
-        setSuccess('Marked as paid!');
-        setPaymentProof(null);
-        setPaymentProofUrl(null);
-        // Immediately refresh escrow data to show updated status
-        await fetchEscrow('mark-paid');
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to mark as paid');
-      }
-    } catch (err) {
-      setError('Failed to mark as paid');
-    } finally {
-      setUploading(false);
-    }
-  };
+
 
   const [confirming, setConfirming] = useState(false);
   const [autoConfirmTriggered, setAutoConfirmTriggered] = useState(false);
@@ -937,13 +902,13 @@ export default function BuyerEscrowPage() {
           </div>
         )}
 
-        {/* Always show Payment Proof Upload & Mark as Paid for buyer in any active state */}
+        {/* Always show Payment Proof Upload for buyer in any active state */}
         {isUserBuyer && escrow.status !== 'completed' && escrow.status !== 'cancelled' && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">📄 Upload Payment Proof</h2>
             <div className="space-y-4">
               <p className="text-gray-600">
-                After making the payment, upload your proof here for verification, then mark as paid.
+                After making the payment, select your proof of payment below. It will be uploaded automatically and your escrow will be marked as paid.
               </p>
               <div>
                 <input
@@ -955,36 +920,15 @@ export default function BuyerEscrowPage() {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
                 <p className="mt-2 text-sm text-gray-500">
-                  Supports: JPEG, PNG, WebP, PDF (max 10MB)
+                  Supports: JPEG, PNG, WebP, PDF (max 10MB) - Upload starts automatically when selected
                 </p>
               </div>
-              {paymentProof && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Selected: {paymentProof.name}</span>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-xs"
-                    onClick={handleUploadPaymentProof}
-                    disabled={uploading}
-                  >
-                    {uploading ? 'Uploading...' : 'Upload Proof'}
-                  </button>
-                </div>
+              {uploading && (
+                <div className="text-blue-600 text-sm">Uploading payment proof...</div>
               )}
               {paymentProofUrl && (
-                <div className="text-green-700 text-sm">Proof uploaded!</div>
+                <div className="text-green-700 text-sm">✅ Payment proof uploaded! Your escrow is now marked as paid and waiting for admin verification.</div>
               )}
-              <button
-                onClick={handleMarkAsPaid}
-                disabled={
-                  uploading ||
-                  (!!paymentProof && !paymentProofUrl) ||
-                  (!paymentProofUrl && (!escrow.receipts || escrow.receipts.length === 0))
-                }
-                className="btn-success mt-2"
-              >
-                {uploading ? 'Processing...' : 'Mark as Paid'}
-              </button>
             </div>
           </div>
         )}
