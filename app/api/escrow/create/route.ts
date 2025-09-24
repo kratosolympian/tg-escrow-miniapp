@@ -143,6 +143,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check if seller already has an active escrow
+    console.log('Checking for active escrows...');
+    const { data: activeEscrows, error: activeError } = await serviceClient
+      .from('escrows')
+      .select('id, code, description, price, status, created_at')
+      .eq('seller_id', authenticatedUser.id)
+      .not('status', 'in', `(${ESCROW_STATUS.COMPLETED},${ESCROW_STATUS.REFUNDED},${ESCROW_STATUS.CLOSED})`);
+
+    if (activeError) {
+      console.error('Error checking active escrows:', activeError);
+      return NextResponse.json({ error: 'Failed to check active escrows' }, { status: 500 });
+    }
+
+    if (activeEscrows && activeEscrows.length > 0) {
+      console.log('Seller has active escrow:', activeEscrows[0]);
+      return NextResponse.json({
+        error: 'You already have an ongoing transaction. Please complete or cancel it before creating a new one.',
+        activeEscrow: activeEscrows[0]
+      }, { status: 409 });
+    }
+
     // Prepare insert data
     const insertData: any = {
       code: shortCode(),
