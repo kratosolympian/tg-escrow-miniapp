@@ -880,7 +880,7 @@ export default function BuyerEscrowPage() {
         )}
 
         {/* Bank Details (from admin_bank only) */}
-        {(escrow as any).admin_bank && (isUserBuyer || (canUploadReceipt && user)) && (
+        {(escrow as any).admin_bank && (isUserBuyer || ((escrow.status === 'waiting_payment' || escrow.status === 'waiting_admin') && user)) && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">💳 Payment Details</h2>
             <div className="space-y-3">
