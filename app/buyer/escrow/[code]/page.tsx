@@ -616,6 +616,15 @@ export default function BuyerEscrowPage() {
     }
   };
 
+  // Refresh escrow status periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchEscrow('periodic-refresh');
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (!timerEnd || !timerLabel) {
       setTimerValue('');

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthCard from '@/components/AuthCard'
+import { toast } from 'react-toastify'
 
 interface CreateEscrowForm {
   description: string
@@ -19,9 +20,11 @@ interface CreatedEscrow {
 
 interface SellerPortalClientProps {
   initialAuthState?: { user: any; authenticated: boolean } | null
+  initialActiveEscrows?: Array<any>
+  errorMessage?: string // New prop for error messages
 }
 
-export default function SellerPortalClient({ initialAuthState }: SellerPortalClientProps = {}) {
+export default function SellerPortalClient({ initialAuthState, initialActiveEscrows, errorMessage }: SellerPortalClientProps = {}) {
   const [form, setForm] = useState<CreateEscrowForm>({
     description: '',
     price: ''
@@ -125,7 +128,33 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
     };
   }, []);
 
-  const [activeEscrows, setActiveEscrows] = useState<Array<any>>([])
+  // Real-time subscription for escrow changes
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel(`seller-dashboard-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows',
+          filter: `seller_id=eq.${user.id}`
+        },
+        () => {
+          // Refresh active escrows when any escrow involving this seller changes
+          fetchActiveEscrows()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id])
+
+  const [activeEscrows, setActiveEscrows] = useState<Array<any>>(initialActiveEscrows || [])
   const [blockedCreationInfo, setBlockedCreationInfo] = useState<any | null>(null)
 
   const fetchActiveEscrows = async () => {
@@ -139,18 +168,6 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
         const j = await res.json();
         const sellerEscrows = j.seller || [];
         setActiveEscrows(sellerEscrows);
-        // Client-side redirect fallback in case server redirect didn't run
-        if (sellerEscrows.length > 0) {
-          try {
-            const first = sellerEscrows[0];
-            const escrowId = first.id || first.escrow_id || first.id;
-            if (!window.location.pathname.startsWith('/seller/escrow')) {
-              router.push(`/seller/escrow/${escrowId}`);
-            }
-          } catch (e) {
-            // ignore redirect errors
-          }
-        }
       }
     } catch (e) {
       console.error('Error fetching admins', e);
@@ -459,6 +476,13 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
     const { name, value } = e.target
     setAuthForm(prev => ({ ...prev, [name]: value }))
   }
+
+  // Show error message if provided
+  useEffect(() => {
+    if (errorMessage) {
+      toast.error(errorMessage);
+    }
+  }, [errorMessage]);
 
   if (!isAuthenticated || showAuthForm) {
     return (

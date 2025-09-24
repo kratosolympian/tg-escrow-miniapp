@@ -27,15 +27,21 @@ export function createServerClientWithAuthHeader(request?: NextRequest) {
 
 export function createServerClientWithCookies() {
   const cookieStore = cookies()
-  
+
   // Debug: log all cookies
   try {
     const allCookies = cookieStore.getAll()
     console.log('[DEBUG] createServerClientWithCookies - all cookies:', allCookies.map(c => ({ name: c.name, value: c.value.substring(0, 10) + '...' })))
+
+    // Log specific cookies for authentication
+    const authToken = allCookies.find(c => c.name === 'sb:token')?.value || 'Not Found'
+    const refreshToken = allCookies.find(c => c.name === 'sb:refresh-token')?.value || 'Not Found'
+    console.log('[DEBUG] Auth Token:', authToken.substring(0, 10) + '...')
+    console.log('[DEBUG] Refresh Token:', refreshToken.substring(0, 10) + '...')
   } catch (e) {
     console.log('[DEBUG] createServerClientWithCookies - error getting cookies:', e)
   }
-  
+
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

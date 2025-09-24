@@ -69,6 +69,41 @@ export default function AdminDashboard() {
     }
   }
 
+  // Real-time subscription for escrow changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-dashboard')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows'
+        },
+        () => {
+          // Refresh escrows list when any escrow changes
+          fetchEscrows()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'escrows'
+        },
+        () => {
+          // Refresh escrows list when new escrow is created
+          fetchEscrows()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [filter, search])
+
   const fetchEscrows = async () => {
     try {
       const params = new URLSearchParams()

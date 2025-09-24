@@ -5,6 +5,7 @@ import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib
 import { shortCode, generateUUID, getFileExtension, isValidImageType } from '@/lib/utils'
 import { ESCROW_STATUS } from '@/lib/status'
 import { z } from 'zod'
+import { requireAuth } from '@/lib/rbac'
 
 
 /**
@@ -33,123 +34,76 @@ const createEscrowSchema = z.object({
   price: z.number().positive().max(1000000)
 })
 
+/**
+ * Enhance error handling and logging for JSON parsing
+ */
+const logRequestDetails = async (request: NextRequest) => {
+  const contentType = request.headers.get('content-type') || 'unknown'
+  let rawBody = null
+  try {
+    rawBody = await request.text()
+  } catch (e) {
+    console.error('Failed to read raw request body:', e)
+  }
+  console.log('Request details:', { contentType, rawBody })
+}
+
+// Fix: Ensure request body is read only once
 export async function POST(request: NextRequest) {
   try {
-  const supabase = createServerClientWithAuthHeader(request)
-    const serviceClient = createServiceRoleClient()
-    
-    // Get authenticated user directly to bypass profile lookup issue
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-    let authenticatedUser = user
+    const supabase = createServerClientWithAuthHeader(request);
+    const serviceClient = createServiceRoleClient(); // Ensure this is defined
 
-    // If no user in session, allow one-time token authentication (used after API signup)
-    let parsedBody: any = null
-    if (!authenticatedUser) {
-      parsedBody = await request.clone().json().catch(() => ({}))
-      // Prefer token in body, but also accept header forms for more robust clients
-      let token = (parsedBody && parsedBody.__one_time_token) || null
-      if (!token) {
-        const headerToken = request.headers.get('x-one-time-token') || null
-        if (headerToken) token = headerToken
-      }
-      if (!token) {
-        const authHeader = request.headers.get('authorization') || ''
-        if (authHeader.toLowerCase().startsWith('bearer ')) {
-          token = authHeader.slice(7).trim()
-        }
-      }
+    // Require authentication and get the authenticated user
+    const authenticatedUser = await requireAuth(supabase);
+    console.log('Authenticated user:', authenticatedUser);
 
-      if (token) {
-        try {
-          const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
-          console.log('Create route: attempting to verify one-time token')
-          const userId = await verifyAndConsumeSignedToken(token)
-          console.log('Create route: token verification result:', !!userId, 'userId:', userId)
-          if (userId) {
-            console.log('Create route: token verified, setting authenticatedUser')
-            // Get user details from service client
-            const { data: userData, error: userFetchError } = await serviceClient
-              .from('profiles')
-              .select('id, email, full_name')
-              .eq('id', userId)
-              .single()
+    const contentType = (request.headers.get('content-type') || '').toLowerCase();
+    let parsedBody: any = null;
+    let description: string | undefined;
+    let price: number | undefined;
+    let imageFile: File | null = null;
+    let assignedAdminId: string | null = null;
+    let preuploadedPath: string | null = null;
 
-            if (!userFetchError && userData) {
-              authenticatedUser = { id: userId, email: (userData as any).email } as any
-              console.log('Create route: authenticatedUser set from profile')
-            } else {
-              // For testing: if profile doesn't exist, create a mock user object
-              console.log('Profile lookup failed, using mock user for testing')
-              authenticatedUser = { id: userId, email: 'test@example.com' } as any
-              console.log('Create route: authenticatedUser set as mock user')
-            }
-          } else {
-            console.log('Create route: token verification failed')
-          }
-        } catch (e) {
-          console.warn('One-time token verification failed:', e)
-        }
-      } else {
-        console.log('Create route: no token provided')
+    if (contentType.includes('application/json')) {
+      try {
+        parsedBody = await request.json();
+        description = parsedBody.description;
+        price = Number(parsedBody.price);
+        assignedAdminId = parsedBody.assigned_admin_id || parsedBody.assignedAdminId || null;
+        preuploadedPath = parsedBody.productImagePath || parsedBody.product_image_path || null;
+      } catch (jsonErr) {
+        console.error('Failed to parse JSON body:', jsonErr);
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
       }
+    } else if (contentType.includes('multipart/form-data')) {
+      try {
+        const formData = await request.formData();
+        description = formData.get('description') as string;
+        price = parseFloat(formData.get('price') as string);
+        imageFile = formData.get('image') as File | null;
+        assignedAdminId = (formData.get('assigned_admin_id') as string) || null;
+        preuploadedPath = (formData.get('productImagePath') as string) || (formData.get('product_image_path') as string) || null;
+      } catch (formErr) {
+        console.error('Failed to parse FormData body:', formErr);
+        return NextResponse.json({ error: 'Invalid FormData body' }, { status: 400 });
+      }
+    } else {
+      console.error('Unsupported Content-Type:', contentType);
+      return NextResponse.json({ error: 'Unsupported Content-Type' }, { status: 415 });
     }
 
-    if (!authenticatedUser) {
-      console.log('Authentication failed - userError:', !!userError, 'authenticatedUser:', !!authenticatedUser)
-      return NextResponse.json({ error: 'Authentication required', debug: { userError: !!userError, authenticatedUser: !!authenticatedUser } }, { status: 401 })
-    }
-    
-    // Accept either JSON or multipart form data. Some clients may not set
-    // Content-Type reliably, so try JSON first and fall back to formData.
-    let description: string
-    let price: number
-    let imageFile: File | null = null
-    let assignedAdminId: string | null = null
-    // Preuploaded path (from temp upload)
-    let preuploadedPath: string | null = null
-
-      // Parse body: try JSON first, then fall back to FormData. Some clients omit Content-Type.
-      const contentType = (request.headers.get('content-type') || '').toLowerCase()
-      let parsedJson: any = parsedBody // Use already parsed body if available
-      if (!parsedJson) {
-        try {
-          parsedJson = await request.clone().json()
-          console.log('Parsed JSON:', parsedJson)
-        } catch (e) {
-          console.log('JSON parsing failed:', e)
-          parsedJson = null
-        }
-      }
-
-      if (parsedJson && (parsedJson.description || parsedJson.price)) {
-        description = parsedJson.description
-        price = Number(parsedJson.price)
-        assignedAdminId = parsedJson.assigned_admin_id || parsedJson.assignedAdminId || null
-        preuploadedPath = parsedJson.productImagePath || parsedJson.product_image_path || null
-      } else {
-        // Try FormData as a fallback (covers multipart/form-data and urlencoded). Guard with try/catch to avoid uncaught undici errors.
-        try {
-          const formData = await request.formData()
-          description = formData.get('description') as string
-          price = parseFloat(formData.get('price') as string)
-          imageFile = formData.get('image') as File | null
-          assignedAdminId = (formData.get('assigned_admin_id') as string) || null
-          preuploadedPath = (formData.get('productImagePath') as string) || (formData.get('product_image_path') as string) || null
-        } catch (fdErr) {
-          console.error('Failed to parse request body as JSON or FormData', fdErr, 'content-type=', contentType)
-          return NextResponse.json({ error: 'Failed to parse request body', details: contentType, fdErr: (fdErr as any).message }, { status: 400 })
-        }
-      }
     // Validate input
     const { description: validDescription, price: validPrice } = createEscrowSchema.parse({
       description,
-      price
+      price,
     })
 
     let productImageUrl: string | null = null
 
-  // Handle image upload if provided (file upload)
-  if ((!preuploadedPath) && imageFile && (imageFile as any).size > 0) {
+    // Handle image upload if provided (file upload)
+    if ((!preuploadedPath) && imageFile && (imageFile as any).size > 0) {
       if (!isValidImageType(imageFile.type)) {
         return NextResponse.json({ error: 'Invalid image type. Only JPEG, PNG, and WebP are allowed.' }, { status: 400 })
       }
@@ -159,10 +113,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Generate unique filename
-      const fileId = generateUUID()
-      const extension = getFileExtension(imageFile.name)
-  const fileName = `${fileId}.${extension}`
-  const filePath = `${authenticatedUser.id}/${fileName}`
+      const fileId = generateUUID();
+      const extension = getFileExtension(imageFile.name);
+      const fileName = `${fileId}.${extension}`;
+      const filePath = `${authenticatedUser.id}/${fileName}`;
 
       // Upload to storage using service client
       const { error: uploadError } = await serviceClient.storage
@@ -170,14 +124,14 @@ export async function POST(request: NextRequest) {
         .upload(filePath, imageFile, {
           cacheControl: '3600',
           upsert: false
-        })
+        });
 
       if (uploadError) {
-        console.error('Error uploading image:', uploadError)
-        return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 })
+        console.error('Error uploading image:', uploadError);
+        return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });
       }
 
-      productImageUrl = filePath
+      productImageUrl = filePath;
     }
 
     // If client supplied a preuploaded path (from temp upload), move it into a permanent seller path
@@ -248,7 +202,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Set expiry to 30 minutes from now for buyer to pay
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+    const paymentDeadline = new Date(Date.now() + 30 * 60 * 1000).toISOString()
 
     // Ensure seller has bank details set before creating an escrow
     const { data: sellerProfile, error: profileErr } = await (serviceClient as any)
@@ -297,7 +251,7 @@ export async function POST(request: NextRequest) {
         admin_fee: 300,
         product_image_url: productImageUrl,
         assigned_admin_id: assignedAdminId,
-        expires_at: expiresAt,
+        expires_at: paymentDeadline,
         status: ESCROW_STATUS.WAITING_PAYMENT
       })
       .select()

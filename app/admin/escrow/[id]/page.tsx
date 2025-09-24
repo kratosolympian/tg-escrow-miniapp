@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { formatNaira } from '@/lib/utils'
 import StatusBadge from '@/components/StatusBadge'
 import EscrowChat from '@/components/EscrowChat'
+import { supabase } from '@/lib/supabaseClient'
 
 interface EscrowDetail {
   id: string
@@ -74,34 +75,11 @@ export default function AdminEscrowDetailPage() {
   const [adminNotes, setAdminNotes] = useState('')
   const [showNotesForm, setShowNotesForm] = useState(false)
 
-  // Countdown state: show time until escrow expires (uses `expires_at` if present,
-  // otherwise falls back to created_at + 30 minutes)
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
-
   const computeExpiry = (e: EscrowDetail | null) => {
     if (!e) return null
     if (e.expires_at) return new Date(e.expires_at)
     return new Date(new Date(e.created_at).getTime() + 30 * 60 * 1000)
   }
-
-  useEffect(() => {
-    if (!escrow) {
-      setSecondsLeft(null)
-      return
-    }
-
-    const expiry = computeExpiry(escrow)
-    if (!expiry) return
-
-    const update = () => {
-      const s = Math.max(0, Math.ceil((expiry.getTime() - Date.now()) / 1000))
-      setSecondsLeft(s)
-    }
-
-    update()
-    const id = setInterval(update, 1000)
-    return () => clearInterval(id)
-  }, [escrow?.expires_at, escrow?.created_at, escrow])
 
   useEffect(() => {
     if (escrowId) {
@@ -113,6 +91,50 @@ export default function AdminEscrowDetailPage() {
   useEffect(() => {
     fetchCurrentUser()
   }, [])
+
+  // Real-time subscription for escrow status changes
+  useEffect(() => {
+    if (!escrowId) return
+
+    const channel = supabase
+      .channel(`escrow-${escrowId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows',
+          filter: `id=eq.${escrowId}`
+        },
+        (payload) => {
+          console.log('Escrow status change detected:', payload)
+          if (payload.new) {
+            // Status or other data changed, refresh the escrow details
+            fetchEscrowDetails()
+            fetchAdminActions()
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'status_logs',
+          filter: `escrow_id=eq.${escrowId}`
+        },
+        () => {
+          console.log('Status log added, refreshing admin actions')
+          // New status log added, refresh admin actions
+          fetchAdminActions()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [escrowId])
 
   const fetchCurrentUser = async () => {
     try {

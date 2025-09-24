@@ -22,37 +22,28 @@ export async function GET(request: NextRequest) {
       const role = url.searchParams.get('role') || 'seller'
 
       if (role === 'buyer') {
-        // Get a buyer ID that doesn't have active escrows
-        const { data: escrows } = await supabase
-          .from('escrows')
-          .select('buyer_id, status')
-          .in('status', ['created', 'waiting_payment', 'waiting_admin', 'payment_confirmed', 'in_progress', 'on_hold'])
-
-        // Get all buyer IDs with active escrows
-        const activeBuyerIds = new Set(escrows?.map(e => e.buyer_id).filter(Boolean) || [])
-
-        // Find a buyer who doesn't have active escrows
-        const { data: profiles } = await supabase
+        // Get a buyer ID (allow active escrows for testing)
+        const { data: profiles } = await supabaseSvc
           .from('profiles')
           .select('id')
           .eq('role', 'buyer')
           .limit(10)
 
-        const availableBuyer = profiles?.find(p => !activeBuyerIds.has(p.id))
-
-        if (!availableBuyer) {
+        if (!profiles || profiles.length === 0) {
           return NextResponse.json({
-            error: 'No available buyers without active escrows found'
+            error: 'No buyers found'
           }, { status: 500 })
         }
 
-        const token = createSignedToken(availableBuyer.id, 3600) // 1 hour expiry
+        // Use the first available buyer
+        const buyer = profiles[0]
+        const token = createSignedToken(buyer.id, 3600) // 1 hour expiry
         return NextResponse.json({
           success: true,
           token,
-          userId: availableBuyer.id,
+          userId: buyer.id,
           role: 'buyer',
-          message: 'Test token generated for available buyer'
+          message: 'Test token generated for buyer'
         })
       } else {
         // Get a seller ID that doesn't have active escrows

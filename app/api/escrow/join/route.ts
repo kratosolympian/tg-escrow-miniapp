@@ -73,22 +73,9 @@ export async function POST(request: NextRequest) {
           const userId = await verifyAndConsumeSignedToken(token)
           console.debug('Join route: verifyAndConsumeSignedToken result ok=', !!userId)
           if (userId) {
-            // Generate an access token for the user to establish a session
-            let accessToken = null
-            let refreshToken = null
-            try {
-              const { data: tokenData, error: tokenError } = await serviceClient.auth.admin.generateAccessToken(userId)
-              if (tokenError) {
-                console.warn('Failed to generate access token for user:', userId, tokenError)
-              } else if (tokenData?.access_token) {
-                accessToken = tokenData.access_token
-                refreshToken = tokenData.refresh_token
-              }
-            } catch (e) {
-              console.warn('Exception generating access token:', e)
-            }
-            // attach a lightweight user object for downstream logic
-            authenticatedUser = { id: userId, accessToken, refreshToken }
+            // For one-time token authentication, we don't need to generate access tokens
+            // The token verification is sufficient for the join operation
+            authenticatedUser = { id: userId }
           } else {
             console.warn('Join route: one-time token present but not valid/expired')
             return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthCard from '@/components/AuthCard'
 import { supabase } from '@/lib/supabaseClient'
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export default function BuyerPage() {
   // Auth states
@@ -45,6 +47,7 @@ export default function BuyerPage() {
         setShowAuthForm(true);
       } catch (error) {
         console.error('Auth check error:', error);
+        toast.error('Authentication check failed. Please try again.');
         setIsAuthenticated(false);
         setUser(null);
         setShowAuthForm(true);
@@ -71,6 +74,32 @@ export default function BuyerPage() {
       listener?.subscription.unsubscribe();
     };
   }, []);
+
+  // Real-time subscription for escrow changes
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel(`buyer-dashboard-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows',
+          filter: `buyer_id=eq.${user.id}`
+        },
+        () => {
+          // Refresh active escrows when any escrow involving this buyer changes
+          fetchActiveEscrows()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id])
 
   const fetchActiveEscrows = async () => {
     try {
@@ -370,6 +399,8 @@ export default function BuyerPage() {
         </div>
 
       </div>
+      {/* Toast container for notifications */}
+      <ToastContainer />
     </div>
   )
 }

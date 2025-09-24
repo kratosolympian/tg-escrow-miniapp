@@ -44,6 +44,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
     }
 
+    console.log('Admin confirm-payment: Updated escrow', escrow.id, 'status to', ESCROW_STATUS.PAYMENT_CONFIRMED)
+
     // Log status change
     const { error: logError } = await (supabase as any)
       .from('status_logs')

@@ -68,13 +68,15 @@ export async function POST(request: NextRequest) {
         authenticatedUser = { id: userId }
       } else {
         console.warn('Upload temp: one-time token present but not valid/expired')
-        return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+        // Don't return error yet - try session auth as fallback
       }
     } catch (e) {
       console.warn('Error importing/verifying one-time token')
     }
-  } else {
-    // Fallback to cookie authentication
+  }
+
+  // If no valid one-time token, try session authentication
+  if (!authenticatedUser) {
     const { data: { user }, error: userErr } = await supabase.auth.getUser()
     if (userErr || !user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })

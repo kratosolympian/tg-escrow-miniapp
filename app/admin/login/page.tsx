@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { toast, ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 // Using server-side login endpoint to set HTTP-only session cookie
 
 export default function AdminLoginPage() {
@@ -30,11 +32,15 @@ export default function AdminLoginPage() {
         // Server should set HTTP-only cookie; redirect to dashboard
         window.location.replace('/admin/dashboard')
       } else {
-        setError(data?.error || 'Login failed')
+        const errorMessage = data?.error || 'Login failed'
+        setError(errorMessage)
+        toast.error(errorMessage)
       }
     } catch (err) {
       console.error('Login error:', err)
-      setError('Network error. Please try again.')
+      const networkError = 'Network error. Please try again.'
+      setError(networkError)
+      toast.error(networkError)
     } finally {
       setLoading(false)
     }
@@ -58,7 +64,7 @@ export default function AdminLoginPage() {
         <div className="card">
           {/* Use a plain HTML form so the server can set the HTTP-only cookie and return a redirect
               in the same response. This avoids fetch + client-side navigation timing issues. */}
-          <form method="post" action="/api/auth/login" className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label htmlFor="email" className="label">
                 Email Address
@@ -122,6 +128,9 @@ export default function AdminLoginPage() {
           </div>
         </div>
       </div>
+
+      {/* Toast container for notifications */}
+      <ToastContainer />
     </div>
   )
 }

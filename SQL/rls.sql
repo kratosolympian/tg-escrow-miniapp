@@ -6,55 +6,189 @@ alter table status_logs enable row level security;
 alter table disputes enable row level security;
 
 -- PROFILES
-create policy "own profile read" on profiles for select using (auth.uid() = id);
-create policy "own profile update" on profiles for update using (auth.uid() = id);
-create policy "admin read profiles" on profiles for select using (
-  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'own profile read' AND tablename = 'profiles'
+  ) THEN
+    CREATE POLICY "own profile read" ON profiles FOR SELECT USING (auth.uid() = id);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'own profile update' AND tablename = 'profiles'
+  ) THEN
+    CREATE POLICY "own profile update" ON profiles FOR UPDATE USING (auth.uid() = id);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'admin read profiles' AND tablename = 'profiles'
+  ) THEN
+    CREATE POLICY "admin read profiles" ON profiles FOR SELECT USING (
+      EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
 
 -- ESCROWS
-create policy "seller insert escrow" on escrows for insert with check (seller_id = auth.uid());
-create policy "member read escrows" on escrows for select using (
-  seller_id = auth.uid() or buyer_id = auth.uid() or exists (
-    select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'
-  )
-);
-create policy "seller update own" on escrows for update using (seller_id = auth.uid());
-create policy "buyer update own" on escrows for update using (buyer_id = auth.uid());
-create policy "admin all escrows" on escrows for all using (
-  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'seller insert escrow' AND tablename = 'escrows'
+  ) THEN
+    CREATE POLICY "seller insert escrow" ON escrows FOR INSERT WITH CHECK (seller_id = auth.uid());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'member read escrows' AND tablename = 'escrows'
+  ) THEN
+    CREATE POLICY "member read escrows" ON escrows FOR SELECT USING (
+      seller_id = auth.uid() OR buyer_id = auth.uid() OR EXISTS (
+        SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'
+      )
+    );
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'seller update own' AND tablename = 'escrows'
+  ) THEN
+    CREATE POLICY "seller update own" ON escrows FOR UPDATE USING (seller_id = auth.uid());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'buyer update own' AND tablename = 'escrows'
+  ) THEN
+    CREATE POLICY "buyer update own" ON escrows FOR UPDATE USING (buyer_id = auth.uid());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'admin all escrows' AND tablename = 'escrows'
+  ) THEN
+    CREATE POLICY "admin all escrows" ON escrows FOR ALL USING (
+      EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
 
 -- RECEIPTS
-create policy "insert own receipt" on receipts for insert with check (uploaded_by = auth.uid());
-create policy "member read receipts" on receipts for select using (
-  uploaded_by = auth.uid() or exists (
-    select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid())
-  ) or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'insert own receipt' AND tablename = 'receipts'
+  ) THEN
+    CREATE POLICY "insert own receipt" ON receipts FOR INSERT WITH CHECK (uploaded_by = auth.uid());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'member read receipts' AND tablename = 'receipts'
+  ) THEN
+    CREATE POLICY "member read receipts" ON receipts FOR SELECT USING (
+      uploaded_by = auth.uid() OR EXISTS (
+        SELECT 1 FROM escrows e WHERE e.id = escrow_id AND (e.seller_id = auth.uid() OR e.buyer_id = auth.uid())
+      ) OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
 
 -- ADMIN SETTINGS
-create policy "read settings (public)" on admin_settings for select using (true);
-create policy "admin write settings" on admin_settings for all using (
-  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'read settings (public)' AND tablename = 'admin_settings'
+  ) THEN
+    CREATE POLICY "read settings (public)" ON admin_settings FOR SELECT USING (true);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'admin write settings' AND tablename = 'admin_settings'
+  ) THEN
+    CREATE POLICY "admin write settings" ON admin_settings FOR ALL USING (
+      EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
 
 -- STATUS LOGS
-create policy "member read logs" on status_logs for select using (
-  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
-create policy "member write logs" on status_logs for insert with check (
-  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'member read logs' AND tablename = 'status_logs'
+  ) THEN
+    CREATE POLICY "member read logs" ON status_logs FOR SELECT USING (
+      EXISTS (SELECT 1 FROM escrows e WHERE e.id = escrow_id AND (e.seller_id = auth.uid() OR e.buyer_id = auth.uid()))
+      OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'member write logs' AND tablename = 'status_logs'
+  ) THEN
+    CREATE POLICY "member write logs" ON status_logs FOR INSERT WITH CHECK (
+      EXISTS (SELECT 1 FROM escrows e WHERE e.id = escrow_id AND (e.seller_id = auth.uid() OR e.buyer_id = auth.uid()))
+      OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
 
 -- DISPUTES
-create policy "member read disputes" on disputes for select using (
-  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
-create policy "member write disputes" on disputes for all using (
-  exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'member read disputes' AND tablename = 'disputes'
+  ) THEN
+    CREATE POLICY "member read disputes" ON disputes FOR SELECT USING (
+      EXISTS (SELECT 1 FROM escrows e WHERE e.id = escrow_id AND (e.seller_id = auth.uid() OR e.buyer_id = auth.uid()))
+      OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'member write disputes' AND tablename = 'disputes'
+  ) THEN
+    CREATE POLICY "member write disputes" ON disputes FOR ALL USING (
+      EXISTS (SELECT 1 FROM escrows e WHERE e.id = escrow_id AND (e.seller_id = auth.uid() OR e.buyer_id = auth.uid()))
+      OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+  END IF;
+END $$;
+
+-- STORAGE BUCKETS
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'authenticated access to product-images' AND tablename = 'storage_buckets'
+  ) THEN
+    CREATE POLICY "authenticated access to product-images" ON storage_buckets FOR SELECT USING (
+      auth.uid() IS NOT NULL
+    );
+  END IF;
+END $$;

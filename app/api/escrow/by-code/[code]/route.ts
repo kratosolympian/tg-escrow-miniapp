@@ -25,6 +25,8 @@ export async function GET(
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
     }
 
+    console.log('Buyer API: Found escrow', (escrow as any).id, 'with status', (escrow as any).status, 'for code:', params.code.toUpperCase())
+
     // If user is not authenticated or not a member, return limited info
     if (!user || ((escrow as any).seller_id !== user.id && (escrow as any).buyer_id !== user.id)) {
       return NextResponse.json({
@@ -52,6 +54,28 @@ export async function GET(
       .eq('escrow_id', (escrow as any).id)
       .order('created_at', { ascending: true })
 
+    // Generate signed URLs for receipts
+    let receiptsWithUrls = receipts || []
+    if (receipts && receipts.length > 0) {
+      receiptsWithUrls = await Promise.all(receipts.map(async (receipt) => {
+        try {
+          const { data: signedUrlData, error } = await serviceClient.storage
+            .from('receipts')
+            .createSignedUrl(receipt.file_path, 900) // 15 minutes
+
+          if (error) {
+            console.warn('Failed to create signed URL for receipt:', receipt.file_path, error)
+            return { ...receipt, signed_url: null }
+          }
+
+          return { ...receipt, signed_url: signedUrlData.signedUrl }
+        } catch (err) {
+          console.warn('Error creating signed URL for receipt:', receipt.file_path, err)
+          return { ...receipt, signed_url: null }
+        }
+      }))
+    }
+
     // Attach assigned admin bank data (profile) or platform fallback
     let adminBank: any = null
     if ((escrow as any).assigned_admin_id) {
@@ -76,7 +100,7 @@ export async function GET(
     return NextResponse.json({
       ...(escrow as any),
       status_logs: statusLogs || [],
-      receipts: receipts || [],
+      receipts: receiptsWithUrls || [],
       admin_bank: adminBank
     })
 

@@ -9,6 +9,7 @@ import { formatNaira } from '@/lib/utils'
 import { getStatusLabel, getStatusColor } from '@/lib/status'
 import StatusBadge from '@/components/StatusBadge'
 import EscrowChat from '@/components/EscrowChat'
+import { supabase } from '@/lib/supabaseClient'
 
 interface Escrow {
   id: string
@@ -87,15 +88,15 @@ export default function SellerEscrowPage() {
     const interval = setInterval(() => {
       // poll escrow to pick up status changes, but only if escrow loaded
       if (escrow) {
-        // refresh every 15s
+        // refresh every 5s for better UX
         fetchEscrow()
       }
-    }, 15000)
+    }, 5000)
     return () => clearInterval(interval)
   }, [id])
 
   useEffect(() => {
-    if (escrow?.product_image_url) {
+    if (escrow?.product_image_url && currentUser) {
       fetchProductImage()
     }
     if (escrow?.receipts) {
@@ -140,14 +141,94 @@ export default function SellerEscrowPage() {
     } else {
       setTimeLeft(null)
     }
-  }, [escrow])
+  }, [escrow, currentUser])
+
+  const [realtimeChannel, setRealtimeChannel] = useState<any>(null)
+
+  const realtimeChannelRef = useRef<any>(null)
+  const currentEscrowIdRef = useRef<string | null>(null)
+
+  // Real-time subscription for escrow status changes
+  useEffect(() => {
+    if (!escrow?.id) {
+      // Clean up channel if escrow becomes unavailable
+      if (realtimeChannelRef.current) {
+        console.log('Real-time: Cleaning up channel due to missing escrow')
+        supabase.removeChannel(realtimeChannelRef.current)
+        realtimeChannelRef.current = null
+        currentEscrowIdRef.current = null
+        setRealtimeChannel(null)
+      }
+      return
+    }
+
+    // If we already have a channel for this escrow, don't create another
+    if (realtimeChannelRef.current && currentEscrowIdRef.current === escrow.id) {
+      return
+    }
+
+    // Clean up previous channel if it exists
+    if (realtimeChannelRef.current) {
+      console.log('Real-time: Cleaning up previous channel')
+      supabase.removeChannel(realtimeChannelRef.current)
+      realtimeChannelRef.current = null
+    }
+
+    console.log('Setting up real-time subscription for escrow:', escrow.id)
+    currentEscrowIdRef.current = escrow.id
+
+    const channel = supabase
+      .channel(`escrow-${escrow.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows',
+          filter: `id=eq.${escrow.id}`
+        },
+        (payload) => {
+          console.log('Real-time: Escrow status change detected:', payload)
+          if (payload.new) {
+            // Update the escrow state directly with the new data
+            setEscrow(prev => prev ? { ...prev, ...payload.new } : null)
+            console.log('Real-time: Updated escrow state with new data')
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Real-time subscription status:', status)
+      })
+
+    realtimeChannelRef.current = channel
+    setRealtimeChannel(channel)
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [escrow?.id])
+
+  // Clean up channel on unmount
+  useEffect(() => {
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current)
+        realtimeChannelRef.current = null
+        currentEscrowIdRef.current = null
+      }
+    }
+  }, [])
 
   // Fetch signed URL for delivery proof
   const fetchDeliveryProofSignedUrl = async (path: string) => {
+    if (!currentUser) return
     try {
       const response = await fetch('/api/storage/sign-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ path, bucket: 'product-images' })
       })
       if (response.ok) {
@@ -210,23 +291,39 @@ export default function SellerEscrowPage() {
   }
 
   const fetchProductImage = async () => {
-    if (!escrow?.product_image_url) return
+    if (!escrow?.product_image_url || !currentUser) return
 
+    console.log('Fetching product image for path:', escrow.product_image_url)
+    
+    // If it's already a valid URL (starts with http), use it directly
+    if (escrow.product_image_url.startsWith('http://') || escrow.product_image_url.startsWith('https://')) {
+      console.log('product_image_url is already a URL, using directly')
+      setProductImageUrl(escrow.product_image_url)
+      return
+    }
+    
     try {
       const response = await fetch('/api/storage/sign-url', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           path: escrow.product_image_url,
           bucket: 'product-images'
         })
       })
 
+      console.log('Sign URL response status:', response.status)
       if (response.ok) {
         const data = await response.json()
+        console.log('Sign URL response data:', data)
         setProductImageUrl(data.signedUrl)
+        console.log('Set productImageUrl to:', data.signedUrl)
+      } else {
+        const errorData = await response.json()
+        console.error('Sign URL API error:', errorData)
       }
     } catch (error) {
       console.error('Error fetching product image:', error)
@@ -234,7 +331,7 @@ export default function SellerEscrowPage() {
   }
 
   const fetchReceiptImages = async () => {
-    if (!escrow?.receipts) return
+    if (!escrow?.receipts || !currentUser) return
 
     const urls: Record<string, string> = {}
     
@@ -245,6 +342,7 @@ export default function SellerEscrowPage() {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify({
             path: receipt.file_path,
             bucket: 'receipts'
@@ -445,6 +543,11 @@ export default function SellerEscrowPage() {
           </div>
           {productImageUrl && (
             <div className="mb-4">
+              {(() => {
+                console.log('About to render Image with productImageUrl:', productImageUrl)
+                console.log('Is it a valid URL?', productImageUrl.startsWith('http'))
+                return null
+              })()}
               <Image
                 src={productImageUrl}
                 alt="Product"

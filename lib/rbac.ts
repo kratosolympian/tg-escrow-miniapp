@@ -74,13 +74,18 @@ export async function requireRole(
 }
 
 export async function requireAuth(supabase: SupabaseClient<Database>): Promise<Profile> {
-  const profile = await getProfile(supabase)
-  
+  console.log('requireAuth: Starting authentication check');
+
+  const profile = await getProfile(supabase);
+
   if (!profile) {
-    throw new Error('Authentication required')
+    console.warn('requireAuth: Authentication failed, no profile found');
+    console.log('requireAuth: Decoded token payload:', supabase.auth.getUser());
+    throw new Error('Authentication required');
   }
-  
-  return profile
+
+  console.log('requireAuth: Authentication successful, profile:', profile);
+  return profile;
 }
 
 export function isAdmin(profile: Profile): boolean {

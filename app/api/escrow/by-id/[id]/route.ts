@@ -107,17 +107,42 @@ export async function GET(
     }
 
     // Get receipts with more detailed info using service client
-    const { data: receipts } = await serviceClient
+    const { data: receiptsData } = await serviceClient
       .from('receipts')
       .select(`
         id, 
-        file_path as receipt_url, 
-        filename,
+        file_path, 
         created_at as uploaded_at, 
         uploaded_by
       `)
       .eq('escrow_id', params.id)
       .order('created_at', { ascending: true })
+
+    // Transform receipts to include proper URLs and filenames
+    const receipts = await Promise.all((receiptsData || []).map(async (receipt: any) => {
+      // Generate signed URL for the receipt (15 minutes expiry)
+      const { data: signedUrlData, error: signedUrlError } = await serviceClient.storage
+        .from('receipts')
+        .createSignedUrl(receipt.file_path, 900) // 15 minutes
+
+      if (signedUrlError) {
+        console.error('Error creating signed URL for receipt:', signedUrlError)
+        return null
+      }
+
+      // Extract filename from file_path
+      const filename = receipt.file_path.split('/').pop() || 'receipt.jpg'
+
+      return {
+        id: receipt.id,
+        receipt_url: signedUrlData.signedUrl,
+        uploaded_at: receipt.uploaded_at,
+        filename: filename
+      }
+    }))
+
+    // Filter out null receipts (failed signed URL generation)
+    const validReceipts = receipts.filter(r => r !== null)
 
     // Include assigned admin bank info (if any), falling back to platform settings
     let adminBank: any = null
@@ -151,7 +176,7 @@ export async function GET(
       success: true,
       escrow: {
         ...(escrow as any),
-        receipts: receipts || [],
+        receipts: validReceipts,
         delivery_proof_url: (escrow as any).delivery_proof_url || null,
         status_logs: statusLogs || []
       }

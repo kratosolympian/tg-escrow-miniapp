@@ -96,12 +96,32 @@ export function createSignedToken(userId: string, ttlSeconds = 300) {
 export async function verifyAndConsumeSignedToken(token: string) {
   try {
     const [payloadStr, sig] = token.split('.')
-    if (!payloadStr || !sig) return null
+    if (!payloadStr || !sig) {
+      console.warn('Malformed token: missing payload or signature')
+      return null
+    }
+
     const expected = hmac(payloadStr)
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
+    if (Buffer.byteLength(sig) !== Buffer.byteLength(expected)) {
+      console.warn('Token signature length mismatch')
+      return null
+    }
+
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      console.warn('Token signature mismatch')
+      return null
+    }
+
     const payloadJson = JSON.parse(Buffer.from(payloadStr, 'base64url').toString('utf8'))
     const { id: tokenId, exp } = payloadJson
-    if (!tokenId || !exp) return null
+    if (!tokenId || !exp) {
+      console.warn('Token payload missing required fields')
+      return null
+    }
+    if (Date.now() > exp) {
+      console.warn('Token expired')
+      return null
+    }
 
     // Prefer DB-backed consumption (works across processes)
     const fromDb = await consumeTokenFromDb(tokenId)
@@ -111,8 +131,12 @@ export async function verifyAndConsumeSignedToken(token: string) {
 
     // Fallback to in-memory store
     const entry = store.get(tokenId)
-    if (!entry) return null
-    if (Date.now() > entry.expires || Date.now() > exp) {
+    if (!entry) {
+      console.warn('Token not found in memory')
+      return null
+    }
+    if (Date.now() > entry.expires) {
+      console.warn('Token expired in memory')
       store.delete(tokenId)
       return null
     }
@@ -120,6 +144,7 @@ export async function verifyAndConsumeSignedToken(token: string) {
     store.delete(tokenId)
     return entry.userId
   } catch (e) {
+    console.error('Error verifying token:', e)
     return null
   }
 }

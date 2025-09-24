@@ -1,6 +1,21 @@
 -- Enable required extensions
 create extension if not exists pgcrypto;
 
+-- STORAGE BUCKETS
+do $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables WHERE table_name = 'storage_buckets'
+  ) THEN
+    CREATE TABLE storage_buckets (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name text NOT NULL UNIQUE,
+      created_at timestamp with time zone DEFAULT now(),
+      updated_at timestamp with time zone DEFAULT now()
+    );
+  END IF;
+END $$;
+
 -- Profiles mirror auth.users, hold telegram mapping + role + banking info
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -40,6 +55,7 @@ create table if not exists escrows (
     'refunded',
     'closed'
   )) default 'created',
+  payment_deadline timestamp with time zone,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );

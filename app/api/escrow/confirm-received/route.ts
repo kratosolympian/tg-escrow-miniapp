@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     // Check for one-time token first
     let authenticatedUser = null
     const body = await request.json()
+    console.log('Confirm received: Request body:', body)
     const { escrowId, __one_time_token } = body
 
     if (__one_time_token) {
@@ -67,28 +68,38 @@ export async function POST(request: NextRequest) {
       profile = await requireAuth(supabase)
     }
     
+    console.log('Confirm received: Authenticated user profile:', profile)
+    
     // Parse and validate the request data
     const validatedData = confirmReceivedSchema.parse(body)
     const escrowIdValidated = validatedData.escrowId
+    console.log('Confirm received: Validated escrowId:', escrowIdValidated)
 
     // Get escrow
     const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
       .select('*')
-      .eq('id', escrowId)
+      .eq('id', escrowIdValidated)
       .single()
 
     if (escrowError || !escrow) {
+      console.log('Confirm received: Escrow not found, error:', escrowError)
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
     }
 
+    console.log('Confirm received: Found escrow with status:', escrow.status, 'buyer_id:', escrow.buyer_id)
+
     // Check if user is the buyer
     if (escrow.buyer_id !== profile.id) {
+      console.log('Confirm received: User is not buyer. User ID:', profile.id, 'Buyer ID:', escrow.buyer_id)
       return NextResponse.json({ error: 'Only the buyer can confirm receipt' }, { status: 403 })
     }
 
     // Check if can transition from in_progress to completed
-    if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.COMPLETED)) {
+    const canTransitionResult = canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.COMPLETED)
+    console.log('Confirm received: Can transition from', escrow.status, 'to completed:', canTransitionResult)
+    console.log('Confirm received: ESCROW_STATUS.COMPLETED =', ESCROW_STATUS.COMPLETED)
+    if (!canTransitionResult) {
       return NextResponse.json({ 
         error: 'Cannot confirm receipt in current status' 
       }, { status: 400 })
@@ -119,6 +130,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Confirm received error:', error)
     if (error instanceof z.ZodError) {
+      console.log('Confirm received: Zod validation error:', error.errors)
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
     }
     return NextResponse.json({ error: 'Failed to confirm receipt' }, { status: 500 })

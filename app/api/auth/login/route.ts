@@ -39,11 +39,15 @@ export async function POST(request: NextRequest) {
 
     if (signInError) {
       console.error('Login error:', signInError)
-      return NextResponse.json({ error: signInError.message }, { status: 401 })
+      return NextResponse.json({
+        error: 'Invalid email or password. Please try again.'
+      }, { status: 401 })
     }
 
     if (!authData.user) {
-      return NextResponse.json({ error: 'Authentication failed' }, { status: 401 })
+      return NextResponse.json({
+        error: 'Authentication failed. Please contact support if the issue persists.'
+      }, { status: 401 })
     }
 
     // If the request was JSON (fetch from client), return a JSON payload so
