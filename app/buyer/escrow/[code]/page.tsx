@@ -643,7 +643,6 @@ export default function BuyerEscrowPage() {
   }
 
   const totalAmount = escrow.price + escrow.admin_fee
-  const canUploadReceipt = escrow.status === 'waiting_payment' || escrow.status === 'waiting_admin'
   const canConfirmReceived = escrow.status === 'in_progress'
   
   // Check if user can join this transaction
@@ -937,7 +936,7 @@ export default function BuyerEscrowPage() {
         )}
 
         {/* Confirm Received */}
-        {canConfirmReceived && isUserBuyer && (
+        {canConfirmReceived && isUserBuyer && escrow.status !== 'completed' && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">✅ Confirm Product Received</h2>
             <p className="text-gray-600 mb-4">

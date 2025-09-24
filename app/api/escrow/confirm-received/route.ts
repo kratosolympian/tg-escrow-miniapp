@@ -89,6 +89,12 @@ export async function POST(request: NextRequest) {
 
     console.log('Confirm received: escrow status is', escrow.status, 'for escrow', escrowId)
 
+    // If already completed, just return success (handles race conditions)
+    if (escrow.status === ESCROW_STATUS.COMPLETED) {
+      console.log('Confirm received: escrow is already completed, returning success')
+      return NextResponse.json({ ok: true })
+    }
+
     // Check if can transition from in_progress to completed
     if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.COMPLETED)) {
       console.log('Confirm received: cannot transition from', escrow.status, 'to completed')
