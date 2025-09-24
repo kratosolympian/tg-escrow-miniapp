@@ -27,7 +27,7 @@ async function generateSignedUrl(serviceClient: SupabaseClient, bucket: string, 
 }
 
 // Buyer-specific handler
-export async function buyerHandler(
+async function buyerHandler(
   request: NextRequest,
   profile: Profile,
   serviceClient: SupabaseClient
@@ -60,7 +60,7 @@ export async function buyerHandler(
 }
 
 // Seller-specific handler
-export async function sellerHandler(
+async function sellerHandler(
   request: NextRequest,
   profile: Profile,
   serviceClient: SupabaseClient
