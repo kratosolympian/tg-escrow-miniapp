@@ -119,18 +119,49 @@ export async function POST(request: NextRequest) {
 
     console.log('Validated input:', { validDescription, validPrice });
 
+    // Ensure profile exists
+    console.log('Ensuring profile exists for seller_id:', authenticatedUser.id);
+    const { data: existingProfile } = await serviceClient
+      .from('profiles')
+      .select('id')
+      .eq('id', authenticatedUser.id)
+      .single();
+
+    if (!existingProfile) {
+      console.log('Profile not found, creating...');
+      const { error: profileError } = await serviceClient
+        .from('profiles')
+        .insert({
+          id: authenticatedUser.id,
+          email: authenticatedUser.email || 'unknown@example.com',
+          full_name: authenticatedUser.user_metadata?.full_name || '',
+          role: 'seller',
+        });
+      if (profileError) {
+        console.error('Failed to create profile:', profileError);
+        return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
+      }
+    }
+
+    // Prepare insert data
+    const insertData: any = {
+      code: shortCode(),
+      seller_id: authenticatedUser.id,
+      description: validDescription,
+      price: validPrice,
+      admin_fee: 300,
+      status: ESCROW_STATUS.WAITING_PAYMENT,
+    };
+    if (parsedBody.assigned_admin_id) {
+      insertData.assigned_admin_id = parsedBody.assigned_admin_id;
+    }
+    console.log('Insert data:', insertData);
+
     // Insert escrow into database
     console.log('Inserting escrow into database...');
     const { data: escrow, error: escrowError } = await serviceClient
       .from('escrows')
-      .insert({
-        code: shortCode(),
-        seller_id: authenticatedUser.id,
-        description: validDescription,
-        price: validPrice,
-        admin_fee: 300,
-        status: ESCROW_STATUS.WAITING_PAYMENT,
-      })
+      .insert(insertData)
       .select()
       .single();
 
