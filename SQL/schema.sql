@@ -119,58 +119,63 @@ alter table admin_settings enable row level security;
 alter table status_logs enable row level security;
 alter table disputes enable row level security;
 
+-- Create a function to check if user is admin (security definer to bypass RLS)
+CREATE OR REPLACE FUNCTION public.is_admin(user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = user_id AND role = 'admin'
+  );
+$$;
+
 -- PROFILES POLICIES
 create policy "own profile read" on profiles for select using (auth.uid() = id);
 create policy "own profile update" on profiles for update using (auth.uid() = id);
-create policy "admin read profiles" on profiles for select using (
-  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+create policy "admin read profiles" on profiles for select using (public.is_admin(auth.uid()));
 
 -- ESCROWS POLICIES
 create policy "seller insert escrow" on escrows for insert with check (seller_id = auth.uid());
 create policy "member read escrows" on escrows for select using (
-  seller_id = auth.uid() or buyer_id = auth.uid() or exists (
-    select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'
-  )
+  seller_id = auth.uid() or buyer_id = auth.uid() or public.is_admin(auth.uid())
 );
 create policy "seller update own" on escrows for update using (seller_id = auth.uid());
 create policy "buyer update own" on escrows for update using (buyer_id = auth.uid());
-create policy "admin all escrows" on escrows for all using (
-  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+create policy "admin all escrows" on escrows for all using (public.is_admin(auth.uid()));
 
 -- RECEIPTS POLICIES
 create policy "insert own receipt" on receipts for insert with check (uploaded_by = auth.uid());
 create policy "member read receipts" on receipts for select using (
   uploaded_by = auth.uid() or exists (
     select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid())
-  ) or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+  ) or public.is_admin(auth.uid())
 );
 
 -- ADMIN SETTINGS POLICIES
 create policy "read settings (auth users)" on admin_settings for select using (auth.uid() is not null);
-create policy "admin write settings" on admin_settings for all using (
-  exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
-);
+create policy "admin write settings" on admin_settings for all using (public.is_admin(auth.uid()));
 
 -- STATUS LOGS POLICIES
 create policy "member read logs" on status_logs for select using (
   exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+  or public.is_admin(auth.uid())
 );
 create policy "member write logs" on status_logs for insert with check (
   exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+  or public.is_admin(auth.uid())
 );
 
 -- DISPUTES POLICIES
 create policy "member read disputes" on disputes for select using (
   exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+  or public.is_admin(auth.uid())
 );
 create policy "member write disputes" on disputes for all using (
   exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
-  or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+  or public.is_admin(auth.uid())
 );
 
 -- Create a function to automatically create profiles for new users
