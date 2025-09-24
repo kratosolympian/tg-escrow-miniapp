@@ -903,7 +903,7 @@ export default function BuyerEscrowPage() {
         )}
 
         {/* Always show Payment Proof Upload for buyer in any active state */}
-        {isUserBuyer && escrow.status !== 'completed' && escrow.status !== 'cancelled' && (
+        {isUserBuyer && escrow.status === 'waiting_payment' && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">📄 Upload Payment Proof</h2>
             <div className="space-y-4">
