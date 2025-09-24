@@ -37,11 +37,18 @@ export async function POST(request: NextRequest) {
   try {
     let parsedBody: any;
     try {
-      parsedBody = await request.json();
-      console.log('Parsed JSON body:', parsedBody);
+      const formData = await request.formData();
+      parsedBody = {
+        description: formData.get('description')?.toString() || '',
+        price: parseFloat(formData.get('price')?.toString() || '0'),
+        assigned_admin_id: formData.get('assigned_admin_id')?.toString(),
+        productImagePath: formData.get('productImagePath')?.toString(),
+        image: formData.get('image') as File | null,
+      };
+      console.log('Parsed FormData body:', parsedBody);
     } catch (error) {
-      console.error('Failed to parse JSON body:', error);
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+      console.error('Failed to parse FormData body:', error);
+      return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
     }
 
     const supabase = createServerClientWithAuthHeader(request);
