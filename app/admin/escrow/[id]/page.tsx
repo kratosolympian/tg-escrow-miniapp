@@ -178,7 +178,7 @@ export default function AdminEscrowDetailPage() {
       let body: any = {};
       if (action === 'confirm-payment') {
         endpoint = '/api/admin/confirm-payment';
-        body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
+        body = { escrowId: escrow.id };
       } else if (action === 'release-funds') {
         endpoint = '/api/admin/release-funds';
         body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };

@@ -1,20 +1,24 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceRoleClient } from '@/lib/supabaseServer'
+import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
-import { Escrow } from '@/lib/types'
 
-const confirmPaymentSchema = z.object({
+const closeSchema = z.object({
   escrowId: z.string().uuid()
 })
 
 export async function POST(request: NextRequest) {
   try {
-    // Use service role client for admin operations
-    const supabase = createServiceRoleClient()
-    
+    const supabase = createServerClientWithCookies()
+
+    // Require admin role
+    const profile = await requireRole(supabase, 'admin')
+
     const body = await request.json()
-    const { escrowId } = confirmPaymentSchema.parse(body)
+    const { escrowId } = closeSchema.parse(body)
 
     // Get escrow
     const { data: escrow, error: escrowError } = await (supabase as any)
@@ -27,42 +31,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
     }
 
-    // Check if can transition from waiting_admin to payment_confirmed
-    if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.PAYMENT_CONFIRMED)) {
-      return NextResponse.json({ 
-        error: 'Cannot confirm payment in current status' 
+    // Check if can transition to closed
+    if (!canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.CLOSED)) {
+      return NextResponse.json({
+        error: 'Cannot close transaction in current status'
       }, { status: 400 })
     }
 
-    // Update escrow status
+    // Update escrow status to closed
     const { error: updateError } = await (supabase as any)
       .from('escrows')
-      .update({ status: ESCROW_STATUS.PAYMENT_CONFIRMED })
+      .update({ status: ESCROW_STATUS.CLOSED })
       .eq('id', escrow.id)
 
     if (updateError) {
+      console.error('Error updating escrow:', updateError)
       return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
     }
 
     // Log status change
-    const { error: logError } = await (supabase as any)
+    await (supabase as any)
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,
-        status: ESCROW_STATUS.PAYMENT_CONFIRMED,
-        changed_by: null // Admin action
+        status: ESCROW_STATUS.CLOSED,
+        changed_by: profile.id
       })
-
-    if (logError) {
-      console.error('Failed to log status change:', logError)
-    }
 
     return NextResponse.json({ ok: true })
 
   } catch (error) {
+    console.error('Close escrow error:', error)
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Failed to confirm payment' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to close transaction' }, { status: 500 })
   }
 }
