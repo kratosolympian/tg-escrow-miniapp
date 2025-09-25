@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     // Log the status change
     const { error: logError } = await serviceClient
-      .from('escrow_status_logs')
+      .from('status_logs')
       .insert({
         escrow_id: escrowId,
         status: ESCROW_STATUS.CLOSED,
