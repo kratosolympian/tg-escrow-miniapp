@@ -81,6 +81,13 @@ export default function BuyerEscrowPage() {
   const [timerEnd, setTimerEnd] = useState<Date | null>(null);
   const [timerValue, setTimerValue] = useState<string>('');
 
+  // Debug: Log status changes
+  useEffect(() => {
+    if (escrow) {
+      console.log('Escrow status changed to:', escrow.status);
+    }
+  }, [escrow?.status]);
+
   // Always show timer for buyer in any active state, fallback if missing
   useEffect(() => {
     if (!escrow || !user) {
@@ -298,6 +305,8 @@ export default function BuyerEscrowPage() {
       if (response.ok) {
         const data = await response.json();
         
+        console.log(`fetchEscrow (${source}): received status: ${data.status}, current status: ${escrow?.status}`);
+        
         // Only update state if data actually changed
         setEscrow(prev => {
           if (!prev) return data;
@@ -310,8 +319,10 @@ export default function BuyerEscrowPage() {
             JSON.stringify(prev.status_logs) !== JSON.stringify(data.status_logs);
           
           if (changed) {
+            console.log(`fetchEscrow (${source}): status changed from ${prev.status} to ${data.status}`);
             return data;
           } else {
+            console.log(`fetchEscrow (${source}): no changes detected`);
             return prev;
           }
         });
@@ -534,7 +545,16 @@ export default function BuyerEscrowPage() {
 
       setPaymentProofUrl(URL.createObjectURL(fileToUpload));
       setSuccess('Payment proof uploaded successfully! Your escrow is now marked as paid and waiting for admin verification.');
-      fetchEscrow('upload-receipt'); // Refresh escrow to show updated status
+      
+      // Force immediate refresh of escrow data after upload
+      console.log('Payment proof uploaded, forcing immediate escrow refresh');
+      await fetchEscrow('upload-receipt-immediate');
+      
+      // Also trigger a refresh after a short delay to ensure real-time updates work
+      setTimeout(() => {
+        console.log('Delayed refresh after payment proof upload');
+        fetchEscrow('upload-receipt-delayed');
+      }, 1000);
     } catch (err) {
       console.error('Upload error:', err);
       setError('Failed to upload payment proof');
@@ -732,6 +752,9 @@ export default function BuyerEscrowPage() {
             <h1 className="text-2xl font-bold">Transaction {escrow.code}</h1>
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(escrow.status as any)}`}>
               {getStatusLabel(escrow.status as any)}
+              {process.env.NODE_ENV === 'development' && (
+                <span className="ml-2 text-xs opacity-50">({escrow.status})</span>
+              )}
             </span>
           </div>
           {productImageUrl && (
