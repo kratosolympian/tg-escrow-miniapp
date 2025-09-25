@@ -35,23 +35,46 @@ async function buyerHandler(
   const body = await request.json();
   const { path, bucket } = signUrlSchema.parse(body);
 
-  if (bucket !== 'receipts') {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-  }
+  // Buyers can access receipts and product images (for escrows they are part of)
+  if (bucket === 'receipts') {
+    const pathParts = path.split('/');
+    if (pathParts.length < 2) {
+      return NextResponse.json({ error: 'Invalid path format' }, { status: 400 });
+    }
 
-  const pathParts = path.split('/');
-  if (pathParts.length < 2) {
-    return NextResponse.json({ error: 'Invalid path format' }, { status: 400 });
-  }
+    const escrowId = pathParts[0];
+    const { data: escrow } = await serviceClient
+      .from('escrows')
+      .select('buyer_id')
+      .eq('id', escrowId)
+      .single();
 
-  const escrowId = pathParts[0];
-  const { data: escrow } = await serviceClient
-    .from('escrows')
-    .select('buyer_id')
-    .eq('id', escrowId)
-    .single();
+    if (!escrow || escrow.buyer_id !== profile.id) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+  } else if (bucket === 'product-images') {
+    // Buyers can access product images for escrows they are part of
+    const pathParts = path.split('/');
+    if (pathParts.length < 2) {
+      return NextResponse.json({ error: 'Invalid path format' }, { status: 400 });
+    }
 
-  if (!escrow || escrow.buyer_id !== profile.id) {
+    const sellerId = pathParts[0];
+    const fileName = pathParts[1];
+
+    // Check if buyer is part of any escrow with this seller and product image
+    const { data: escrow } = await serviceClient
+      .from('escrows')
+      .select('id, buyer_id, product_image_url')
+      .eq('seller_id', sellerId)
+      .eq('buyer_id', profile.id)
+      .eq('product_image_url', `${sellerId}/${fileName}`)
+      .single();
+
+    if (!escrow) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+  } else {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 

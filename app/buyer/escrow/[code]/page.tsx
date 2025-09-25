@@ -250,10 +250,9 @@ export default function BuyerEscrowPage() {
           filter: `id=eq.${escrow.id}`
         },
         (payload) => {
-          if (payload.new) {
-            // Update the escrow state directly with the new data
-            setEscrow(prev => prev ? { ...prev, ...payload.new } : null)
-          }
+          // Real-time updates may not include all related data, so fetch complete data
+          console.log('Real-time escrow update detected, fetching complete data');
+          fetchEscrow('realtime-update');
         }
       )
       .subscribe((status) => {
@@ -444,6 +443,50 @@ export default function BuyerEscrowPage() {
       }
     } catch (error) {
       console.error('Buyer: Error fetching product image:', error)
+    }
+  }
+
+  const fetchReceiptSignedUrls = async () => {
+    if (!escrow?.receipts || !user || !isUserBuyer) return
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      // Generate signed URLs for all receipts
+      const receiptsWithUrls = await Promise.all(
+        escrow.receipts.map(async (receipt) => {
+          try {
+            const response = await fetch('/api/storage/sign-url', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token && { Authorization: `Bearer ${token}` })
+              },
+              body: JSON.stringify({
+                path: receipt.file_path,
+                bucket: 'receipts'
+              })
+            })
+
+            if (response.ok) {
+              const data = await response.json()
+              return { ...receipt, signed_url: data.signedUrl }
+            } else {
+              console.error('Buyer: Sign URL API error for receipt:', receipt.id)
+              return receipt
+            }
+          } catch (error) {
+            console.error('Buyer: Error fetching signed URL for receipt:', receipt.id, error)
+            return receipt
+          }
+        })
+      )
+
+      // Update escrow with signed URLs
+      setEscrow(prev => prev ? { ...prev, receipts: receiptsWithUrls } : null)
+    } catch (error) {
+      console.error('Buyer: Error fetching receipt signed URLs:', error)
     }
   }
 
@@ -662,6 +705,12 @@ export default function BuyerEscrowPage() {
   const isUserBuyer = user && String(escrow.buyer_id) === String(user.id);
   const isUserSeller = user && String(escrow.seller_id) === String(user.id);
   const needsAuthentication = (canJoinTransaction || canJoinPublic) && !user;
+
+  useEffect(() => {
+    if (escrow?.receipts && user && isUserBuyer) {
+      fetchReceiptSignedUrls()
+    }
+  }, [escrow?.receipts, user, isUserBuyer])
 
   if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
     // debug flag enabled; no client-side token/log leakage in production build

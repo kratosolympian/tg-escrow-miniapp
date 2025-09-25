@@ -4,6 +4,7 @@ alter table receipts enable row level security;
 alter table admin_settings enable row level security;
 alter table status_logs enable row level security;
 alter table disputes enable row level security;
+alter table one_time_tokens enable row level security;
 
 -- PROFILES
 create policy "own profile read" on profiles for select using (auth.uid() = id);
@@ -81,4 +82,9 @@ create policy "member read participants" on chat_participants for select using (
 create policy "member write participants" on chat_participants for all using (
   user_id = auth.uid() and exists (select 1 from escrows e where e.id = escrow_id and (e.seller_id = auth.uid() or e.buyer_id = auth.uid()))
   or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- ONE TIME TOKENS
+create policy "service role all tokens" on one_time_tokens for all using (
+  auth.role() = 'service_role'
 );
