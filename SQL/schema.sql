@@ -118,6 +118,8 @@ alter table receipts enable row level security;
 alter table admin_settings enable row level security;
 alter table status_logs enable row level security;
 alter table disputes enable row level security;
+alter table chat_messages enable row level security;
+alter table chat_participants enable row level security;
 
 -- Create a function to check if user is admin (security definer to bypass RLS)
 CREATE OR REPLACE FUNCTION public.is_admin(user_id uuid)
