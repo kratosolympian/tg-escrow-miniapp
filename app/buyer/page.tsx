@@ -264,7 +264,7 @@ export default function BuyerPage() {
         {blockedJoinInfo && (
           <div className="card mb-6">
             <div className="p-4">
-              <h3 className="font-semibold mb-2">Can't join transaction</h3>
+              <h3 className="font-semibold mb-2">Can&apos;t join transaction</h3>
               <p className="text-sm text-gray-700 mb-3">{blockedJoinInfo.reason || 'Joining this transaction is not allowed.'}</p>
               {blockedJoinInfo.escrows && blockedJoinInfo.escrows.length > 0 && (
                 <div className="space-y-2">

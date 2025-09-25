@@ -64,7 +64,7 @@ export default function HomePage() {
           {/* Buyer Card */}
           <div className="card text-center hover:shadow-lg transition-shadow">
             <div className="text-4xl mb-4">🛒</div>
-            <h2 className="text-xl font-semibold mb-3">I'm a Buyer</h2>
+            <h2 className="text-xl font-semibold mb-3">I&apos;m a Buyer</h2>
             <p className="text-gray-600 mb-6">
               Join an escrow transaction using a transaction code from the seller
             </p>
@@ -76,7 +76,7 @@ export default function HomePage() {
           {/* Seller Card */}
           <div className="card text-center hover:shadow-lg transition-shadow">
             <div className="text-4xl mb-4">💼</div>
-            <h2 className="text-xl font-semibold mb-3">I'm a Seller</h2>
+            <h2 className="text-xl font-semibold mb-3">I&apos;m a Seller</h2>
             <p className="text-gray-600 mb-6">
               Create a new escrow transaction and get a unique transaction code
             </p>

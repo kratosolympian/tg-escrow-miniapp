@@ -106,7 +106,7 @@ export default function AdminLoginPage() {
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an admin account? Contact your system administrator.
+              Don&apos;t have an admin account? Contact your system administrator.
             </p>
           </div>
         </div>

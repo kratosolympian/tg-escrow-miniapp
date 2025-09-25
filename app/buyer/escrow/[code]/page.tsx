@@ -208,6 +208,12 @@ export default function BuyerEscrowPage() {
     }
   }, [escrowProductImageUrl, user])
 
+  useEffect(() => {
+    if (escrow?.receipts && user && isUserBuyer) {
+      fetchReceiptSignedUrls()
+    }
+  }, [escrow?.receipts, user])
+
   const [realtimeChannel, setRealtimeChannel] = useState<any>(null)
 
   const realtimeChannelRef = useRef<any>(null)
@@ -706,12 +712,6 @@ export default function BuyerEscrowPage() {
   const isUserSeller = user && String(escrow.seller_id) === String(user.id);
   const needsAuthentication = (canJoinTransaction || canJoinPublic) && !user;
 
-  useEffect(() => {
-    if (escrow?.receipts && user && isUserBuyer) {
-      fetchReceiptSignedUrls()
-    }
-  }, [escrow?.receipts, user, isUserBuyer])
-
   if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
     // debug flag enabled; no client-side token/log leakage in production build
   }
@@ -902,7 +902,7 @@ export default function BuyerEscrowPage() {
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">🚀 Ready to Join?</h2>
             <p className="text-gray-600 mb-4">
-              Join this transaction to proceed with the purchase. You'll be able to make payment and track the progress.
+              Join this transaction to proceed with the purchase. You&apos;ll be able to make payment and track the progress.
             </p>
             
             <button

@@ -353,8 +353,8 @@ export default function ProfileSettings() {
                   Your banking information is encrypted and stored securely. It will only be used for:
                 </p>
                 <ul className="list-disc list-inside space-y-1">
-                  <li>Processing escrow payments when you're the seller</li>
-                  <li>Issuing refunds when you're the buyer</li>
+                  <li>Processing escrow payments when you&apos;re the seller</li>
+                  <li>Issuing refunds when you&apos;re the buyer</li>
                   <li>Verifying your identity for security purposes</li>
                 </ul>
               </div>
