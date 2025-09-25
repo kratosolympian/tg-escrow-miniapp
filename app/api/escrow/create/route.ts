@@ -171,7 +171,8 @@ export async function POST(request: NextRequest) {
       description: validDescription,
       price: validPrice,
       admin_fee: 300,
-      status: ESCROW_STATUS.WAITING_PAYMENT,
+      status: ESCROW_STATUS.CREATED,
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
     };
     if (parsedBody.assigned_admin_id) {
       insertData.assigned_admin_id = parsedBody.assigned_admin_id;

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
@@ -13,6 +13,7 @@ const closeSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClientWithCookies()
+    const serviceClient = createServiceRoleClient()
 
     // Require admin role
     const profile = await requireRole(supabase, 'admin')
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const { escrowId } = closeSchema.parse(body)
 
     // Get escrow
-    const { data: escrow, error: escrowError } = await (supabase as any)
+    const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update escrow status to closed
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await (serviceClient as any)
       .from('escrows')
       .update({ status: ESCROW_STATUS.CLOSED })
       .eq('id', escrow.id)
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log status change
-    await (supabase as any)
+    await (serviceClient as any)
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,

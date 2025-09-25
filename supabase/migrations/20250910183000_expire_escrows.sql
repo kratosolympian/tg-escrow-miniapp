@@ -11,7 +11,8 @@ DECLARE
 BEGIN
   WITH expired AS (
     SELECT id FROM escrows
-    WHERE status = 'waiting_payment' AND expires_at IS NOT NULL AND expires_at < now()
+    WHERE (status = 'created' OR status = 'waiting_payment') 
+    AND expires_at IS NOT NULL AND expires_at < now()
   )
   -- Update statuses
   UPDATE escrows
@@ -40,7 +41,7 @@ BEGIN
   -- If pg_cron is available, schedule the expire_escrows function every minute
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     BEGIN
-      PERFORM cron.schedule('expire_escrows_every_min', '*/1 * * * *', $$SELECT public.expire_escrows();$$);
+      PERFORM cron.schedule('expire_escrows_every_min', '*/1 * * * *', 'SELECT public.expire_escrows();');
     EXCEPTION WHEN others THEN
       RAISE NOTICE 'Failed to schedule expire_escrows job via pg_cron; you may schedule it manually in Supabase.';
     END;

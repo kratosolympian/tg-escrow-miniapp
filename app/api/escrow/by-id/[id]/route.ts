@@ -64,12 +64,12 @@ export async function GET(
     }
 
     
-    // If escrow has an expires_at and it's passed, expire it (only if waiting for payment)
+    // If escrow has an expires_at and it's passed, expire it (only if created or waiting for payment)
     try {
       if ((escrow as any)?.expires_at) {
         const expiresAt = new Date((escrow as any).expires_at).getTime()
         const now = Date.now()
-        if (now > expiresAt && (escrow as any).status === ESCROW_STATUS.WAITING_PAYMENT) {
+        if (now > expiresAt && ((escrow as any).status === ESCROW_STATUS.CREATED || (escrow as any).status === ESCROW_STATUS.WAITING_PAYMENT)) {
           // mark as closed
           const { error: updateError } = await (serviceClient as any)
             .from('escrows')

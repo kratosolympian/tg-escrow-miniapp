@@ -183,7 +183,8 @@ export async function POST(request: NextRequest) {
       .from('escrows')
       .update({
         buyer_id: authenticatedUser.id,
-        status: ESCROW_STATUS.WAITING_PAYMENT
+        status: ESCROW_STATUS.WAITING_PAYMENT,
+        expires_at: null // Clear expiration since buyer has joined
       })
       .ilike('code', code)
 
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest) {
             console.error('Refetch after update error failed', refetch.error)
           } else {
           const escrowId = refetch.data.id
-            const retry = await serviceClient.from('escrows').update({ buyer_id: authenticatedUser.id, status: ESCROW_STATUS.WAITING_PAYMENT }).eq('id', escrowId)
+            const retry = await serviceClient.from('escrows').update({ buyer_id: authenticatedUser.id, status: ESCROW_STATUS.WAITING_PAYMENT, expires_at: null }).eq('id', escrowId)
             if (retry.error) {
               // Check if this is the specific database constraint error
               if (retry.error.code === 'P0001' && retry.error.message?.includes('Buyer already has an active escrow')) {
