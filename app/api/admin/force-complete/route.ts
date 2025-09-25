@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'
-import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
+import { ESCROW_STATUS } from '@/lib/status'
 import { z } from 'zod'
 
-const closeSchema = z.object({
+const forceCompleteSchema = z.object({
   escrowId: z.string().uuid()
 })
 
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const profile = await requireRole(supabase, 'admin')
 
     const body = await request.json()
-    const { escrowId } = closeSchema.parse(body)
+    const { escrowId } = forceCompleteSchema.parse(body)
 
     // Get escrow
     const { data: escrow, error: escrowError } = await (serviceClient as any)
@@ -32,18 +32,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
     }
 
-    // Admins can close escrows from any status
-    // No status transition check needed for admin close operations
+    // Admins can force complete from any active status
+    // Check if escrow is already in a terminal state
+    if (escrow.status === ESCROW_STATUS.COMPLETED ||
+        escrow.status === ESCROW_STATUS.REFUNDED ||
+        escrow.status === ESCROW_STATUS.CLOSED) {
+      return NextResponse.json({
+        error: 'Transaction is already in a terminal state'
+      }, { status: 400 })
+    }
 
-    // Update escrow status to closed
+    // Update escrow status to completed
     const { error: updateError } = await (serviceClient as any)
       .from('escrows')
-      .update({ status: ESCROW_STATUS.CLOSED })
+      .update({ status: ESCROW_STATUS.COMPLETED })
       .eq('id', escrow.id)
 
     if (updateError) {
       console.error('Error updating escrow:', updateError)
-      return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to complete transaction' }, { status: 500 })
     }
 
     // Log status change
@@ -51,17 +58,17 @@ export async function POST(request: NextRequest) {
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,
-        status: ESCROW_STATUS.CLOSED,
+        status: ESCROW_STATUS.COMPLETED,
         changed_by: profile.id
       })
 
     return NextResponse.json({ ok: true })
 
   } catch (error) {
-    console.error('Close escrow error:', error)
+    console.error('Force complete error:', error)
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Failed to close transaction' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to force complete transaction' }, { status: 500 })
   }
 }

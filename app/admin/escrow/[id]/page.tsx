@@ -191,6 +191,9 @@ export default function AdminEscrowDetailPage() {
       } else if (action === 'take-off-hold') {
         endpoint = '/api/admin/take-off-hold';
         body = { escrowId: escrow.id };
+      } else if (action === 'force-complete') {
+        endpoint = '/api/admin/force-complete';
+        body = { escrowId: escrow.id };
       } else if (action === 'close') {
         endpoint = '/api/admin/close';
         body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
@@ -269,6 +272,7 @@ export default function AdminEscrowDetailPage() {
     if (escrow.status !== 'on_hold' && escrow.status !== 'completed' && escrow.status !== 'refunded' && escrow.status !== 'closed') actions.push('put-on-hold');
     if (escrow.status === 'on_hold') actions.push('take-off-hold');
     if (escrow.status !== 'completed' && escrow.status !== 'refunded') actions.push('close');
+    if (escrow.status !== 'completed' && escrow.status !== 'refunded' && escrow.status !== 'closed') actions.push('force-complete');
     return Array.from(new Set(actions));
   }
 
@@ -586,6 +590,15 @@ export default function AdminEscrowDetailPage() {
                       className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
                     >
                       {actionLoading === 'take-off-hold' ? 'Resuming...' : '▶️ Take Off Hold'}
+                    </button>
+                  )}
+                  {availableActions.includes('force-complete') && (
+                    <button
+                      onClick={() => handleAdminAction('force-complete')}
+                      disabled={!!actionLoading}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
+                    >
+                      {actionLoading === 'force-complete' ? 'Completing...' : '✅ Force Complete'}
                     </button>
                   )}
                   {availableActions.includes('close') && (
