@@ -30,24 +30,18 @@ export async function POST(request: NextRequest) {
       GRANT EXECUTE ON FUNCTION public.consume_one_time_token(uuid) TO authenticated;
     `
 
-    // Execute the SQL
-    try {
-      // Try to execute via RPC if available
-      await supabase.rpc('exec_sql', { sql: rpcSql + rlsSql })
-    } catch (rpcError) {
-      console.warn('RPC execution failed, trying direct approach')
-      // If RPC doesn't work, we'll need manual application
-      return NextResponse.json({
-        error: 'Cannot apply fixes automatically',
-        message: 'Please run the following SQL in your Supabase SQL Editor:',
-        sql: rpcSql + rlsSql
-      }, { status: 400 })
-    }
+    // Return SQL for manual execution since exec_sql RPC doesn't exist
+    return NextResponse.json({
+      error: 'Manual SQL execution required',
+      message: 'Please run the following SQL in your Supabase SQL Editor:',
+      sql: rpcSql + rlsSql
+    }, { status: 200 })
 
     return NextResponse.json({
-      success: true,
-      message: 'One-time token fixes applied successfully'
-    })
+      error: 'Manual SQL execution required',
+      message: 'Please run the following SQL in your Supabase SQL Editor:',
+      sql: rpcSql + rlsSql
+    }, { status: 200 })
 
   } catch (error) {
     console.error('Fix application error:', error)
