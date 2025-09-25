@@ -188,6 +188,9 @@ export default function AdminEscrowDetailPage() {
       } else if (action === 'put-on-hold') {
         endpoint = '/api/admin/put-on-hold';
         body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
+      } else if (action === 'take-off-hold') {
+        endpoint = '/api/admin/take-off-hold';
+        body = { escrowId: escrow.id };
       } else if (action === 'close') {
         endpoint = '/api/admin/close';
         body = { escrowId: escrow.id, admin_notes: notes || adminNotes || undefined };
@@ -264,7 +267,8 @@ export default function AdminEscrowDetailPage() {
     if (escrow.status === 'waiting_admin') actions.push('confirm-payment');
     if (escrow.status === 'payment_confirmed' || escrow.status === 'delivered') actions.push('release-funds', 'refund');
     if (escrow.status !== 'on_hold' && escrow.status !== 'completed' && escrow.status !== 'refunded' && escrow.status !== 'closed') actions.push('put-on-hold');
-    if (escrow.status !== 'completed' && escrow.status !== 'refunded' && escrow.status !== 'closed') actions.push('close');
+    if (escrow.status === 'on_hold') actions.push('take-off-hold');
+    if (escrow.status !== 'completed' && escrow.status !== 'refunded') actions.push('close');
     return Array.from(new Set(actions));
   }
 
@@ -573,6 +577,15 @@ export default function AdminEscrowDetailPage() {
                       className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
                     >
                       {actionLoading === 'put-on-hold' ? 'Putting on Hold...' : '⏸️ Put on Hold'}
+                    </button>
+                  )}
+                  {availableActions.includes('take-off-hold') && (
+                    <button
+                      onClick={() => handleAdminAction('take-off-hold')}
+                      disabled={!!actionLoading}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
+                    >
+                      {actionLoading === 'take-off-hold' ? 'Resuming...' : '▶️ Take Off Hold'}
                     </button>
                   )}
                   {availableActions.includes('close') && (
