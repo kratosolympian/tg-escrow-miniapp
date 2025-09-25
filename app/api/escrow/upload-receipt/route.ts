@@ -189,19 +189,31 @@ export async function POST(request: NextRequest) {
     if (escrow.status === ESCROW_STATUS.WAITING_PAYMENT && 
         canTransition(escrow.status as EscrowStatus, ESCROW_STATUS.WAITING_ADMIN)) {
       
-      await (serviceClient as any)
+      const { error: statusError } = await (serviceClient as any)
         .from('escrows')
         .update({ status: ESCROW_STATUS.WAITING_ADMIN })
         .eq('id', escrow.id)
 
+      if (statusError) {
+        console.error('Error updating escrow status:', statusError)
+        // Clean up uploaded file
+        await serviceClient.storage.from('receipts').remove([filePath])
+        return NextResponse.json({ error: 'Failed to update escrow status' }, { status: 500 })
+      }
+
       // Log status change
-      await (serviceClient as any)
+      const { error: logError } = await (serviceClient as any)
         .from('status_logs')
         .insert({
           escrow_id: escrow.id,
           status: ESCROW_STATUS.WAITING_ADMIN,
           changed_by: authenticatedUser.id
         })
+
+      if (logError) {
+        console.error('Error logging status change:', logError)
+        // Don't fail the whole operation for logging errors, but log it
+      }
     }
 
     return NextResponse.json({ ok: true })

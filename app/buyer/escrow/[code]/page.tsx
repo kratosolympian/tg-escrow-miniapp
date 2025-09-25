@@ -1012,7 +1012,7 @@ export default function BuyerEscrowPage() {
         )}
 
         {/* Communication Chat */}
-        {escrow.seller && isUserBuyer && currentUser && (
+        {isUserBuyer && currentUser && (
           <div className="card mb-6">
             <h2 className="text-xl font-semibold mb-4">💬 Communication</h2>
             <EscrowChat 

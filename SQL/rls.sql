@@ -9,6 +9,8 @@ alter table one_time_tokens enable row level security;
 -- PROFILES
 create policy "own profile read" on profiles for select using (auth.uid() = id);
 create policy "own profile update" on profiles for update using (auth.uid() = id);
+create policy "service role insert profiles" on profiles for insert with check (auth.role() = 'service_role');
+create policy "service role update profiles" on profiles for update using (auth.role() = 'service_role');
 create policy "admin read profiles" on profiles for select using (
   exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
 );
