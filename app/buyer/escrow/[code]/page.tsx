@@ -103,26 +103,36 @@ export default function BuyerEscrowPage() {
       setTimerLabel('Time left to pay:');
       setTimerEnd(deadline);
     } else if (escrow.status === 'in_progress') {
-      // Reset auto-confirm flag when entering in_progress status (only if it was previously not in_progress)
-      if (escrowPrevStatus.current !== 'in_progress') {
-        setAutoConfirmTriggered(false);
+      // Only recalculate timer if we don't already have one running for this in_progress period
+      // This prevents timer reset on page refresh
+      if (!timerEnd || !timerLabel.includes('confirm receipt') || escrowPrevStatus.current !== 'in_progress') {
+        // Reset auto-confirm flag when entering in_progress status (only if it was previously not in_progress)
+        if (escrowPrevStatus.current !== 'in_progress') {
+          setAutoConfirmTriggered(false);
+        }
+        escrowPrevStatus.current = 'in_progress';
+        
+        // Find when escrow entered in_progress status
+        const statusLogs = (escrow as any).status_logs || [];
+        const inProgressLog = statusLogs.find((log: any) => log.status === 'in_progress');
+        
+        console.log('Timer: escrow status is in_progress, statusLogs:', statusLogs.length, 'inProgressLog:', inProgressLog);
+        
+        // If we have a log entry for in_progress, use that timestamp + 5 minutes
+        // Otherwise, assume it just entered in_progress and start 5-minute countdown from now
+        const inProgressStart = inProgressLog 
+          ? new Date(inProgressLog.created_at)
+          : new Date(); // Fallback to current time
+        
+        console.log('Timer: inProgressStart:', inProgressStart, 'current time:', new Date());
+        
+        const deadline = new Date(inProgressStart.getTime() + 5 * 60 * 1000); // 5 minutes after entering in_progress
+        
+        console.log('Timer: calculated deadline:', deadline, 'time left:', Math.max(0, deadline.getTime() - Date.now()) / 1000, 'seconds');
+        
+        setTimerLabel('Time left to confirm receipt:');
+        setTimerEnd(deadline);
       }
-      escrowPrevStatus.current = 'in_progress';
-      
-      // Find when escrow entered in_progress status
-      const statusLogs = (escrow as any).status_logs || [];
-      const inProgressLog = statusLogs.find((log: any) => log.status === 'in_progress');
-      
-      // If we have a log entry for in_progress, use that timestamp + 5 minutes
-      // Otherwise, assume it just entered in_progress and start 5-minute countdown from now
-      const inProgressStart = inProgressLog 
-        ? new Date(inProgressLog.created_at)
-        : new Date(); // Fallback to current time
-      
-      const deadline = new Date(inProgressStart.getTime() + 5 * 60 * 1000); // 5 minutes after entering in_progress
-      
-      setTimerLabel('Time left to confirm receipt:');
-      setTimerEnd(deadline);
     } else {
       // Clear timer for any other status (completed, cancelled, closed, refunded, etc.)
       escrowPrevStatus.current = escrow.status;
