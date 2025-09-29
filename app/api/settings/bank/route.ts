@@ -6,14 +6,10 @@ export async function GET(request: NextRequest) {
     // Use service role client for public access to bank settings
     const supabase = createServiceRoleClient()
     
-    console.log('[settings/bank] Using service role client')
-    
     // First, let's see all rows in admin_settings
     const { data: allRows, error: allError } = await (supabase as any)
       .from('admin_settings')
       .select('*')
-    
-    console.log('[settings/bank] All admin_settings rows:', { allRows, error: allError })
     
     // Get the latest settings row by updated_at
     const { data: settings, error } = await (supabase as any)
@@ -22,8 +18,6 @@ export async function GET(request: NextRequest) {
       .order('updated_at', { ascending: false })
       .limit(1)
       .single()
-
-    console.log('[settings/bank] Latest settings result:', { settings, error })
 
     if (error) {
       console.error('Error fetching bank settings:', error)

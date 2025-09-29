@@ -11,26 +11,10 @@ import { ESCROW_STATUS } from '@/lib/status'
  */
 export async function GET(request: NextRequest) {
   try {
-    // TEMP LOGGING: inspect incoming headers and cookies to diagnose SSR auth visibility
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[API] my-active - incoming headers:')
-      // eslint-disable-next-line no-console
-      console.log('  authorization:', request.headers.get('authorization'))
-      // eslint-disable-next-line no-console
-      console.log('  cookie:', request.headers.get('cookie'))
-    } catch (l) {}
     const supabase = createServerClientWithCookies()
     const serviceClient = createServiceRoleClient()
 
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    // TEMP LOGGING: surface whether a user was found for incoming request
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[API] my-active - user present:', !!user)
-      // eslint-disable-next-line no-console
-      if (user) console.log('[API] my-active - user id:', user.id)
-    } catch (l) {}
 
     // If no user from cookies, attempt to accept a one-time token (header or query)
     let resolvedUser = user
@@ -53,12 +37,8 @@ export async function GET(request: NextRequest) {
 
       if (token) {
         try {
-          // eslint-disable-next-line no-console
-          console.log('[API] my-active - found one-time token, attempting verify')
           const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
           const userId = await verifyAndConsumeSignedToken(token)
-          // eslint-disable-next-line no-console
-          console.log('[API] my-active - token verify result userId:', userId)
           if (userId) {
             // populate minimal user object so subsequent logic can use user.id
             resolvedUser = { id: userId } as any
@@ -75,8 +55,6 @@ export async function GET(request: NextRequest) {
         const match = cookieHeader.match(/(?:^|;)\s*test_session=([^;\s]+)/)
         if (!resolvedUser && match && match[1]) {
           resolvedUser = { id: match[1] } as any
-          // eslint-disable-next-line no-console
-          console.log('[API] my-active - using test_session cookie, userId=', match[1])
         }
       } catch {
         // ignore
@@ -103,7 +81,7 @@ export async function GET(request: NextRequest) {
     // Fetch seller active escrow (limit 10)
     const { data: sellerData, error: sellerErr } = await serviceClient
       .from('escrows')
-      .select('id, code, status, seller_id, buyer_id')
+      .select('id, code, status, seller_id, buyer_id, description, price')
       .eq('seller_id', userId)
       .in('status', activeStatuses)
       .order('created_at', { ascending: false })
@@ -118,7 +96,7 @@ export async function GET(request: NextRequest) {
     // Fetch buyer active escrows (limit 10)
     const { data: buyerData, error: buyerErr } = await serviceClient
       .from('escrows')
-      .select('id, code, status, seller_id, buyer_id')
+      .select('id, code, status, seller_id, buyer_id, description, price')
       .eq('buyer_id', userId)
       .in('status', activeStatuses)
       .order('created_at', { ascending: false })
@@ -128,12 +106,6 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching buyer active escrows:', buyerErr)
       return NextResponse.json({ error: 'Failed to fetch buyer active escrows' }, { status: 500 })
     }
-
-    // TEMP LOGGING: log the counts being returned
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[API] my-active - returning counts: seller=', (sellerData || []).length, 'buyer=', (buyerData || []).length)
-    } catch (l) {}
 
     return NextResponse.json({ seller: sellerData || [], buyer: buyerData || [] })
   } catch (error) {

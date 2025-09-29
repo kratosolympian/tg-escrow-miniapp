@@ -1,1107 +1,521 @@
-'use client'
+"use client";
 
-import { useEffect, useState, useRef, useMemo } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import FeedbackBanner from '../../../../components/FeedbackBanner'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
-import Image from 'next/image'
-import { formatNaira } from '@/lib/utils'
-import { getStatusLabel, getStatusColor } from '@/lib/status'
-import EscrowChat from '@/components/EscrowChat'
+import { useEffect, useState, useRef } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import { supabase } from "@/lib/supabaseClient";
+import FeedbackBanner from "../../../../components/FeedbackBanner";
+import EscrowChat from "@/components/EscrowChat";
+import { formatNaira } from "@/lib/utils";
+import { getStatusLabel, getStatusColor, ESCROW_STATUS } from "@/lib/status";
 
-interface User {
-  id: string
-  email: string
-}
-
-interface Escrow {
-  id: string
-  code: string
-  description: string
-  price: number
-  admin_fee: number
-  product_image_url?: string
-  status: string
-  created_at: string
-  seller_id: string
-  buyer_id?: string
-  payment_deadline?: string
-  expires_at?: string
-  seller?: { telegram_id: string }
-  buyer?: { telegram_id: string }
-  receipts?: Array<{
-    id: string
-    created_at: string
-    file_path: string
-    signed_url?: string
-  }>
-  status_logs?: Array<{
-    id: string
-    status: string
-    created_at: string
-    changed_by: string
-  }>
-}
-
-interface BankSettings {
-  bank_name: string
-  account_number: string
-  account_holder: string
-}
-
+// Escrow/user types with nulls allowed for DB fields
+export type Escrow = {
+  id: string | null;
+  code: string | null;
+  status: string | null;
+  buyer_id?: string | null;
+  seller_id?: string | null;
+  admin_fee?: number | null;
+  product_image_url?: string | null;
+  // DB uses `description` and `price` (seller page). Accept both for compatibility.
+  description?: string | null;
+  product_description?: string | null;
+  price?: number | null;
+  amount?: number | null;
+  created_at?: string | null;
+  receipts?: any[];
+  buyer?: { email?: string | null; full_name?: string | null } | null;
+  seller?: { email?: string | null; full_name?: string | null } | null;
+};
+export type User = { id: string; email?: string | null };
 
 export default function BuyerEscrowPage() {
-  // ...existing code...
-  // All hooks must be at the top, before any return or conditional
-  // All hooks must be at the top, before any return or conditional
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const params = useParams()
-  const code = params.code as string
-  const [escrow, setEscrow] = useState<Escrow | null>(null)
+  const { code } = useParams();
+  const [escrow, setEscrow] = useState<Escrow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [receiptUrls, setReceiptUrls] = useState<Record<string, string>>({})
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [paymentProof, setPaymentProof] = useState<File | null>(null)
-  const [paymentProofUrl, setPaymentProofUrl] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [user, setUser] = useState<User | null>(null)
-  const [supabaseUser, setSupabaseUser] = useState<any>(null)
-  const [showAuthForm, setShowAuthForm] = useState(false)
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup')
-  const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
-  const [authLoading, setAuthLoading] = useState(false)
-  const [joining, setJoining] = useState(false)
-  const authFormRef = useRef<HTMLDivElement | null>(null)
-  const escrowPrevStatus = useRef<string | null>(null)
-  // Timer hooks (must be declared here)
-  const [timerLabel, setTimerLabel] = useState<string>('');
-  const [timerEnd, setTimerEnd] = useState<Date | null>(null);
-  const [timerValue, setTimerValue] = useState<string>('');
+  const [statusChangeNotification, setStatusChangeNotification] = useState<string | null>(null)
 
-  // Debug: Log status changes
   useEffect(() => {
-    if (escrow) {
-      console.log('Escrow status changed to:', escrow.status);
-    }
-  }, [escrow?.status]);
-
-  // Always show timer for buyer in any active state, fallback if missing
-  useEffect(() => {
-    if (!escrow || !user) {
-      setTimerLabel('');
-      setTimerEnd(null);
-      return;
-    }
-    const isBuyer = String(escrow.buyer_id) === String(user.id);
-    if (!isBuyer) {
-      setTimerLabel('');
-      setTimerEnd(null);
-      return;
-    }
-    if (escrow.status === 'waiting_payment') {
-      // Use expires_at if available, otherwise calculate from created_at + 30 minutes
-      const deadline = escrow.expires_at 
-        ? new Date(escrow.expires_at)
-        : new Date(new Date(escrow.created_at).getTime() + 30 * 60 * 1000); // 30 minutes after creation
-      
-      setTimerLabel('Time left to pay:');
-      setTimerEnd(deadline);
-    } else if (escrow.status === 'in_progress') {
-      // Only recalculate timer if we don't already have one running for this in_progress period
-      // This prevents timer reset on page refresh
-      if (!timerEnd || !timerLabel.includes('confirm receipt') || escrowPrevStatus.current !== 'in_progress') {
-        // Reset auto-confirm flag when entering in_progress status (only if it was previously not in_progress)
-        if (escrowPrevStatus.current !== 'in_progress') {
-          setAutoConfirmTriggered(false);
+    async function fetchEscrow() {
+      setLoading(true);
+      setError("");
+      const codeStr = Array.isArray(code) ? code[0] : code;
+      try {
+        const resp = await fetch(`/api/escrow/by-id/${encodeURIComponent(String(codeStr))}`, { credentials: 'include' })
+        if (!resp.ok) {
+          const j = await resp.json().catch(() => ({}))
+          setError(j.error || 'Failed to load')
+          setEscrow(null)
+          if (resp.status === 403) console.warn('[dev] escrow fetch returned 403')
+        } else {
+          const j = await resp.json()
+          setEscrow(j.escrow as Escrow)
         }
-        escrowPrevStatus.current = 'in_progress';
-        
-        // Find when escrow entered in_progress status
-        const statusLogs = (escrow as any).status_logs || [];
-        const inProgressLog = statusLogs.find((log: any) => log.status === 'in_progress');
-        
-        console.log('Timer: escrow status is in_progress, statusLogs:', statusLogs.length, 'inProgressLog:', inProgressLog);
-        
-        // If we have a log entry for in_progress, use that timestamp + 5 minutes
-        // Otherwise, assume it just entered in_progress and start 5-minute countdown from now
-        const inProgressStart = inProgressLog 
-          ? new Date(inProgressLog.created_at)
-          : new Date(); // Fallback to current time
-        
-        console.log('Timer: inProgressStart:', inProgressStart, 'current time:', new Date());
-        
-        const deadline = new Date(inProgressStart.getTime() + 5 * 60 * 1000); // 5 minutes after entering in_progress
-        
-        console.log('Timer: calculated deadline:', deadline, 'time left:', Math.max(0, deadline.getTime() - Date.now()) / 1000, 'seconds');
-        
-        setTimerLabel('Time left to confirm receipt:');
-        setTimerEnd(deadline);
+      } catch (err) {
+        console.error('Error fetching escrow (server API):', err)
+        setError('Failed to load')
+        setEscrow(null)
+      } finally {
+        setLoading(false)
       }
-    } else {
-      // Clear timer for any other status (completed, cancelled, closed, refunded, etc.)
-      escrowPrevStatus.current = escrow.status;
-      setTimerLabel('');
-      setTimerEnd(null);
     }
-  }, [escrow, user]);
-
-  // Feedback auto-dismiss
-  useEffect(() => {
-    if (error || success) {
-      const timer = setTimeout(() => {
-        setError('');
-        setSuccess('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, success]);
-
-  useEffect(() => {
-    // Check Supabase auth state
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        setUser({ id: data.user.id ?? '', email: data.user.email ?? '' });
-        setSupabaseUser(data.user);
-        setShowAuthForm(false);
-      } else {
-        setUser(null);
-        setSupabaseUser(null);
-      }
-    });
-    fetchEscrow('initial');
-    fetchCurrentUser();
-    // Listen for auth state changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser({ id: session.user.id ?? '', email: session.user.email ?? '' });
-        setSupabaseUser(session.user);
-        setShowAuthForm(false);
-      } else {
-        setUser(null);
-        setSupabaseUser(null);
-      }
-    });
-    return () => {
-      listener?.subscription.unsubscribe();
-    };
+    if (code) fetchEscrow();
   }, [code]);
 
-  // Polling for escrow updates (similar to seller page)
+  // Fetch current user (to determine if buyer and allow upload)
   useEffect(() => {
-    if (!escrow) return;
-    
-    // Don't poll for completed/cancelled/refunded escrows
-    if (['completed', 'cancelled', 'refunded', 'closed'].includes(escrow.status)) {
-      return;
-    }
-    
-    const interval = setInterval(() => {
-      // refresh every 5s for better UX
-      fetchEscrow('polling')
-    }, 5000)
-    return () => {
-      clearInterval(interval);
-    }
-  }, [escrow?.id, escrow?.status])
-
-  const escrowProductImageUrl = useMemo(() => escrow?.product_image_url, [escrow?.product_image_url]);
-
-  useEffect(() => {
-    if (escrowProductImageUrl && user) {
-      fetchProductImage()
-    }
-  }, [escrowProductImageUrl, user])
-
-  useEffect(() => {
-    if (escrow?.receipts && user && isUserBuyer) {
-      fetchReceiptSignedUrls()
-    }
-  }, [escrow?.receipts, user])
-
-  const [realtimeChannel, setRealtimeChannel] = useState<any>(null)
-
-  const realtimeChannelRef = useRef<any>(null)
-  const currentEscrowIdRef = useRef<string | null>(null)
-
-  // Real-time subscription for escrow status changes
-  useEffect(() => {
-    if (!escrow?.id) {
-      // Clean up channel if escrow becomes unavailable
-      if (realtimeChannelRef.current) {
-        supabase.removeChannel(realtimeChannelRef.current)
-        realtimeChannelRef.current = null
-        currentEscrowIdRef.current = null
-        setRealtimeChannel(null)
-      }
-      return
-    }
-
-    // If we already have a channel for this escrow, don't create another
-    if (realtimeChannelRef.current && currentEscrowIdRef.current === escrow.id) {
-      return
-    }
-
-    // Clean up previous channel if it exists
-    if (realtimeChannelRef.current) {
-      supabase.removeChannel(realtimeChannelRef.current)
-      realtimeChannelRef.current = null
-    }
-
-    currentEscrowIdRef.current = escrow.id
-
-    const channel = supabase
-      .channel(`escrow-${escrow.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'escrows',
-          filter: `id=eq.${escrow.id}`
-        },
-        (payload) => {
-          // Real-time updates may not include all related data, so fetch complete data
-          console.log('Real-time escrow update detected, fetching complete data');
-          fetchEscrow('realtime-update');
+    async function fetchCurrentUser() {
+      try {
+  const res = await fetch('/api/auth/me', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          // API returns { user: { ... } } - prefer the nested user object but
+          // fall back to the top-level response for robustness.
+          setCurrentUser((data && data.user) ? data.user : data)
         }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Real-time: Successfully subscribed to escrow updates')
-        }
-      })
-
-    realtimeChannelRef.current = channel
-    setRealtimeChannel(channel)
-
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel)
+      } catch (err) {
+        // ignore
       }
     }
-  }, [escrow?.id])
+    fetchCurrentUser()
+  }, [])
 
-  // Clean up channel on unmount
+  // Instrument navigation calls during debugging: log stack traces when the page
+  // is being replaced/assigned/reloaded so we can find what triggers full-page
+  // navigations in the wild. This is intentionally lightweight and wrapped in
+  // try/catch to avoid interfering with normal behavior.
   useEffect(() => {
-    return () => {
-      if (realtimeChannelRef.current) {
-        supabase.removeChannel(realtimeChannelRef.current)
-        realtimeChannelRef.current = null
-        currentEscrowIdRef.current = null
+    if (typeof window === 'undefined') return
+    const navLog = (kind: string, url?: string) => {
+      try {
+        // eslint-disable-next-line no-console
+        console.warn(`[nav-instrument] ${kind}${url ? ` -> ${url}` : ''}`)
+        // eslint-disable-next-line no-console
+        console.trace()
+      } catch (e) {}
+    }
+
+    const origReplace = window.location.replace?.bind(window.location)
+    const origReload = window.location.reload?.bind(window.location)
+    const origAssign = (window.location as any).assign?.bind(window.location)
+
+    try {
+      if (origReplace) {
+        // @ts-ignore
+        window.location.replace = (url: string) => {
+          navLog('location.replace', url)
+          return origReplace(url)
+        }
       }
+    } catch (e) {
+      // ignore - not writable in some environments
+    }
+
+    try {
+      if (origReload) {
+        // @ts-ignore
+        window.location.reload = () => {
+          navLog('location.reload')
+          return origReload()
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      if (origAssign) {
+        // @ts-ignore
+        ;(window.location as any).assign = (url: string) => {
+          navLog('location.assign', url)
+          return origAssign(url)
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    return () => {
+      try { if (origReplace) (window.location as any).replace = origReplace } catch (e) {}
+      try { if (origReload) (window.location as any).reload = origReload } catch (e) {}
+      try { if (origAssign) (window.location as any).assign = origAssign } catch (e) {}
     }
   }, [])
 
-  const fetchEscrow = async (source = 'unknown') => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const response = await fetch(`/api/escrow/by-code/${code}`,
-        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-      );
-      if (response.ok) {
-        const data = await response.json();
-        
-        console.log(`fetchEscrow (${source}): received status: ${data.status}, current status: ${escrow?.status}`);
-        
-        // Only update state if data actually changed
-        setEscrow(prev => {
-          if (!prev) return data;
-          // Compare key fields to avoid unnecessary re-renders
-          const changed = 
-            prev.status !== data.status ||
-            prev.buyer_id !== data.buyer_id ||
-            prev.product_image_url !== data.product_image_url ||
-            JSON.stringify(prev.receipts) !== JSON.stringify(data.receipts) ||
-            JSON.stringify(prev.status_logs) !== JSON.stringify(data.status_logs);
-          
-          if (changed) {
-            console.log(`fetchEscrow (${source}): status changed from ${prev.status} to ${data.status}`);
-            return data;
-          } else {
-            console.log(`fetchEscrow (${source}): no changes detected`);
-            return prev;
-          }
-        });
-      } else {
-        setError('Transaction not found');
-      }
-    } catch (error) {
-      console.error('Error fetching escrow:', error);
-      setError('Failed to load transaction');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // fetchBankSettings removed
-
-  // checkAuthStatus removed (now handled by Supabase SDK)
-
-  const fetchCurrentUser = async () => {
-    // Optionally fetch additional user info if needed, or remove if not used
-    // setCurrentUser(supabaseUser) or fetch from your DB if needed
-    setCurrentUser(supabaseUser);
-  }
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setError('');
-    try {
-      if (authMode === 'login') {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: authForm.email,
-          password: authForm.password,
-        });
-        if (error) {
-          setError(error.message || 'Authentication failed');
-        } else if (data.user) {
-          setUser({ id: data.user.id ?? '', email: data.user.email ?? '' });
-          setSupabaseUser(data.user);
-          setShowAuthForm(false);
-          setAuthForm({ email: '', password: '', name: '' });
-          setSuccess('Logged in successfully!');
-        }
-      } else {
-        const { data, error } = await supabase.auth.signUp({
-          email: authForm.email,
-          password: authForm.password,
-        });
-        if (error) {
-          setError(error.message || 'Signup failed');
-        } else if (data.user) {
-          setUser({ id: data.user.id ?? '', email: data.user.email ?? '' });
-          setSupabaseUser(data.user);
-          setShowAuthForm(false);
-          setAuthForm({ email: '', password: '', name: '' });
-          setSuccess('Account created successfully!');
-        }
-      }
-    } catch (error) {
-      setError('Authentication failed. Please try again.');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleJoinTransaction = async () => {
-    if (!user || !escrow) return;
-    setJoining(true);
-    setError('');
-    try {
-      // Force a session refresh to get the latest token
-      await supabase.auth.refreshSession();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-  // Do not log tokens to console in client-side code.
-      if (!token) {
-        setError('Authentication failed: No token present. Please log out and log in again.');
-        setJoining(false);
-        return;
-      }
-      const response = await fetch('/api/escrow/join', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ code: escrow.code })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setSuccess('Successfully joined the transaction!');
-        await fetchEscrow('join'); // Ensure latest escrow is loaded
-      } else {
-        setError(data.error || 'Failed to join transaction');
-      }
-    } catch (error) {
-      console.error('Join error:', error);
-      setError('Failed to join transaction. Please try again.');
-    } finally {
-      setJoining(false);
-    }
-  }
-
-  const fetchProductImage = async () => {
-    if (!escrowProductImageUrl || !user) return
-    
-    // If it's already a valid URL (starts with http), use it directly
-    if (escrowProductImageUrl.startsWith('http://') || escrowProductImageUrl.startsWith('https://')) {
-      setProductImageUrl(escrowProductImageUrl)
-      return
-    }
-    
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      
-      const response = await fetch('/api/storage/sign-url', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` })
-        },
-        body: JSON.stringify({
-          path: escrowProductImageUrl,
-          bucket: 'product-images'
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setProductImageUrl(data.signedUrl)
-      } else {
-        const errorData = await response.json()
-        console.error('Buyer: Sign URL API error:', errorData)
-      }
-    } catch (error) {
-      console.error('Buyer: Error fetching product image:', error)
-    }
-  }
-
-  const fetchReceiptSignedUrls = async () => {
-    if (!escrow?.receipts || !user || !isUserBuyer) return
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-
-      // Generate signed URLs for all receipts
-      const receiptsWithUrls = await Promise.all(
-        escrow.receipts.map(async (receipt) => {
-          try {
-            const response = await fetch('/api/storage/sign-url', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(token && { Authorization: `Bearer ${token}` })
-              },
-              body: JSON.stringify({
-                path: receipt.file_path,
-                bucket: 'receipts'
-              })
-            })
-
-            if (response.ok) {
-              const data = await response.json()
-              return { ...receipt, signed_url: data.signedUrl }
-            } else {
-              console.error('Buyer: Sign URL API error for receipt:', receipt.id)
-              return receipt
-            }
-          } catch (error) {
-            console.error('Buyer: Error fetching signed URL for receipt:', receipt.id, error)
-            return receipt
-          }
-        })
-      )
-
-      // Update escrow with signed URLs
-      setEscrow(prev => prev ? { ...prev, receipts: receiptsWithUrls } : null)
-    } catch (error) {
-      console.error('Buyer: Error fetching receipt signed URLs:', error)
-    }
-  }
-
-  // New payment proof upload logic - automatic upload on file selection
-  const handlePaymentProofChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setPaymentProof(file);
-      // Automatically upload the file
-      await handleUploadPaymentProof(file);
-    }
-  };
-
-  const handleUploadPaymentProof = async (file?: File) => {
-    const fileToUpload = file || paymentProof;
-    if (!fileToUpload || !escrow) return;
-    setUploading(true);
-    setError('');
-    setSuccess('');
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const formData = new FormData();
-      formData.append('file', fileToUpload);
-      formData.append('escrowId', escrow.id);
-
-      const uploadResp = await fetch('/api/escrow/upload-receipt', {
-        method: 'POST',
-        body: formData,
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-
-      if (!uploadResp.ok) {
-        const errorData = await uploadResp.json().catch(() => ({}));
-        setError(errorData.error || 'Failed to upload payment proof');
-        setUploading(false);
-        return;
-      }
-
-      setPaymentProofUrl(URL.createObjectURL(fileToUpload));
-      setSuccess('Payment proof uploaded successfully! Your escrow is now marked as paid and waiting for admin verification.');
-      
-      // Force immediate refresh of escrow data after upload
-      console.log('Payment proof uploaded, forcing immediate escrow refresh');
-      await fetchEscrow('upload-receipt-immediate');
-      
-      // Also trigger a refresh after a short delay to ensure real-time updates work
-      setTimeout(() => {
-        console.log('Delayed refresh after payment proof upload');
-        fetchEscrow('upload-receipt-delayed');
-      }, 1000);
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError('Failed to upload payment proof');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-
-
-  const [confirming, setConfirming] = useState(false);
-  const [autoConfirmTriggered, setAutoConfirmTriggered] = useState(false);
-  const handleConfirmReceived = async () => {
-    if (!escrow) return;
-    
-    // Prevent multiple simultaneous calls
-    if (confirming) {
-      return;
-    }
-    
-    // Double-check status before confirming (prevent race conditions)
-    if (escrow.status !== 'in_progress') {
-      console.log('Cannot confirm receipt: escrow status is', escrow.status);
-      setError('Cannot confirm receipt in current status');
-      return;
-    }
-    
-    setConfirming(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const response = await fetch('/api/escrow/confirm-received', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ escrowId: escrow.id })
-      });
-      if (response.ok) {
-        setSuccess('Receipt confirmed successfully!');
-        // Wait a moment to ensure DB is updated, then fetch fresh
-        setTimeout(() => {
-          fetchEscrow('confirm-receipt');
-          setConfirming(false);
-        }, 800);
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to confirm receipt');
-        setConfirming(false);
-      }
-    } catch (error) {
-      console.error('Error confirming receipt:', error);
-      setError('Failed to confirm receipt');
-      setConfirming(false);
-    }
-  };
-
-  const expireEscrow = async () => {
-    if (!escrow) return;
-    
-    // Don't attempt to expire if escrow is already in a terminal state
-    if (['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
-      console.log('Escrow is already in terminal state:', escrow.status, '- not attempting to expire');
-      return;
-    }
-    
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const response = await fetch('/api/escrow/expire', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ escrowId: escrow.id })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Escrow expired successfully');
-        // Refresh escrow data to show updated status
-        fetchEscrow('expire-escrow');
-      } else {
-        const data = await response.json();
-        console.error('Failed to expire escrow:', data.error);
-        setError(data.error || 'Failed to expire transaction');
-      }
-    } catch (error) {
-      console.error('Error expiring escrow:', error);
-      setError('Failed to expire transaction');
-    }
-  };
-
+  // When escrow loads, fetch signed product image and receipts if present
   useEffect(() => {
-    if (!timerEnd || !timerLabel) {
-      setTimerValue('');
-      return;
-    }
-    
-    // Stop timer if escrow is in a terminal state
-    if (escrow && ['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
-      setTimerLabel('');
-      setTimerEnd(null);
-      setTimerValue('');
-      return;
-    }
-    
-    const updateTimer = () => {
-      const now = Date.now();
-      const secs = Math.max(0, Math.floor((timerEnd.getTime() - now) / 1000));
-      const h = Math.floor(secs / 3600);
-      const m = Math.floor((secs % 3600) / 60);
-      const s = secs % 60;
-      setTimerValue(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
-      
-      // Auto-confirm receipt if timer expired and escrow is in_progress
-      if (secs <= 0 && escrow?.status === 'in_progress' && !confirming && !autoConfirmTriggered) {
-        setAutoConfirmTriggered(true);
-        handleConfirmReceived();
-      }
-      
-      // Expire escrow if payment deadline reached and still waiting for payment
-      // Only expire if escrow is still in expirable status
-      if (secs <= 0 && escrow?.status === 'waiting_payment' && timerLabel === 'Time left to pay:' && !['closed', 'completed', 'cancelled', 'refunded'].includes(escrow.status)) {
-        console.log('Payment deadline reached, expiring escrow');
-        expireEscrow();
-      }
-      
-      // Note: No expiration for in_progress status - it auto-completes instead
-      if (secs <= 0 && timerLabel === 'Time left to pay:' && escrow?.status !== 'waiting_payment') {
-        console.log('Payment timer expired but escrow status changed to:', escrow?.status, '- stopping timer');
-        // Clear the timer when status has changed
-        setTimerLabel('');
-        setTimerEnd(null);
-      }
-    };
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [timerEnd, timerLabel, escrow?.status, confirming]);
+    if (!escrow) return
+    const fetchProductImage = async () => {
+      if (!escrow.product_image_url) return
+      try {
+        // If the server already returned a signed URL (preferred), use it
+        if ((escrow as any).product_image_signed_url) {
+          setProductImageUrl((escrow as any).product_image_signed_url)
+          return
+        }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Loading transaction...</p>
-        </div>
-      </div>
-    )
+        // Fallback: request a signed URL from the sign-url API
+        const resp = await fetch('/api/storage/sign-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ path: escrow.product_image_url, bucket: 'product-images' })
+        })
+        if (resp.ok) {
+          const d = await resp.json()
+          setProductImageUrl(d.signedUrl)
+        }
+      } catch (err) {
+        console.error('Error fetching product image signed url', err)
+      }
+    }
+
+    const fetchReceiptImages = async () => {
+      if (!Array.isArray(escrow.receipts) || escrow.receipts.length === 0) return
+      const urls: Record<string,string> = {}
+      for (const receipt of escrow.receipts) {
+        try {
+          // Prefer server-provided signed_url if available
+          if (receipt.signed_url) {
+            urls[receipt.id] = receipt.signed_url
+            continue
+          }
+
+          // Fallback to sign-url API
+          const resp = await fetch('/api/storage/sign-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ path: receipt.file_path, bucket: 'receipts' })
+          })
+          if (resp.ok) {
+            const d = await resp.json()
+            urls[receipt.id] = d.signedUrl
+          }
+        } catch (err) {
+          console.error('Error fetching receipt signed url', err)
+        }
+      }
+      setReceiptUrls(urls)
+    }
+
+    fetchProductImage()
+    fetchReceiptImages()
+  }, [escrow])
+
+  // Subscribe to escrow updates (status changes, receipts, etc.) so UI updates in real-time
+  useEffect(() => {
+    if (!escrow || !escrow.id) return
+    const channel = supabase
+      .channel(`escrow-updates-${escrow.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${escrow.id}` }, (payload) => {
+        try {
+          console.debug('[BuyerEscrowPage] escrow payload', payload)
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const newRow = payload.new as Partial<Escrow>
+            setEscrow(prev => {
+              const merged = { ...(prev || {}), ...(newRow || {}) } as Escrow
+              // Check if status changed
+              if (prev && prev.status !== merged.status) {
+                setStatusChangeNotification(`Status changed to: ${merged.status}`)
+                // Auto-dismiss notification after 5 seconds
+                setTimeout(() => setStatusChangeNotification(null), 5000)
+              }
+              return merged
+            })
+            // If receipts or product image changed, let existing effects pick up signed urls
+          }
+        } catch (err) {
+          console.error('Error handling escrow realtime payload', err)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [escrow?.id])
+
+  const handleReceiptChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!escrow) return
+    if (!e.target.files || e.target.files.length === 0) return
+    const file = e.target.files[0]
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('escrowId', escrow.id || '')
+      const resp = await fetch('/api/escrow/upload-receipt', {
+        method: 'POST',
+        body: form,
+        // ensure httpOnly cookie session is sent with the upload request
+        credentials: 'include'
+      })
+      if (resp.ok) {
+        // refresh escrow to pick up new receipt and status
+        // Use the authenticated server API to re-fetch the escrow so we
+        // receive member-only fields (receipts, signed URLs) and respect RLS.
+        try {
+          const codeStr = Array.isArray(code) ? code[0] : code
+          const r = await fetch(`/api/escrow/by-id/${encodeURIComponent(String(codeStr))}`, { credentials: 'include' })
+          if (r.ok) {
+            const j = await r.json()
+            setEscrow(j.escrow as Escrow)
+          } else {
+            const j = await r.json().catch(() => ({}))
+            console.warn('Post-upload escrow refresh failed', r.status, j)
+          }
+        } catch (e) {
+          console.error('Post-upload refresh error', e)
+        }
+      } else {
+        const d = await resp.json().catch(() => ({}))
+        setError(d.error || 'Failed to upload receipt')
+      }
+    } catch (err) {
+      console.error('Upload receipt error', err)
+      setError('Failed to upload receipt')
+    } finally {
+      setUploading(false)
+    }
   }
 
-  if (!escrow) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error || 'Transaction not found'}</p>
-          <Link href="/buyer" className="btn-primary">
-            Back to Buyer Portal
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  const totalAmount = escrow.price + escrow.admin_fee
-  const canConfirmReceived = escrow.status === 'in_progress'
-  
-  // Check if user can join this transaction
-  // For public view, we use has_buyer field since seller_id/buyer_id are not returned when not authenticated
-  const canJoinTransaction = escrow.status === 'created' && !escrow.buyer_id && (!user || String(escrow.seller_id) !== String(user.id));
-  const canJoinPublic = escrow.status === 'created' && !(escrow as any).has_buyer; // For unauthenticated users
-  const isUserBuyer = user && String(escrow.buyer_id) === String(user.id);
-  const isUserSeller = user && String(escrow.seller_id) === String(user.id);
-  const needsAuthentication = (canJoinTransaction || canJoinPublic) && !user;
-
-  if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
-    // debug flag enabled; no client-side token/log leakage in production build
+  // Helper: determine if the buyer should be allowed to upload a receipt for this escrow status
+  const canUploadReceipt = (status?: string | null) => {
+    if (!status) return true
+    // Disallow uploading once the escrow has progressed to admin review or later stages
+    const disallowed = [
+      ESCROW_STATUS.WAITING_ADMIN,
+      ESCROW_STATUS.PAYMENT_CONFIRMED,
+      ESCROW_STATUS.IN_PROGRESS,
+      ESCROW_STATUS.COMPLETED,
+      ESCROW_STATUS.REFUNDED,
+      ESCROW_STATUS.CLOSED,
+    ]
+    return !disallowed.includes(status as any)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      {/* Debug banner removed — do not leak tokens in UI */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white p-4">
       <div className="container mx-auto max-w-2xl">
-        <div className="mb-6">
-          <Link href="/buyer" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">
-            ← Back to Buyer Portal
-          </Link>
-        </div>
-
-        {/* Transaction Header with dynamic timer */}
-        <div className="card mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">Transaction {escrow.code}</h1>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(escrow.status as any)}`}>
-              {getStatusLabel(escrow.status as any)}
-              {process.env.NODE_ENV === 'development' && (
-                <span className="ml-2 text-xs opacity-50">({escrow.status})</span>
-              )}
-            </span>
-          </div>
-          {productImageUrl && (
-            <div className="mb-4">
-              {(() => {
-                console.log('Buyer: About to render Image with productImageUrl:', productImageUrl)
-                console.log('Buyer: Is it a valid URL?', productImageUrl.startsWith('http'))
-                return null
-              })()}
-              <Image
-                src={productImageUrl}
-                alt="Product"
-                width={300}
-                height={200}
-                className="rounded-lg object-cover"
-              />
-            </div>
-          )}
-          <div className="space-y-3">
-            <div>
-              <h3 className="font-semibold text-gray-900">Description</h3>
-              <p className="text-gray-600">{escrow.description}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-semibold text-gray-900">Price</h3>
-                <p className="text-lg">{formatNaira(escrow.price)}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Service Fee</h3>
-                <p className="text-lg">{formatNaira(escrow.admin_fee)}</p>
-              </div>
-            </div>
-            <div className="pt-3 border-t">
-              <h3 className="font-semibold text-gray-900">Total Amount</h3>
-              <p className="text-2xl font-bold text-green-600">{formatNaira(totalAmount)}</p>
-            </div>
-            {/* Timer for buyer in any active state */}
-            {isUserBuyer && timerLabel && (
-              <div>
-                <span className="text-gray-500">{timerLabel}</span>{timerValue && timerEnd ? <span className="font-mono font-semibold"> {timerValue}</span> : null}
-              </div>
-            )}
-            {/* Always show admin bank details for buyer in any active state */}
-            {isUserBuyer && (escrow as any).admin_bank && escrow.status !== 'completed' && escrow.status !== 'cancelled' && (
-              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900">Pay To</h3>
-                <div>
-                  <span className="font-medium">Bank Name:</span> {(escrow as any).admin_bank.bank_name || <span className='text-red-600'>Missing</span>}
-                </div>
-                <div>
-                  <span className="font-medium">Account Number:</span> <span className="font-mono text-lg">{(escrow as any).admin_bank.account_number || <span className='text-red-600'>Missing</span>}</span>
-                </div>
-                <div>
-                  <span className="font-medium">Account Holder:</span> {(escrow as any).admin_bank.account_holder || (escrow as any).admin_bank.account_holder_name || <span className='text-red-600'>Missing</span>}
+        {loading && (
+          <div className="text-center text-gray-400 py-20">Loading transaction...</div>
+        )}
+        {error && (
+          <>
+            <FeedbackBanner message={error} type="error" onClose={() => setError("")} />
+            {/* Dev helper: if access denied, show currentUser.id and a button to fetch escrow via service role */}
+            {process.env.NODE_ENV !== 'production' && error.toLowerCase().includes('access denied') && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4 rounded">
+                <div className="mb-2 text-sm text-yellow-800">Dev info: Access denied when fetching escrow.</div>
+                <div className="mb-2 text-xs text-gray-700">currentUser.id: <code>{currentUser?.id || 'not-signed-in'}</code></div>
+                <div className="flex gap-3">
+                  <button className="btn-primary" onClick={async () => {
+                    try {
+                      const resp = await fetch(`/api/dev/escrow/by-code?code=${encodeURIComponent(Array.isArray(code) ? code[0] : code)}`, { credentials: 'include' })
+                      const json = await resp.json()
+                      // show a small popup via alert for convenience
+                      alert('Dev escrow response: ' + JSON.stringify(json))
+                    } catch (e) {
+                      // eslint-disable-next-line no-console
+                      console.error('Dev fetch escrow error', e)
+                      alert('Dev fetch failed: ' + String(e))
+                    }
+                  }}>Fetch escrow (dev)</button>
+                  <button className="btn-secondary" onClick={() => navigator.clipboard?.writeText(currentUser?.id || '')}>Copy currentUser.id</button>
                 </div>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Prominent Auth Banner for buyers who need to sign in */}
-        {needsAuthentication && !showAuthForm && (
-          <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-blue-800">Sign in to Join</h3>
-              <p className="text-sm text-blue-700">Create an account or sign in to join this transaction and make a payment.</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setAuthMode('signup'); setShowAuthForm(true); setTimeout(() => authFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150) }}
-                className="btn-primary"
-              >
-                Sign Up
-              </button>
-              <button
-                onClick={() => { setAuthMode('login'); setShowAuthForm(true); setTimeout(() => authFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150) }}
-                className="btn-secondary"
-              >
-                Login
-              </button>
+          </>
+        )}
+        {statusChangeNotification && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <div className="text-blue-400 mr-3">🔄</div>
+              <p className="text-blue-800 font-medium">{statusChangeNotification}</p>
             </div>
           </div>
         )}
-
-        {/* Join Transaction Section */}
-        {needsAuthentication && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">🔑 Join This Transaction</h2>
-            <p className="text-gray-600 mb-4">
-              To join this transaction, you need to create an account or sign in.
-            </p>
-            
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => { setAuthMode('signup'); setShowAuthForm(true); }}
-                className={`px-4 py-2 rounded-lg ${authMode === 'signup' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                Sign Up
-              </button>
-              <button
-                onClick={() => { setAuthMode('login'); setShowAuthForm(true); }}
-                className={`px-4 py-2 rounded-lg ${authMode === 'login' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                Login
-              </button>
+        {!loading && !error && escrow && (
+          <div className="bg-white shadow rounded-lg p-8 mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <h1 className="text-2xl font-bold text-gray-900">
+                Transaction <span className="font-mono text-lg text-gray-700">{escrow.code}</span>
+              </h1>
+              <span className={`inline-flex items-center gap-2 px-4 py-1 rounded-full text-base font-semibold border-2 ${getStatusColor((escrow.status as any) || "created")}`}>
+                {getStatusLabel((escrow.status as any) || "created")}
+              </span>
             </div>
+            {(productImageUrl || escrow.product_image_url) && (
+              <div className="mb-6 flex justify-center">
+                <Image src={productImageUrl || escrow.product_image_url || ''} alt="Product" width={320} height={220} className="rounded-2xl object-cover shadow-lg border border-gray-200" />
+              </div>
+            )}
+            <div className="space-y-4">
+              <div>
+                <span className="font-semibold">Description:</span> {(escrow.description as any) || escrow.product_description || "-"}
+              </div>
+              <div>
+                <span className="font-semibold">Amount:</span> {(escrow.price ?? escrow.amount) !== null && (escrow.price ?? escrow.amount) !== undefined ? formatNaira((escrow.price ?? escrow.amount) as number) : "-"}
+              </div>
+              <div>
+                <span className="font-semibold">Created At:</span> {escrow.created_at ? new Date(escrow.created_at).toLocaleString() : "-"}
+              </div>
+              {/* Payment Receipt Display */}
+              <div>
+                <span className="font-semibold">Payment Receipt:</span>{" "}
+                {Array.isArray(escrow.receipts) && escrow.receipts.length > 0 ? (
+                  <div className="mt-2">
+                    {escrow.receipts.map((r: any) => (
+                      <div key={r.id} className="mb-2">
+                        {receiptUrls[r.id] ? (
+                          (r.file_path || '').toLowerCase().endsWith('.pdf') ? (
+                            <a href={receiptUrls[r.id]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">View receipt</a>
+                          ) : (
+                            <Image src={receiptUrls[r.id]} alt="Payment Receipt" width={320} height={220} className="rounded-lg border shadow max-h-48 object-contain" />
+                          )
+                        ) : (
+                          <span className="text-gray-400">Receipt available</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <div className="text-gray-400">No receipt uploaded</div>
 
-            {showAuthForm && (
-              <div ref={authFormRef}>
-              <form onSubmit={handleAuth} className="space-y-4">
-                {authMode === 'signup' && (
-                  <div>
-                    <label htmlFor="name" className="label">Full Name</label>
-                    <input
-                      type="text"
-                      id="name"
-                      value={authForm.name}
-                      onChange={(e) => setAuthForm(prev => ({ ...prev, name: e.target.value }))}
-                      className="input"
-                      required
-                      disabled={authLoading}
-                    />
+                    {/* If signed-in user is the escrow buyer, show upload control */}
+                    {currentUser && currentUser.id === escrow.buyer_id && canUploadReceipt(escrow.status) && (
+                      <div className="flex items-center gap-3">
+                        <label className="btn-secondary cursor-pointer">
+                          {uploading ? 'Uploading...' : 'Upload Receipt'}
+                          <input type="file" accept="image/*,.pdf" onChange={handleReceiptChange} className="hidden" />
+                        </label>
+                        <span className="text-sm text-gray-500">Uploading will automatically update the transaction status.</span>
+                      </div>
+                    )}
+
+                    {/* If signed-in user is NOT the escrow buyer, show a clear message with actions */}
+                    {currentUser && currentUser.id !== escrow.buyer_id && (
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                        <div className="font-semibold text-yellow-800">You're signed in as a different account</div>
+                        <div className="text-sm text-gray-700 mt-1">This transaction is owned by <code>{escrow.buyer?.email || escrow.buyer_id}</code>. To upload a receipt, sign in as that buyer account.</div>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            className="btn-primary"
+                            onClick={async () => {
+                              try {
+                                // sign out current session then navigate to buyer landing so user can sign in
+                                await (supabase as any).auth.signOut()
+                                // open buyer landing page (login form)
+                                window.location.href = '/buyer'
+                              } catch (e) {
+                                // eslint-disable-next-line no-console
+                                console.error('Sign out failed', e)
+                                alert('Sign out failed. Please clear cookies and try again.')
+                              }
+                            }}
+                          >
+                            Sign out
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            onClick={() => {
+                              try {
+                                const email = escrow.buyer?.email || ''
+                                if (email) navigator.clipboard?.writeText(email)
+                                // open buyer page where user can sign in
+                                window.open('/buyer', '_blank')
+                                alert('Buyer email copied to clipboard: ' + email)
+                              } catch (e) {
+                                // eslint-disable-next-line no-console
+                                console.error(e)
+                              }
+                            }}
+                          >
+                            Open buyer login
+                          </button>
+                          {process.env.NODE_ENV !== 'production' && (
+                            <button
+                              className="btn-ghost"
+                              onClick={async () => {
+                                try {
+                                  const email = escrow.buyer?.email || ''
+                                  if (!email) return alert('No buyer email available')
+                                  const resp = await fetch('/api/dev/signin', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'include',
+                                    body: JSON.stringify({ email })
+                                  })
+                                  const j = await resp.json()
+                                  if (resp.ok && j.user) {
+                                    // reload to reflect new session
+                                    window.location.reload()
+                                  } else {
+                                    alert('Dev sign-in failed: ' + (j.error || JSON.stringify(j)))
+                                  }
+                                } catch (e) {
+                                  // eslint-disable-next-line no-console
+                                  console.error('Dev sign-in error', e)
+                                  alert('Dev sign-in error: ' + String(e))
+                                }
+                              }}
+                            >
+                              Sign in as buyer (dev)
+                            </button>
+                          )}
+                          {process.env.NODE_ENV !== 'production' && escrow.seller?.email && (
+                            <button
+                              className="btn-ghost"
+                              onClick={async () => {
+                                try {
+                                  const email = escrow.seller?.email || ''
+                                  if (!email) return alert('No seller email available')
+                                  const resp = await fetch('/api/dev/signin', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'include',
+                                    body: JSON.stringify({ email })
+                                  })
+                                  const j = await resp.json()
+                                  if (resp.ok && j.user) {
+                                    // reload to reflect new session
+                                    window.location.reload()
+                                  } else {
+                                    alert('Dev sign-in failed: ' + (j.error || JSON.stringify(j)))
+                                  }
+                                } catch (e) {
+                                  // eslint-disable-next-line no-console
+                                  console.error('Dev sign-in error', e)
+                                  alert('Dev sign-in error: ' + String(e))
+                                }
+                              }}
+                            >
+                              Sign in as seller (dev)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-                
-                <div>
-                  <label htmlFor="email" className="label">Email</label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={authForm.email}
-                    onChange={(e) => setAuthForm(prev => ({ ...prev, email: e.target.value }))}
-                    className="input"
-                    required
-                    disabled={authLoading}
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="password" className="label">Password</label>
-                  <input
-                    type="password"
-                    id="password"
-                    value={authForm.password}
-                    onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
-                    className="input"
-                    required
-                    disabled={authLoading}
-                  />
-                </div>
-                
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="btn-primary w-full"
-                >
-                  {authLoading ? 'Processing...' : (authMode === 'login' ? 'Sign In' : 'Create Account')}
-                </button>
-                </form>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Join Transaction Button */}
-        {canJoinTransaction && user && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">🚀 Ready to Join?</h2>
-            <p className="text-gray-600 mb-4">
-              Join this transaction to proceed with the purchase. You&apos;ll be able to make payment and track the progress.
-            </p>
-            
-            <button
-              onClick={handleJoinTransaction}
-              disabled={joining}
-              className="btn-primary w-full"
-            >
-              {joining ? 'Joining Transaction...' : 'Join Transaction'}
-            </button>
-          </div>
-        )}
-
-        {/* User Status Information */}
-        {isUserSeller && (
-          <div className="card mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <h3 className="font-semibold text-blue-800 mb-2">👨‍💼 You are the seller</h3>
-              <p className="text-blue-600">
-                This is your transaction. Share the code <strong>{escrow.code}</strong> with your buyer.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {escrow.buyer_id && !isUserBuyer && !isUserSeller && (
-          <div className="card mb-6">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-              <h3 className="font-semibold text-yellow-800 mb-2">⚠️ Transaction Unavailable</h3>
-              <p className="text-yellow-600">
-                This transaction already has a buyer and is no longer available to join.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Bank Details (from admin_bank only) */}
-        {(escrow as any).admin_bank && (isUserBuyer || ((escrow.status === 'waiting_payment' || escrow.status === 'waiting_admin') && user)) && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">💳 Payment Details</h2>
-            <div className="space-y-3">
-              <div>
-                <h3 className="font-semibold text-gray-900">Bank Name</h3>
-                <p className="text-gray-600">{(escrow as any).admin_bank.bank_name}</p>
+              {/* Chat Section */}
+              <div className="mt-8">
+                <EscrowChat escrowId={escrow.id || ""} currentUserId={currentUser?.id || ""} supabaseClient={supabase} />
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Account Number</h3>
-                <p className="text-lg font-mono">{(escrow as any).admin_bank.account_number}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Account Holder</h3>
-                <p className="text-gray-600">{(escrow as any).admin_bank.account_holder || (escrow as any).admin_bank.account_holder_name}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Amount to Pay</h3>
-                <p className="text-xl font-bold text-green-600">{formatNaira(totalAmount)}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Always show Payment Proof Upload for buyer in any active state */}
-        {isUserBuyer && escrow.status === 'waiting_payment' && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">📄 Upload Payment Proof</h2>
-            <div className="space-y-4">
-              <p className="text-gray-600">
-                After making the payment, select your proof of payment below. It will be uploaded automatically and your escrow will be marked as paid.
-              </p>
-              <div>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  ref={fileInputRef}
-                  onChange={handlePaymentProofChange}
-                  disabled={uploading}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                <p className="mt-2 text-sm text-gray-500">
-                  Supports: JPEG, PNG, WebP, PDF (max 10MB) - Upload starts automatically when selected
-                </p>
-              </div>
-              {uploading && (
-                <div className="text-blue-600 text-sm">Uploading payment proof...</div>
-              )}
-              {paymentProofUrl && (
-                <div className="text-green-700 text-sm">✅ Payment proof uploaded! Your escrow is now marked as paid and waiting for admin verification.</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Confirm Received */}
-        {canConfirmReceived && isUserBuyer && escrow.status !== 'completed' && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">✅ Confirm Product Received</h2>
-            <p className="text-gray-600 mb-4">
-              Have you received the product/service and are satisfied with it?
-            </p>
-            <button
-              onClick={handleConfirmReceived}
-              className="btn-success"
-              disabled={confirming}
-            >
-              {confirming ? 'Processing...' : 'Confirm Received'}
-            </button>
-          </div>
-        )}
-
-        {/* Communication Chat */}
-        {isUserBuyer && currentUser && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">💬 Communication</h2>
-            <EscrowChat 
-              escrowId={escrow.id}
-              currentUserId={currentUser.id}
-              isAdmin={false}
-            />
-          </div>
-        )}
-
-        {/* Feedback banners */}
-        {error && (
-          <FeedbackBanner
-            message={error}
-            type="error"
-            onClose={() => setError('')}
-          />
-        )}
-        {success && !error && (
-          <FeedbackBanner
-            message={success}
-            type="success"
-            onClose={() => setSuccess('')}
-          />
-        )}
-
-        {/* Receipts Preview */}
-        {escrow.receipts && escrow.receipts.length > 0 && isUserBuyer && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">📄 Uploaded Receipts</h2>
-            <div className="space-y-4">
-              {escrow.receipts.map((receipt) => (
-                <div key={receipt.id} className="border border-gray-200 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-500">
-                      Uploaded on {new Date(receipt.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {receipt.signed_url && (
-                    <div>
-                      {receipt.file_path.toLowerCase().endsWith('.pdf') ? (
-                        <a
-                          href={receipt.signed_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          📄 View PDF Receipt
-                        </a>
-                      ) : (
-                        <Image
-                          src={receipt.signed_url}
-                          alt="Payment Receipt"
-                          width={200}
-                          height={150}
-                          className="rounded object-cover"
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }

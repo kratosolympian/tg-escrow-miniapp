@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         productImagePath: formData.get('productImagePath')?.toString(),
         image: formData.get('image') as File | null,
       };
-      console.log('Parsed FormData body:', parsedBody);
+
     } catch (error) {
       console.error('Failed to parse FormData body:', error);
       return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
@@ -55,14 +55,14 @@ export async function POST(request: NextRequest) {
     const serviceClient = createServiceRoleClient();
 
     // Log authentication attempt
-    console.log('Attempting to authenticate user...');
+
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    console.log('Authentication result:', { user, userError });
+
 
     let authenticatedUser = user;
 
     if (!authenticatedUser) {
-      console.log('No user in session, checking one-time token...');
+
       let token = parsedBody?.__one_time_token || request.headers.get('x-one-time-token') || null;
       if (!token) {
         const authHeader = request.headers.get('authorization') || '';
@@ -71,15 +71,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      console.log('Authentication token:', token);
-      console.log('Request headers:', Object.fromEntries(request.headers));
+
+
 
       if (token) {
         try {
           const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth');
-          console.log('Verifying one-time token...');
+
           const userId = await verifyAndConsumeSignedToken(token);
-          console.log('Token verification result:', userId);
+
           if (userId) {
             const { data: userData, error: userFetchError } = await serviceClient
               .from('profiles')
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
               .eq('id', userId)
               .single();
 
-            console.log('Profile fetch result:', { userData, userFetchError });
+
             // Adjust authenticatedUser assignment to match the expected User type
             authenticatedUser = {
               id: userId,
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    console.log('Authenticated user:', authenticatedUser);
+
 
     // Validate input
     const { description: validDescription, price: validPrice } = createEscrowSchema.parse({
@@ -117,10 +117,10 @@ export async function POST(request: NextRequest) {
       price: parsedBody.price,
     });
 
-    console.log('Validated input:', { validDescription, validPrice });
+
 
     // Ensure profile exists
-    console.log('Ensuring profile exists for seller_id:', authenticatedUser.id);
+
     const { data: existingProfile } = await serviceClient
       .from('profiles')
       .select('id')
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!existingProfile) {
-      console.log('Profile not found, creating...');
+
       const { error: profileError } = await serviceClient
         .from('profiles')
         .insert({
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if seller already has an active escrow
-    console.log('Checking for active escrows...');
+
     const { data: activeEscrows, error: activeError } = await serviceClient
       .from('escrows')
       .select('id, code, description, price, status, created_at')
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (activeEscrows && activeEscrows.length > 0) {
-      console.log('Seller has active escrow:', activeEscrows[0]);
+
       return NextResponse.json({
         error: 'You already have an ongoing transaction. Please complete or cancel it before creating a new one.',
         activeEscrow: activeEscrows[0]
@@ -177,17 +177,17 @@ export async function POST(request: NextRequest) {
     if (parsedBody.assigned_admin_id) {
       insertData.assigned_admin_id = parsedBody.assigned_admin_id;
     }
-    console.log('Insert data:', insertData);
+
 
     // Insert escrow into database
-    console.log('Inserting escrow into database...');
+
     const { data: escrow, error: escrowError } = await serviceClient
       .from('escrows')
       .insert(insertData)
       .select()
       .single();
 
-    console.log('Database insertion result:', { escrow, escrowError });
+
 
     if (escrowError) {
       console.error('Error creating escrow:', escrowError);

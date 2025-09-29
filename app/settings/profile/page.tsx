@@ -1,4 +1,6 @@
+
 'use client'
+import React from 'react'
 
 import { useState, useEffect } from 'react'
 import FeedbackBanner from '../../../components/FeedbackBanner'
@@ -109,11 +111,7 @@ export default function ProfileSettings() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  useEffect(() => {
-    loadProfile()
-  }, [])
-
-  const loadProfile = async () => {
+  const loadProfile = React.useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -121,7 +119,7 @@ export default function ProfileSettings() {
         return
       }
 
-      const response = await fetch('/api/profile/banking')
+  const response = await fetch('/api/profile/banking', { credentials: 'include' })
       const data = await response.json()
 
       if (data.profile) {
@@ -134,13 +132,17 @@ export default function ProfileSettings() {
           account_holder_name: data.profile.account_holder_name || ''
         })
       }
-    } catch (err) {
+    } catch (error) {
       setError('Failed to load profile')
-  // ...removed for production...
     } finally {
       setLoading(false)
     }
-  }
+  }, [router, supabase])
+
+
+  useEffect(() => {
+    loadProfile()
+  }, [loadProfile])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -155,6 +157,7 @@ export default function ProfileSettings() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(formData),
+        credentials: 'include',
       })
 
       const data = await response.json()

@@ -27,17 +27,6 @@ export function createServerClientWithAuthHeader(request?: NextRequest) {
 
 export function createServerClientWithCookies() {
   const cookieStore = cookies()
-  
-  // Debug: log all cookies
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      const allCookies = cookieStore.getAll()
-      console.log('[DEBUG] createServerClientWithCookies - all cookies:', allCookies.map(c => ({ name: c.name, value: c.value.substring(0, 10) + '...' })))
-    } catch (e) {
-      console.log('[DEBUG] createServerClientWithCookies - error getting cookies:', e)
-    }
-  }
-  
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

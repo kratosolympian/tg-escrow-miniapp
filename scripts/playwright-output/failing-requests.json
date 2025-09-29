@@ -1,0 +1,37 @@
+[
+  {
+    "url": "http://localhost:3000/api/storage/sign-url",
+    "status": 500,
+    "requestHeaders": {
+      "sec-ch-ua": "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"HeadlessChrome\";v=\"120\"",
+      "sec-ch-ua-platform": "\"Windows\"",
+      "referer": "http://localhost:3000/buyer/escrow/MG171MFW7GRE",
+      "sec-ch-ua-mobile": "?0",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.6099.28 Safari/537.36",
+      "content-type": "application/json"
+    }
+  },
+  {
+    "url": "http://localhost:3000/test-receipt.jpg",
+    "status": 404,
+    "requestHeaders": {
+      "sec-ch-ua": "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"HeadlessChrome\";v=\"120\"",
+      "referer": "http://localhost:3000/buyer/escrow/MG171MFW7GRE",
+      "sec-ch-ua-mobile": "?0",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.6099.28 Safari/537.36",
+      "sec-ch-ua-platform": "\"Windows\""
+    }
+  },
+  {
+    "url": "http://localhost:3000/api/escrow/upload-receipt",
+    "status": 400,
+    "requestHeaders": {
+      "sec-ch-ua": "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"HeadlessChrome\";v=\"120\"",
+      "sec-ch-ua-platform": "\"Windows\"",
+      "referer": "http://localhost:3000/buyer/escrow/MG171MFW7GRE",
+      "sec-ch-ua-mobile": "?0",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.6099.28 Safari/537.36",
+      "content-type": "multipart/form-data; boundary=----WebKitFormBoundaryjtlB0IJijgZ4ymrq"
+    }
+  }
+]

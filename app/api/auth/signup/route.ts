@@ -82,8 +82,8 @@ export async function POST(request: NextRequest) {
     // Profile will be created automatically by database trigger
     // Generate a one-time token clients can use immediately to authenticate a follow-up action
     try {
-      const { createSignedToken } = await import('@/lib/signedAuth')
-      const token = createSignedToken(authData.user.id, 300) // 5 minutes
+      const { createSignedTokenAndPersist } = await import('@/lib/signedAuth')
+      const token = await createSignedTokenAndPersist(authData.user.id, 300) // 5 minutes
       if (process.env.NEXT_PUBLIC_DEBUG) console.log('Signup route: created one-time token for user', authData.user.id)
       // Build response and, when possible, attach auth cookies so JSON clients receive httpOnly cookies
       const resp = NextResponse.json({

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib/supabaseServer'
+import { createServerClientWithAuthHeader, createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireAuth } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
@@ -36,39 +36,50 @@ const markDeliveredSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-  const supabase = createServerClientWithAuthHeader(request)
+    // Create server clients
+    const cookieClient = createServerClientWithCookies()
+    const headerClient = createServerClientWithAuthHeader(request)
     const serviceClient = createServiceRoleClient()
-    
-    // Check for one-time token first
-    let authenticatedUser = null
-    const body = await request.json()
-    const { escrowId: requestEscrowId, deliveryProof: requestDeliveryProof, __one_time_token } = body
 
-    if (__one_time_token) {
+    // Parse and validate input early
+    const body = await request.json()
+    const { escrowId, deliveryProof, __one_time_token } = markDeliveredSchema.parse(body)
+
+    // Authentication: prefer cookie session, then header session, then one-time token
+    let authenticatedUser: { id: string } | null = null
+    try {
+      const { data: { user } } = await cookieClient.auth.getUser()
+      if (user) authenticatedUser = { id: user.id }
+    } catch (e) {
+      // ignore
+    }
+
+    if (!authenticatedUser) {
       try {
-        const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
-        console.debug('Mark delivered: one-time token present')
-        const userId = await verifyAndConsumeSignedToken(__one_time_token)
-        console.debug('Mark delivered: verifyAndConsumeSignedToken result ok=', !!userId)
-        if (userId) {
-          authenticatedUser = { id: userId }
-        } else {
-          console.warn('Mark delivered: one-time token present but not valid/expired')
-          return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
-        }
+        const { data: { user } } = await headerClient.auth.getUser()
+        if (user) authenticatedUser = { id: user.id }
       } catch (e) {
-        console.warn('Error importing/verifying one-time token')
+        // ignore
       }
     }
 
-    // Fallback to requireAuth if no token
-    let profile = authenticatedUser
-    if (!profile) {
-      profile = await requireAuth(supabase)
+    if (!authenticatedUser) {
+      let oneTimeToken = __one_time_token || request.headers.get('x-one-time-token') || null
+      const authHeader = request.headers.get('authorization') || ''
+      if (!oneTimeToken && authHeader.toLowerCase().startsWith('bearer ')) oneTimeToken = authHeader.slice(7).trim()
+      if (oneTimeToken) {
+        try {
+          const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+          const userId = await verifyAndConsumeSignedToken(oneTimeToken)
+          if (userId) authenticatedUser = { id: userId }
+          else return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+        } catch (e) {
+          return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+        }
+      }
     }
 
-    // Parse and validate the request data
-    const { escrowId, deliveryProof } = markDeliveredSchema.parse(body)
+    if (!authenticatedUser) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
 
     // Get escrow
     const { data: escrow, error: escrowError } = await serviceClient
@@ -82,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is the seller
-    if (escrow.seller_id !== profile.id) {
+    if (escrow.seller_id !== authenticatedUser.id) {
       return NextResponse.json({ error: 'Only the seller can mark as delivered' }, { status: 403 })
     }
 
@@ -114,7 +125,7 @@ export async function POST(request: NextRequest) {
       .insert({
         escrow_id: escrow.id,
         status: ESCROW_STATUS.IN_PROGRESS,
-        changed_by: profile.id
+  changed_by: authenticatedUser.id
       })
 
     return NextResponse.json({ ok: true })

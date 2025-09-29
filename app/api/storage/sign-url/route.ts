@@ -12,6 +12,30 @@ const signUrlSchema = z.object({
   bucket: z.enum(['product-images', 'receipts'])
 })
 
+// Helper to return JSON and optionally append _debug info when DEBUG is enabled
+function makeJson(payload: any, request?: NextRequest, serverUser?: any, status?: number) {
+  try {
+    if (process.env.DEBUG) {
+      payload._debug = payload._debug || {}
+      try {
+        payload._debug.cookie = request ? request.headers.get('cookie') || null : null
+      } catch (e) {}
+      try {
+        payload._debug.serverUser = serverUser ? (serverUser.id || serverUser) : null
+      } catch (e) {}
+      try {
+        // Surface any debug escrow id resolved earlier in the request lifecycle
+        // (some handlers may attach request.__debugEscrowId)
+        // @ts-ignore
+        const debugEscrowId = request && (request as any).__debugEscrowId
+        if (debugEscrowId) payload._debug.escrowId = debugEscrowId
+      } catch (e) {}
+      payload._debug.ts = Date.now()
+    }
+  } catch (e) {}
+  return typeof status === 'number' ? NextResponse.json(payload, { status }) : NextResponse.json(payload)
+}
+
 // Extract shared logic for signed URL generation
 async function generateSignedUrl(serviceClient: SupabaseClient, bucket: string, path: string): Promise<string> {
   const { data, error } = await serviceClient.storage
@@ -39,24 +63,53 @@ async function buyerHandler(
   if (bucket === 'receipts') {
     const pathParts = path.split('/');
     if (pathParts.length < 2) {
-      return NextResponse.json({ error: 'Invalid path format' }, { status: 400 });
+      return makeJson({ error: 'Invalid path format' }, request, profile, 400);
     }
 
-    const escrowId = pathParts[0];
-    const { data: escrow } = await serviceClient
-      .from('escrows')
-      .select('buyer_id')
-      .eq('id', escrowId)
-      .single();
+    // Accept either an escrow UUID or the escrow code in the path. Try id lookup
+    // first (fast/common), then fall back to lookup by code for paths that were
+    // previously using the escrow code as the prefix.
+    const escrowIdOrCode = pathParts[0];
+    let escrow: any = null;
+
+    // Try lookup by id first
+    try {
+      const { data } = await serviceClient
+        .from('escrows')
+        .select('id, buyer_id')
+        .eq('id', escrowIdOrCode)
+        .maybeSingle();
+      if (data) escrow = data;
+    } catch (e) {}
+
+    // If not found by id, try lookup by code
+    if (!escrow) {
+      try {
+        const { data } = await serviceClient
+          .from('escrows')
+          .select('id, buyer_id')
+          .eq('code', escrowIdOrCode)
+          .maybeSingle();
+        if (data) escrow = data;
+      } catch (e) {}
+    }
+
+    // Attach the resolved escrow id into debug payload when present
+    if (process.env.DEBUG && escrow && escrow.id) {
+      try {
+        // @ts-ignore
+        request['__debugEscrowId'] = escrow.id
+      } catch (e) {}
+    }
 
     if (!escrow || escrow.buyer_id !== profile.id) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      return makeJson({ error: 'Access denied' }, request, profile, 403);
     }
   } else if (bucket === 'product-images') {
     // Buyers can access product images for escrows they are part of
     const pathParts = path.split('/');
     if (pathParts.length < 2) {
-      return NextResponse.json({ error: 'Invalid path format' }, { status: 400 });
+      return makeJson({ error: 'Invalid path format' }, request, profile, 400);
     }
 
     const sellerId = pathParts[0];
@@ -72,14 +125,14 @@ async function buyerHandler(
       .single();
 
     if (!escrow) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      return makeJson({ error: 'Access denied' }, request, profile, 403);
     }
   } else {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    return makeJson({ error: 'Access denied' }, request, profile, 403);
   }
 
   const signedUrl = await generateSignedUrl(serviceClient, bucket, path);
-  return NextResponse.json({ signedUrl });
+  return makeJson({ signedUrl }, request, profile);
 }
 
 // Seller-specific handler
@@ -92,16 +145,16 @@ async function sellerHandler(
   const { path, bucket } = signUrlSchema.parse(body);
 
   if (bucket !== 'product-images') {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    return makeJson({ error: 'Access denied' }, request, profile, 403);
   }
 
   const pathParts = path.split('/');
   if (pathParts.length < 2 || pathParts[0] !== profile.id) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    return makeJson({ error: 'Access denied' }, request, profile, 403);
   }
 
   const signedUrl = await generateSignedUrl(serviceClient, bucket, path);
-  return NextResponse.json({ signedUrl });
+  return makeJson({ signedUrl }, request, profile);
 }
 
 export async function POST(request: NextRequest) {
@@ -115,19 +168,19 @@ export async function POST(request: NextRequest) {
     } else if (profile.role === 'seller') {
       return sellerHandler(request, profile, serviceClient);
     } else {
-      return NextResponse.json({ error: 'Role not supported' }, { status: 403 });
+      return makeJson({ error: 'Role not supported' }, request, profile, 403);
     }
   } catch (error) {
     // Handle common expected errors more gracefully
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
+      return makeJson({ error: 'Invalid input data' }, request, null, 400)
     }
     // Authentication failures are expected for anonymous requests; return 401 instead of 500
     if (error instanceof Error && error.message === 'Authentication required') {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      return makeJson({ error: 'Authentication required' }, request, null, 401)
     }
 
     console.error('Sign URL error:', error)
-    return NextResponse.json({ error: 'Failed to create signed URL' }, { status: 500 })
+    return makeJson({ error: 'Failed to create signed URL' }, request, null, 500)
   }
 }

@@ -54,6 +54,35 @@ Run the SQL files in your Supabase dashboard in this order:
 2. `SQL/rls.sql` - Sets up Row Level Security policies
 3. `SQL/storage.sql` - Creates storage buckets
 
+#### RLS migration: fix admin checks (avoid recursion)
+
+If you see PostgREST errors like "infinite recursion detected in policy for relation \"profiles\"" when authenticated users query protected rows, apply the idempotent migration:
+
+1. `SQL/2025-09-26-replace-is_admin-with-admin_users.sql` — creates `admin_users` and replaces recursive policy checks with safe lookups.
+
+Apply it from the Supabase SQL editor (use your service role or run in the Supabase SQL UI). After applying, add any admin users:
+
+```sql
+INSERT INTO public.admin_users (user_id) VALUES ('<admin-uuid>') ON CONFLICT DO NOTHING;
+```
+
+Verification commands
+
+1) Check the escrow row as service role (sanity check):
+
+```powershell
+$svc = (Get-Content .\.env.local | Select-String '^SUPABASE_SERVICE_ROLE_KEY=').ToString().Split('=',2)[1].Trim()
+curl.exe -i -H "apikey: $svc" -H "Authorization: Bearer $svc" "https://<your-project>.supabase.co/rest/v1/escrows?select=seller_id,buyer_id&id=eq.<ESCROW_ID>"
+```
+
+2) Check the same query as an authenticated user (include anon apikey + access token):
+
+```powershell
+curl.exe -i -H "apikey: $env:NEXT_PUBLIC_SUPABASE_ANON_KEY" -H "Authorization: Bearer <ACCESS_TOKEN>" "https://<your-project>.supabase.co/rest/v1/escrows?select=seller_id,buyer_id&id=eq.<ESCROW_ID>"
+```
+
+If the authenticated query returns 200 (with the row) and no 500 recursion error, the migration is applied correctly.
+
 ### 4. Install Dependencies
 
 ```bash

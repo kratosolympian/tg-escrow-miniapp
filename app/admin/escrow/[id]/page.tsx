@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { formatNaira } from '@/lib/utils'
 import StatusBadge from '@/components/StatusBadge'
 import EscrowChat from '@/components/EscrowChat'
+import { supabase } from '@/lib/supabaseClient'
 
 interface EscrowDetail {
   id: string
@@ -40,7 +41,7 @@ interface EscrowDetail {
   } | null
   receipts: Array<{
     id: string
-    receipt_url: string
+    signed_url: string
     uploaded_at: string
     filename: string
   }>
@@ -73,6 +74,7 @@ export default function AdminEscrowDetailPage() {
   const [success, setSuccess] = useState('')
   const [adminNotes, setAdminNotes] = useState('')
   const [showNotesForm, setShowNotesForm] = useState(false)
+  const [statusChangeNotification, setStatusChangeNotification] = useState<string | null>(null)
 
   // Countdown state: show time until escrow expires (uses `expires_at` if present,
   // otherwise falls back to created_at + 30 minutes)
@@ -114,9 +116,42 @@ export default function AdminEscrowDetailPage() {
     fetchCurrentUser()
   }, [])
 
+  // Subscribe to escrow updates (status changes, receipts, etc.) so UI updates in real-time
+  useEffect(() => {
+    if (!escrowId) return
+    const channel = supabase
+      .channel(`escrow-updates-${escrowId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${escrowId}` }, (payload) => {
+        try {
+          console.debug('[AdminEscrowPage] escrow payload', payload)
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const newRow = payload.new as Partial<EscrowDetail>
+            setEscrow(prev => {
+              const merged = { ...(prev || {}), ...(newRow || {}) } as EscrowDetail
+              // Check if status changed
+              if (prev && prev.status !== merged.status) {
+                setStatusChangeNotification(`Status changed to: ${merged.status}`)
+                // Auto-dismiss notification after 5 seconds
+                setTimeout(() => setStatusChangeNotification(null), 5000)
+              }
+              return merged
+            })
+            // If receipts or product image changed, let existing effects pick up signed urls
+          }
+        } catch (err) {
+          console.error('Error handling escrow realtime payload', err)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [escrowId])
+
   const fetchCurrentUser = async () => {
     try {
-      const response = await fetch('/api/auth/me')
+  const response = await fetch('/api/auth/me', { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
         setCurrentUser(data.user)
@@ -129,7 +164,7 @@ export default function AdminEscrowDetailPage() {
   const fetchEscrowDetails = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/escrow/by-id/${escrowId}`)
+  const response = await fetch(`/api/escrow/by-id/${escrowId}`, { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
         setEscrow(data.escrow)
@@ -147,7 +182,7 @@ export default function AdminEscrowDetailPage() {
   const fetchAdminActions = async () => {
     try {
       // This would be a new API endpoint to fetch admin action history
-      const response = await fetch(`/api/admin/escrow-actions/${escrowId}`)
+  const response = await fetch(`/api/admin/escrow-actions/${escrowId}`, { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
         setAdminActions(data.actions || [])
@@ -207,7 +242,8 @@ export default function AdminEscrowDetailPage() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        credentials: 'include'
       });
 
       const result = await response.json();
@@ -232,7 +268,7 @@ export default function AdminEscrowDetailPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
       window.location.href = '/'
     } catch (error) {
       console.error('Logout error:', error)
@@ -249,19 +285,7 @@ export default function AdminEscrowDetailPage() {
     })
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'created': return 'text-blue-600'
-      case 'joined': return 'text-purple-600'
-      case 'waiting_admin': return 'text-yellow-600'
-      case 'payment_confirmed': return 'text-green-600'
-      case 'delivered': return 'text-indigo-600'
-      case 'completed': return 'text-green-700'
-      case 'on_hold': return 'text-red-600'
-      case 'refunded': return 'text-gray-600'
-      default: return 'text-gray-500'
-    }
-  }
+
 
   // Expanded admin actions for all statuses
   const getAvailableActions = () => {
@@ -369,6 +393,15 @@ export default function AdminEscrowDetailPage() {
             <div className="flex items-center">
               <div className="text-green-400 mr-3">✅</div>
               <p className="text-green-800">{success}</p>
+            </div>
+          </div>
+        )}
+
+        {statusChangeNotification && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <div className="text-blue-400 mr-3">🔄</div>
+              <p className="text-blue-800 font-medium">{statusChangeNotification}</p>
             </div>
           </div>
         )}
@@ -516,7 +549,7 @@ export default function AdminEscrowDetailPage() {
                       </div>
                       <div className="mb-3">
                         <img 
-                          src={receipt.receipt_url} 
+                          src={receipt.signed_url} 
                           alt={`Receipt ${receipt.filename}`}
                           className="w-full h-48 object-cover rounded border"
                         />
@@ -524,7 +557,7 @@ export default function AdminEscrowDetailPage() {
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">{receipt.filename}</span>
                         <a 
-                          href={receipt.receipt_url} 
+                          href={receipt.signed_url} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 text-sm"
@@ -704,6 +737,7 @@ export default function AdminEscrowDetailPage() {
               escrowId={escrow.id} 
               currentUserId={currentUser.id}
               isAdmin={true}
+              supabaseClient={supabase}
             />
           </div>
         )}

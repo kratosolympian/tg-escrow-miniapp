@@ -28,11 +28,13 @@ export async function GET(request: NextRequest) {
 
     // Normalize profile to an object before spreading to satisfy TypeScript
     const profileData = (profile && typeof profile === 'object' && !Array.isArray(profile)) ? profile : {}
+    // Normalize presence flag: backend column is `is_online`, UI expects `online`
+    const normalized = { ...profileData, online: (profileData as any).is_online ?? false }
     return NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
-        ...profileData
+        ...normalized
       }
     })
 

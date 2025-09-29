@@ -33,4 +33,5 @@ export function clearRedirectCookie(resp: NextResponse) {
   resp.cookies.set(REDIRECT_COOKIE, '', { ...cookieOptions(), expires: new Date(0) })
 }
 
-export default { setAuthCookies, clearAuthCookies, setRedirectCookie, clearRedirectCookie }
+const cookiesApi = { setAuthCookies, clearAuthCookies, setRedirectCookie, clearRedirectCookie }
+export default cookiesApi

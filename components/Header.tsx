@@ -27,7 +27,7 @@ export default function Header() {
         // If no user from Supabase, try the API endpoint as fallback
         if (!error && retryCount < 2) {
           try {
-            const response = await fetch('/api/auth/me');
+            const response = await fetch('/api/auth/me', { credentials: 'include' });
             if (response.ok) {
               const userData = await response.json();
               if (userData.user) {
@@ -69,17 +69,76 @@ export default function Header() {
     });
     
     // Also check auth on window focus (helps when user switches tabs)
+    // Debounce the focus handler to avoid repeated calls when focus events
+    // fire rapidly (some platforms generate multiple focus events).
+    const focusTimer = { current: 0 as any }
     const handleFocus = () => {
-      checkAuth();
-    };
-    
-    window.addEventListener('focus', handleFocus);
+      try {
+        if (focusTimer.current) clearTimeout(focusTimer.current)
+      } catch (e) {}
+      focusTimer.current = setTimeout(() => {
+        checkAuth()
+      }, 250)
+    }
+
+    window.addEventListener('focus', handleFocus as any);
     
     return () => {
-      listener?.subscription.unsubscribe();
-      window.removeEventListener('focus', handleFocus);
+  listener?.subscription.unsubscribe();
+  try { window.removeEventListener('focus', handleFocus as any) } catch (e) {}
     };
   }, []);
+
+  // Debugging instrumentation: capture calls to location.replace/assign/reload across the app.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const navLog = (kind: string, url?: string) => {
+      try {
+        console.warn(`[nav-instrument] ${kind}${url ? ` -> ${url}` : ''}`)
+        console.trace()
+      } catch (e) {}
+    }
+
+    const origReplace = window.location.replace?.bind(window.location)
+    const origReload = window.location.reload?.bind(window.location)
+    const origAssign = (window.location as any).assign?.bind(window.location)
+
+    try {
+      if (origReplace) {
+        // @ts-ignore
+        window.location.replace = (url: string) => {
+          navLog('location.replace', url)
+          return origReplace(url)
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (origReload) {
+        // @ts-ignore
+        window.location.reload = () => {
+          navLog('location.reload')
+          return origReload()
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (origAssign) {
+        // @ts-ignore
+        ;(window.location as any).assign = (url: string) => {
+          navLog('location.assign', url)
+          return origAssign(url)
+        }
+      }
+    } catch (e) {}
+
+    return () => {
+      try { if (origReplace) (window.location as any).replace = origReplace } catch (e) {}
+      try { if (origReload) (window.location as any).reload = origReload } catch (e) {}
+      try { if (origAssign) (window.location as any).assign = origAssign } catch (e) {}
+    }
+  }, [])
 
   const handleLogout = async () => {
     if (typeof window !== "undefined") {

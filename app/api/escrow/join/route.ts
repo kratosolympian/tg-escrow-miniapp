@@ -63,15 +63,14 @@ export async function POST(request: NextRequest) {
         }
       }
   // Do not log full body or token values; only log presence for audit
-  console.debug('Join route: peeked body, token present=', !!token)
+  // minimal log: token presence
+  if (token) console.info('Join route: one-time token present')
 
       if (token) {
         try {
           const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
-          // Do not log the full token; only note presence
-          console.debug('Join route: one-time token present')
+          // Attempt one-time token verification
           const userId = await verifyAndConsumeSignedToken(token)
-          console.debug('Join route: verifyAndConsumeSignedToken result ok=', !!userId)
           if (userId) {
             // Generate an access token for the user to establish a session
             let accessToken = null
@@ -220,7 +219,7 @@ export async function POST(request: NextRequest) {
               }
               console.error('Retry update by id failed', retry.error)
             } else {
-              console.log('Retry update by id succeeded for escrow id=', escrowId)
+              // Retry update succeeded
             }
         }
       } catch (re) {

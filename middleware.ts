@@ -6,9 +6,6 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
   // Create a Supabase client configured to use Next's cookie adapter
   const supabase = createServerClientWithCookies()
-  // Minimal debug logging (avoid printing tokens)
-  const url = request.nextUrl.pathname
-  if (process.env.DEBUG) console.log('Middleware request:', url)
 
   // Get user (do not log full user object)
   const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -37,11 +34,9 @@ export async function middleware(request: NextRequest) {
     // Allow both regular admins and super admins
     const role = profile?.role
     if (profileError || !profile || (role !== 'admin' && role !== 'super_admin')) {
-      if (process.env.DEBUG) console.log('Access denied: admin check failed for userId present=', !!userId)
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
     
-    if (process.env.DEBUG) console.log('Access granted: Admin for userId present=', !!userId)
     return response
   }
   return response

@@ -5,8 +5,6 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = createServiceRoleClient()
 
-    console.log('Applying one-time token fixes...')
-
     // Create the RPC function
     const rpcSql = `
       CREATE OR REPLACE FUNCTION public.consume_one_time_token(p_id uuid)

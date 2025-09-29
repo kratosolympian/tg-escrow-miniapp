@@ -29,12 +29,12 @@ export default function AdminSettingsPage() {
   fetchBankSettings()
     ;(async () => {
       try {
-        const { supabase } = await import('@/lib/supabaseClient')
-        const { data } = await supabase.auth.getUser()
-        setUser(data?.user ?? null)
+    const { supabase } = await import('@/lib/supabaseClient')
+    const { data } = await supabase.auth.getUser()
+    setUser(data?.user ?? null)
         
-        // Also fetch user profile to ensure auth state is refreshed
-        const response = await fetch('/api/auth/me')
+    // Also fetch user profile to ensure auth state is refreshed
+  const response = await fetch('/api/auth/me', { credentials: 'include' })
         if (response.ok) {
           const userData = await response.json()
           // This helps ensure the Header component detects the user
@@ -47,7 +47,7 @@ export default function AdminSettingsPage() {
 
   const fetchBankSettings = async () => {
     try {
-      const response = await fetch('/api/settings/bank')
+  const response = await fetch('/api/settings/bank', { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
         // API may return either the settings directly or wrapped as { settings: {...} }
@@ -63,7 +63,7 @@ export default function AdminSettingsPage() {
           setCurrentSettings(null)
         }
         // fetch profile banking via dedicated endpoint
-        const pb = await fetch('/api/profile/banking')
+  const pb = await fetch('/api/profile/banking', { credentials: 'include' })
         if (pb.ok) {
           const pjson = await pb.json()
           // profile endpoint may return { profile: { ... } } or profile directly
@@ -96,7 +96,8 @@ export default function AdminSettingsPage() {
           'Content-Type': 'application/json',
         },
         // this form is intended to update the platform canonical bank settings
-        body: JSON.stringify({ ...form, scope: 'platform' })
+        body: JSON.stringify({ ...form, scope: 'platform' }),
+        credentials: 'include',
       })
       const data = await response.json().catch(() => null)
       // Accept either { settings: {...} } or { profile: {...} } or direct row
@@ -128,7 +129,7 @@ export default function AdminSettingsPage() {
     setError('')
     setSuccess('')
     try {
-      const res = await fetch('/api/admin/update-bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profileBank }) })
+  const res = await fetch('/api/admin/update-bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profileBank }), credentials: 'include' })
       const json = await res.json()
       if (!res.ok) {
         setError(json.error || 'Failed to update profile bank')
@@ -147,11 +148,11 @@ export default function AdminSettingsPage() {
     if (!user) return
     setPresenceLoading(true)
     try {
-      const res = await fetch('/api/admin/set-presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_online: !(profileBank as any).is_online }) })
+  const res = await fetch('/api/admin/set-presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_online: !(profileBank as any).is_online }), credentials: 'include' })
       if (res.ok) {
         const json = await res.json()
         // refresh profile banking
-        const pb = await fetch('/api/profile/banking')
+  const pb = await fetch('/api/profile/banking', { credentials: 'include' })
         if (pb.ok) {
           const pjson = await pb.json()
           setProfileBank({ bank_name: pjson.profile?.bank_name || '', account_number: pjson.profile?.account_number || '', account_holder: pjson.profile?.account_holder_name || '' })

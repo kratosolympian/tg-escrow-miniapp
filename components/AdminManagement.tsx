@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface AdminProfile {
   id: string
@@ -57,17 +57,11 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [presenceLoading, setPresenceLoading] = useState<boolean>(false);
 
-  useEffect(() => {
-    fetchAdminData()
-    // fetch initial users and escrows for management panel
-    fetchUsers()
-    fetchEscrows()
-  }, [])
 
-  async function fetchUsers() {
+  const fetchUsers = React.useCallback(async () => {
     setUsersLoading(true)
     try {
-      const res = await fetch('/api/admin/users')
+      const res = await fetch('/api/admin/users', { credentials: 'include' })
       if (!res.ok) throw new Error('Failed to fetch users')
       const json = await res.json()
       setUsers(json.users || [])
@@ -76,15 +70,15 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     } finally {
       setUsersLoading(false)
     }
-  }
+  }, [])
 
-  async function fetchEscrows(q?: string) {
+  const fetchEscrows = React.useCallback(async (q?: string) => {
     setEscrowLoading(true)
     try {
       const params = new URLSearchParams()
       if (q) params.set('q', q)
       params.set('limit', '20')
-      const res = await fetch(`/api/admin/escrows?${params.toString()}`)
+      const res = await fetch(`/api/admin/escrows?${params.toString()}`, { credentials: 'include' })
       if (!res.ok) throw new Error('Failed to fetch escrows')
       const json = await res.json()
       setEscrows(json.escrows || [])
@@ -93,7 +87,29 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     } finally {
       setEscrowLoading(false)
     }
-  }
+  }, [])
+
+  const fetchAdminData = React.useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+  const res = await fetch('/api/admin/super-admin-manage', { credentials: 'include' })
+      if (!res.ok) throw new Error('Failed to fetch admin settings')
+      const json = await res.json()
+      setAdminData(json)
+    } catch (e: any) {
+      setError(e.message || 'Failed to fetch admin settings')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchAdminData()
+    // fetch initial users and escrows for management panel
+    fetchUsers()
+    fetchEscrows()
+  }, [fetchAdminData, fetchUsers, fetchEscrows])
 
   // Fetch current user from server-side endpoint to ensure we detect
   // the signed-in user even if client-side supabase session isn't ready.
@@ -101,7 +117,7 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     let mounted = true
     async function detectMe() {
       try {
-        const res = await fetch('/api/auth/me')
+        const res = await fetch('/api/auth/me', { credentials: 'include' })
         if (!res.ok) return
         const json = await res.json()
         const email = json?.user?.email ?? null
@@ -128,7 +144,8 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
       const res = await fetch('/api/admin/set-presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_online: !isOnline })
+        body: JSON.stringify({ is_online: !isOnline }),
+        credentials: 'include'
       });
       if (!res.ok) throw new Error('Failed to update online status');
       setIsOnline((prev) => !prev);
@@ -167,48 +184,7 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     return new Date(dateString).toLocaleString('en-US', options)
   }
 
-  async function fetchAdminData() {
-    setLoading(true)
-    setError('')
-    setSuccess('')
 
-    try {
-  const response = await fetch('/api/admin/super-admin-manage', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch admin data')
-      }
-
-      const data: AdminManagementData = await response.json()
-      // Normalize server response: if server returned single `super_admin`, convert to array
-      const normalized: AdminManagementData = {
-        success: data.success,
-        admins: data.admins || [],
-        total_count: data.total_count ?? (data.admins ? data.admins.length : 0),
-        super_admins: data.super_admins ?? (data.super_admin ? [data.super_admin] : []),
-        super_admin: data.super_admin ?? null,
-      }
-
-      setAdminData(normalized)
-
-      // Compute isMainAdmin: canonical email OR presence in returned super_admins
-      if (currentUserEmail === 'ceo@kratos.ng') {
-        setIsMainAdmin(true)
-      } else if (currentUserEmail && normalized.super_admins?.length) {
-        const match = normalized.super_admins.find((s) => s.email === currentUserEmail)
-        setIsMainAdmin(!!match)
-      }
-    } catch (error: any) {
-      setError(error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   async function handleAddAdmin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -222,6 +198,7 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ email: newAdminEmail, action: 'add' }),
       })
 
@@ -256,6 +233,7 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ email, action: 'remove' }),
       })
 
@@ -277,7 +255,7 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     if (!confirm(`Permanently delete user ${email || userId} and all related records?`)) return
     setUserActionLoading(userId)
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE', credentials: 'include' })
       if (!res.ok) throw new Error('Failed to delete user')
       setSuccess(`User ${email || userId} deleted`)
       await fetchUsers()
@@ -293,7 +271,7 @@ export default function AdminManagement({ currentUserEmail, onAdminUpdate }: Adm
     if (!confirm(`Delete escrow ${escrowId} and all related records? This cannot be undone.`)) return
     setEscrowActionLoading(escrowId)
     try {
-      const res = await fetch(`/api/admin/escrows/${escrowId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/admin/escrows/${escrowId}`, { method: 'DELETE', credentials: 'include' })
       if (!res.ok) throw new Error('Failed to delete escrow')
       setSuccess(`Escrow ${escrowId} deleted`)
       await fetchEscrows(escrowQuery)

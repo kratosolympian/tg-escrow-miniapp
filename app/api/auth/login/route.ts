@@ -67,9 +67,9 @@ export async function POST(request: NextRequest) {
         const { data: { user } } = await supabase.auth.getUser()
         if (user && authData.session && (authData.session as any).access_token) {
           // Create a signed one-time token as well so JSON clients always receive a token
-          try {
-            const { createSignedToken } = await import('@/lib/signedAuth')
-            const token = createSignedToken(authData.user.id, 300)
+            try {
+            const { createSignedTokenAndPersist } = await import('@/lib/signedAuth')
+            const token = await createSignedTokenAndPersist(authData.user.id, 300)
             const resp = NextResponse.json({ user: authData.user, __one_time_token: token })
             // set short-lived cookies for access and refresh tokens so subsequent
             // server helpers can use them via centralized helper
@@ -93,8 +93,8 @@ export async function POST(request: NextRequest) {
       // if the cookie wasn't set on the response. This is safe for tests and
       // small client flows because the token is short-lived.
       try {
-        const { createSignedToken } = await import('@/lib/signedAuth')
-        const token = createSignedToken(authData.user.id, 300)
+        const { createSignedTokenAndPersist } = await import('@/lib/signedAuth')
+        const token = await createSignedTokenAndPersist(authData.user.id, 300)
         const resp = NextResponse.json({ user: authData.user, __one_time_token: token })
         // Also attempt to set cookies if session info is available
         const { setAuthCookies } = await import('@/lib/cookies')

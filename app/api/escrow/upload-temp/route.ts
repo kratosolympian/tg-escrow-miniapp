@@ -60,10 +60,9 @@ export async function POST(request: NextRequest) {
 
   if (token) {
     try {
-      const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
-      console.debug('Upload temp: one-time token present')
-      const userId = await verifyAndConsumeSignedToken(token)
-      console.debug('Upload temp: verifyAndConsumeSignedToken result ok=', !!userId)
+  const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+  // Attempt one-time token verification
+  const userId = await verifyAndConsumeSignedToken(token)
       if (userId) {
         authenticatedUser = { id: userId }
       } else {

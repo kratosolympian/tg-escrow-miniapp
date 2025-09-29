@@ -1,10 +1,13 @@
+
 "use client"
+import Image from 'next/image'
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthCard from '@/components/AuthCard'
+import { formatNaira } from '@/lib/utils'
 
 interface CreateEscrowForm {
   description: string
@@ -54,6 +57,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
       const token = sessionData.session?.access_token;
       const res = await fetch('/api/admin/online-admins', {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
@@ -92,6 +96,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
       const token = sessionData.session?.access_token;
       const res = await fetch('/api/profile/banking', {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
@@ -193,6 +198,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
       const resp = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       })
       const json = await resp.json().catch(() => ({}))
@@ -209,6 +215,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
             await fetch('/api/auth/login', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify({ email: authForm.email, password: authForm.password }),
             })
           } catch (e) {
@@ -221,18 +228,20 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
         setShowAuthForm(false)
         try { checkBank(); } catch {}
 
-        // If we received a one-time token, redirect to seller page with token
+        // If we received a one-time token, navigate to seller page with token.
+        // Use client-side navigation to avoid a full reload; fall back to
+        // window.location if router methods are unavailable.
         if (oneTime) {
           try {
-            window.location.href = `/seller?__one_time_token=${encodeURIComponent(oneTime)}`
+            router.replace(`/seller?__one_time_token=${encodeURIComponent(oneTime)}`)
             return
           } catch (e) {
-            // ignore and fallthrough to reload
+            try { window.location.href = `/seller?__one_time_token=${encodeURIComponent(oneTime)}` } catch (e) {}
           }
         }
 
-        // Otherwise reload so server cookies (if set) are attached to next SSR request
-        try { window.location.reload() } catch (e) {}
+        // Otherwise refresh the current route so SSR can observe newly-set cookies
+        try { router.refresh?.() } catch (e) { try { window.location.reload() } catch (e) {} }
       }
     } catch (error) {
       setError('Network error. Please try again.');
@@ -257,6 +266,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
             const response = await fetch('/api/auth/telegram', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify({ initData })
             })
 
@@ -303,31 +313,38 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
           fd.append('image', file)
           const { data: sessionData } = await supabase.auth.getSession();
           const token = sessionData.session?.access_token;
-          const resp = await fetch('/api/escrow/upload-temp', {
+                const resp = await fetch('/api/escrow/upload-temp', {
             method: 'POST',
             body: fd,
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                  headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                  credentials: 'include',
           });
           const json = await resp.json().catch(() => null);
-          if (resp.ok && json?.path) {
+            if (resp.ok && json?.path) {
             const path = json.path
             setProductImagePath(path)
-            try {
-              const { data: sessionData } = await supabase.auth.getSession();
-              const token = sessionData.session?.access_token;
-              const signResp = await fetch('/api/storage/sign-url', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({ path, bucket: 'product-images' }),
-              });
-              const signJson = await signResp.json().catch(() => null);
-              if (signResp.ok && signJson?.signedUrl) {
-                setProductImagePreview(signJson.signedUrl);
+            // Prefer signedUrl returned by upload-temp if provided
+            if (json?.signedUrl) {
+              setProductImagePreview(json.signedUrl)
+            } else {
+              try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const token = sessionData.session?.access_token;
+                const signResp = await fetch('/api/storage/sign-url', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  credentials: 'include',
+                  body: JSON.stringify({ path, bucket: 'product-images' }),
+                });
+                const signJson = await signResp.json().catch(() => null);
+                if (signResp.ok && signJson?.signedUrl) {
+                  setProductImagePreview(signJson.signedUrl);
+                }
+              } catch (e) {
               }
-            } catch (e) {
             }
 
             setForm(prev => ({ ...prev, image: file }))
@@ -378,6 +395,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
         method: 'POST',
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
       });
 
       const data = await response.json()
@@ -498,13 +516,15 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
               </button>
             </div>
             <div className="space-y-4">
-              {activeEscrows.map((escrow: any) => (
+              {activeEscrows.map((escrow: any) => {
+                const price = typeof escrow.price === 'number' && !isNaN(escrow.price) ? escrow.price : 0
+                return (
                 <div key={escrow.id} className="bg-white rounded-lg shadow-md p-6 border border-green-100">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-semibold text-lg text-green-800">Transaction #{escrow.code}</h3>
                       <p className="text-gray-600 mt-1">{escrow.description}</p>
-                      <p className="text-green-600 font-medium mt-2">₦{escrow.price}</p>
+                      <p className="text-green-600 font-medium mt-2">{formatNaira(price)}</p>
                       <p className="text-sm text-gray-500 mt-1">Status: <span className="capitalize">{escrow.status.replace('_', ' ')}</span></p>
                     </div>
                     <Link
@@ -515,7 +535,8 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
                     </Link>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ) : (
@@ -578,7 +599,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
                 />
                 {productImagePreview && (
                   <div className="mt-4">
-                    <img src={productImagePreview} alt="Product preview" className="max-w-xs rounded-lg shadow-md" />
+                    <Image src={productImagePreview} alt="Product preview" width={320} height={240} className="max-w-xs rounded-lg shadow-md" />
                   </div>
                 )}
               </div>

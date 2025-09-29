@@ -5,8 +5,6 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = createServiceRoleClient()
 
-    console.log('Testing database connection...')
-
     // Test connection by trying to query a table that should exist
     const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true })
 

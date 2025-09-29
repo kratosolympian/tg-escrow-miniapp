@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server.js'
 import { createServiceRoleClient } from '@/lib/supabaseServer'
-import { createSignedToken } from '@/lib/signedAuth'
+import { createSignedToken, createSignedTokenAndPersist } from '@/lib/signedAuth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,10 +8,6 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClientWithCookies()
     const { data } = await supabase.auth.getSession()
     const session = data?.session
-
-    console.log('[TEST] session present:', !!session)
-    console.log('[TEST] session user id:', session?.user?.id)
-    console.log('[TEST] session access_token length:', session?.access_token?.length || 0)
     
     const supabaseSvc = createServiceRoleClient()
     const { searchParams } = new URL(request.url)
@@ -46,7 +42,7 @@ export async function GET(request: NextRequest) {
           }, { status: 500 })
         }
 
-        const token = createSignedToken(availableBuyer.id, 3600) // 1 hour expiry
+        const token = await createSignedTokenAndPersist(availableBuyer.id, 3600) // 1 hour expiry
         return NextResponse.json({
           success: true,
           token,
@@ -79,7 +75,7 @@ export async function GET(request: NextRequest) {
           }, { status: 500 })
         }
 
-        const token = createSignedToken(availableSeller.id, 3600) // 1 hour expiry
+        const token = await createSignedTokenAndPersist(availableSeller.id, 3600) // 1 hour expiry
         return NextResponse.json({
           success: true,
           token,

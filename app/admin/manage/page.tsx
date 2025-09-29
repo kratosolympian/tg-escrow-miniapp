@@ -28,7 +28,7 @@ export default function AdminManagementPage() {
         setCurrentUser({ id: data.user.id, email: data.user.email ?? undefined })
         
         // Also fetch user profile to ensure auth state is refreshed
-        const response = await fetch('/api/auth/me')
+  const response = await fetch('/api/auth/me', { credentials: 'include' })
         if (response.ok) {
           const userData = await response.json()
           // This helps ensure the Header component detects the user
@@ -44,7 +44,7 @@ export default function AdminManagementPage() {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut()
-      await fetch('/api/auth/logout', { method: 'POST' })
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
       window.location.href = '/'
     } catch (error) {
       console.error('Logout error:', error)
@@ -91,9 +91,6 @@ export default function AdminManagementPage() {
           currentUserEmail={currentUser?.email}
           onAdminUpdate={() => {
             // Refresh or update any parent state if needed
-            if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
-              console.log('Admin data updated')
-            }
           }}
         />
       </div>

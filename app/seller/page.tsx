@@ -5,21 +5,13 @@ import { redirect } from 'next/navigation'
 
 export const revalidate = 0
 
-console.log('[SSR] seller/page.tsx - file loaded')
-
 export default async function SellerPage({ searchParams }: { searchParams?: Record<string,string> }) {
-  console.log('[SSR] seller/page.tsx - function called')
   // Server-side: check for an authenticated session and query active escrows.
   try {
-    console.log('[SSR] seller/page.tsx - in try block')
     const { createServerClientWithCookies } = await import('@/lib/supabaseServer')
     const supabase = createServerClientWithCookies()
     const { data } = await supabase.auth.getSession()
     const session = data?.session
-
-    console.log('[SSR] seller/page.tsx - session present:', !!session)
-    console.log('[SSR] seller/page.tsx - session user id:', session?.user?.id)
-    console.log('[SSR] seller/page.tsx - session access_token length:', session?.access_token?.length || 0)
 
     if (!session) {
       // Not authenticated on server; but if a one-time token is present in the URL,
@@ -42,19 +34,8 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
               .order('created_at', { ascending: false })
               .limit(10)
 
-            // Debug logging: show what the service-role query returned
-            try {
-              // eslint-disable-next-line no-console
-              console.log('[SSR][DEV] sellerDataDev length=', Array.isArray(sellerDataDev) ? sellerDataDev.length : 'null', 'err=', sellerErrDev)
-              if (Array.isArray(sellerDataDev) && sellerDataDev.length > 0) {
-                // eslint-disable-next-line no-console
-                console.log('[SSR][DEV] sellerDataDev[0]=', JSON.stringify(sellerDataDev[0]))
-              }
-            } catch (logE) {}
-
             if (!sellerErrDev && Array.isArray(sellerDataDev) && sellerDataDev.length > 0) {
               // Don't redirect - let client show the list
-              console.log('[SSR][DEV] Found active escrows but not redirecting')
             }
           } catch (e) {
             // ignore dev helper errors
@@ -70,8 +51,6 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
         try {
           const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
           const userId = await verifyAndConsumeSignedToken(oneTime)
-          // eslint-disable-next-line no-console
-          console.log('[SSR] seller/page.tsx - one-time-token verify userId:', userId)
           if (userId) {
             const svc = createServiceRoleClient()
             const activeStatuses = ['created','waiting_payment','waiting_admin','payment_confirmed','in_progress','on_hold']
@@ -83,19 +62,8 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
               .order('created_at', { ascending: false })
               .limit(10)
 
-            // Debug logging for token-based path
-            try {
-              // eslint-disable-next-line no-console
-              console.log('[SSR][TOKEN] sellerData length=', Array.isArray(sellerData) ? sellerData.length : 'null', 'err=', sellerErr)
-              if (Array.isArray(sellerData) && sellerData.length > 0) {
-                // eslint-disable-next-line no-console
-                console.log('[SSR][TOKEN] sellerData[0]=', JSON.stringify(sellerData[0]))
-              }
-            } catch (logE) {}
-
             if (!sellerErr && Array.isArray(sellerData) && sellerData.length > 0) {
               // Don't redirect - let client show the list
-              console.log('[SSR][TOKEN] Found active escrows but not redirecting')
             } else if (sellerErr) {
               console.error('[SSR] seller/page.tsx - service-role query error for token path:', sellerErr)
             }
@@ -109,16 +77,7 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
     }
 
     const token = session.access_token
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[SSR] seller/page.tsx - access token length:', token ? token.length : 0)
-    } catch (l) {}
     // Query active escrows directly using the server-side Supabase client.
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[SSR] seller/page.tsx - querying escrows via server client')
-    } catch (l) {}
-
     try {
       const activeStatuses = [
         'created',
@@ -140,12 +99,7 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
       if (sellerErr) {
         console.error('[SSR] seller/page.tsx - error querying escrows:', sellerErr)
       } else if (Array.isArray(sellerData) && sellerData.length > 0) {
-        try {
-          // eslint-disable-next-line no-console
-          console.log('[SSR] seller/page.tsx - found active seller escrows count=', sellerData.length)
-        } catch (l) {}
         // Don't redirect - let client show the list
-        console.log('[SSR] seller/page.tsx - found active escrows but not redirecting')
       }
     } catch (e) {
       console.error('[SSR] seller/page.tsx - error during direct DB query', e)

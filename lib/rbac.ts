@@ -22,7 +22,6 @@ export async function getProfile(supabase: SupabaseClient<Database>): Promise<Pr
 
     // If profile doesn't exist, create it
     if (error && error.code === 'PGRST116') {
-  if (process.env.DEBUG) console.log('Profile not found, creating one for user:', user.id)
       const { data: newProfile, error: createError } = await (supabase as any)
         .from('profiles')
         .insert({

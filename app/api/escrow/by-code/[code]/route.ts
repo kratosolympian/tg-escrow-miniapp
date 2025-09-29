@@ -46,11 +46,38 @@ export async function GET(
       .eq('escrow_id', (escrow as any).id)
       .order('created_at', { ascending: true })
 
-    const { data: receipts } = await serviceClient
+    const { data: receipts, error: receiptsError } = await serviceClient
       .from('receipts')
       .select('id, file_path, created_at, uploaded_by')
       .eq('escrow_id', (escrow as any).id)
       .order('created_at', { ascending: true })
+
+    if (receiptsError) {
+      console.error('Error fetching receipts for escrow', (escrow as any).id, receiptsError)
+    }
+
+    // Attach signed URLs to receipts (non-fatal)
+    if (Array.isArray(receipts) && receipts.length > 0) {
+      try {
+        const signed = await Promise.all(receipts.map(async (r: any) => {
+          try {
+            const { data: signedData, error: signError } = await createServiceRoleClient()
+              .storage
+              .from('receipts')
+              .createSignedUrl(r.file_path, 900)
+
+            return { ...r, signed_url: signError ? null : signedData?.signedUrl || null }
+          } catch (e) {
+            console.error('Error creating signed URL for receipt', e)
+            return { ...r, signed_url: null }
+          }
+        }))
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        ;(receipts as any) = signed
+      } catch (e) {
+        console.error('Error while attaching signed urls to receipts', e)
+      }
+    }
 
     // Attach assigned admin bank data (profile) or platform fallback
     let adminBank: any = null

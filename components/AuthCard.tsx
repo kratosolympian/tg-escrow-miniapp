@@ -1,4 +1,6 @@
+
 "use client"
+import Image from 'next/image'
 
 import React from 'react'
 
@@ -16,7 +18,7 @@ export default function AuthCard({ authMode, authForm, authLoading, error, onCha
   return (
     <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-10 border border-green-100 mx-auto">
       <div className="flex flex-col items-center mb-8">
-  <img src="/logo-blue.png" alt="Logo" className="h-20 mb-6" />
+  <Image src="/logo-blue.png" alt="Logo" width={80} height={80} className="h-20 mb-6" />
         <h2 className="text-4xl font-extrabold text-green-800 mb-2 text-center">Log in to your account</h2>
         <p className="text-gray-500 text-center mb-6 text-lg">Welcome back! Please enter your details.</p>
         <div className="flex w-full mb-6 rounded-xl overflow-hidden border border-green-200">

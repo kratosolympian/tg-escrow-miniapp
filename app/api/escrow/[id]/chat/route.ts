@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer';
 
 // Get chat messages for an escrow
 export async function GET(
@@ -8,8 +7,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-  const supabase = createServerClientWithCookies()
-  const sb: any = supabase
+    const supabase = createServerClientWithCookies();
+    const sb: any = supabase
     // Get current user (guarded)
     let user = null
     try {
@@ -20,8 +19,9 @@ export async function GET(
     }
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Verify user has access to this escrow
-    const { data: escrow, error: escrowError } = await sb
+    // Use service role client to read escrow (server enforces access control below)
+    const serviceClient = createServiceRoleClient()
+    const { data: escrow, error: escrowError } = await serviceClient
       .from('escrows')
       .select('seller_id, buyer_id')
       .eq('id', params.id)
@@ -31,23 +31,22 @@ export async function GET(
       return NextResponse.json({ error: 'Escrow not found' }, { status: 404 })
     }
 
-    // Check if user is admin
-    const { data: userProfile } = await sb
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-  const userProfileAny: any = userProfile
-  const escrowAny: any = escrow
-  const isAdmin = userProfileAny && userProfileAny.role === 'admin'
-  const hasAccess = isAdmin || escrowAny.seller_id === user.id || escrowAny.buyer_id === user.id
+    // Check if user is admin by consulting admin_users (using service client)
+    const { data: adminRow } = await serviceClient
+      .from('admin_users')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const isAdmin = !!adminRow
+    const escrowAny: any = escrow
+    const hasAccess = isAdmin || escrowAny.seller_id === user.id || escrowAny.buyer_id === user.id
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Get chat messages with sender info
-  const { data: messages, error: messagesError } = await sb
+    // Get chat messages and include sender profile (server-side service client can join safely)
+  const { data: messages, error: messagesError } = await serviceClient
       .from('chat_messages')
       .select(`
         id,
@@ -67,10 +66,10 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 })
     }
 
-    // Mark messages as read for current user
+    // Mark messages as read for current user (service client, server-side check already done)
     if (!isAdmin) {
       const updateObj: any = { is_read: true }
-      await sb
+      await serviceClient
         .from('chat_messages')
         .update(updateObj)
         .eq('escrow_id', params.id)
@@ -94,8 +93,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-  const supabase = createServerClientWithCookies()
-  const sb: any = supabase
+    const supabase = createServerClientWithCookies();
+    const sb: any = supabase
     // Get current user (guarded)
     let user = null
     try {
@@ -117,8 +116,9 @@ export async function POST(
       return NextResponse.json({ error: 'Message too long (max 500 characters)' }, { status: 400 })
     }
 
-    // Verify user has access to this escrow
-    const { data: escrow, error: escrowError } = await sb
+    // Use service client to read escrow (server enforces access control below)
+    const serviceClient2 = createServiceRoleClient()
+    const { data: escrow, error: escrowError } = await serviceClient2
       .from('escrows')
       .select('seller_id, buyer_id')
       .eq('id', params.id)
@@ -128,20 +128,35 @@ export async function POST(
       return NextResponse.json({ error: 'Escrow not found' }, { status: 404 })
     }
 
-    // Check if user is admin
-    const { data: userProfile } = await sb
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    // Check if user is admin by consulting admin_users table (service client)
+    const { data: adminRow2 } = await serviceClient2
+      .from('admin_users')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
 
-  const userProfileAny2: any = userProfile
+  const isAdmin = !!adminRow2
   const escrowAny2: any = escrow
-  const isAdmin = userProfileAny2 && userProfileAny2.role === 'admin'
   const hasAccess = isAdmin || escrowAny2.seller_id === user.id || escrowAny2.buyer_id === user.id
 
+
     if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      return NextResponse.json({
+        error: 'Access denied',
+        debug: {
+          user_id: user.id,
+          escrow_buyer_id: escrowAny2.buyer_id,
+          escrow_seller_id: escrowAny2.seller_id,
+          insert_sender_id: user.id,
+          insertObj: {
+            escrow_id: params.id,
+            sender_id: user.id,
+            message: message.trim(),
+            message_type,
+            is_read: false
+          }
+        }
+      }, { status: 403 })
     }
 
     // Insert the message
@@ -152,15 +167,37 @@ export async function POST(
       message_type,
       is_read: false
     }
-    const { data: newMessage, error: insertError } = await sb
+    // Insert message and return inserted row including sender profile
+    const { data: newMessage, error: insertError } = await serviceClient2
       .from('chat_messages')
       .insert(insertObj)
-      .select()
+      .select(`
+        id,
+        escrow_id,
+        sender_id,
+        message,
+        message_type,
+        is_read,
+        created_at,
+        sender:profiles!sender_id(full_name, role)
+      `)
       .single()
 
     if (insertError) {
-  // ...removed for production...
-      return NextResponse.json({ error: 'Failed to send message' }, { status: 500 })
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[DEBUG] Insert chat message failed', { insertError, insertObj });
+      }
+      return NextResponse.json({
+        error: 'Failed to send message',
+        debug: {
+          user_id: user.id,
+          escrow_buyer_id: escrowAny2.buyer_id,
+          escrow_seller_id: escrowAny2.seller_id,
+          insert_sender_id: user.id,
+          insertObj,
+          insertError
+        }
+      }, { status: 500 })
     }
 
 
@@ -170,7 +207,7 @@ export async function POST(
       user_id: user.id,
       last_read_at: new Date().toISOString()
     }
-    await sb
+    await serviceClient2
       .from('chat_participants')
       .upsert(upsertObj, { onConflict: 'escrow_id,user_id' })
 
@@ -180,7 +217,9 @@ export async function POST(
     })
 
   } catch (error) {
-  // ...removed for production...
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[DEBUG] POST /api/escrow/[id]/chat error', error);
+    }
+    return NextResponse.json({ error: 'Internal server error', debug: String(error) }, { status: 500 })
   }
 }

@@ -32,4 +32,5 @@ setInterval(() => {
   })
 }, 60 * 1000)
 
-export default { createOneTimeToken, consumeOneTimeToken }
+const ephemeralAuthApi = { createOneTimeToken, consumeOneTimeToken }
+export default ephemeralAuthApi

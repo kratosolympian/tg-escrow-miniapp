@@ -81,6 +81,7 @@ export default function BuyerPage() {
       const token = sessionData.session?.access_token;
       const res = await fetch('/api/escrow/my-active', {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
       })
       if (res.ok) {
         const j = await res.json()
@@ -166,16 +167,16 @@ export default function BuyerPage() {
     try {
       const response = await doJoin(code.trim())
       if (response.ok) {
-        window.location.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
+          router.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
         return
       }
       const data = await response.json().catch(() => null)
       // If already joined, fetch escrow details and redirect
       if (data?.error && typeof data.error === 'string' && data.error.toLowerCase().includes('already joined')) {
         // Try to fetch escrow details
-        const escrowResp = await fetch(`/api/escrow/by-id/${code.trim().toUpperCase()}`)
+        const escrowResp = await fetch(`/api/escrow/by-id/${code.trim().toUpperCase()}`, { credentials: 'include' })
         if (escrowResp.ok) {
-          window.location.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
+          router.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
           return
         } else {
           setError('You have already joined, but escrow details could not be loaded.')
@@ -201,17 +202,17 @@ export default function BuyerPage() {
     if (!code.trim()) return
     setLoading(true)
     try {
-      const resp = await doJoin(code.trim())
+  const resp = await doJoin(code.trim())
       if (resp.ok) {
-        window.location.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
+        router.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
         return
       }
       const data = await resp.json().catch(() => null)
       // If already joined, fetch escrow details and redirect
       if (data?.error && typeof data.error === 'string' && data.error.toLowerCase().includes('already joined')) {
-        const escrowResp = await fetch(`/api/escrow/by-id/${code.trim().toUpperCase()}`)
+  const escrowResp = await fetch(`/api/escrow/by-id/${code.trim().toUpperCase()}`, { credentials: 'include' })
         if (escrowResp.ok) {
-          window.location.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
+          router.replace(`/buyer/escrow/${code.trim().toUpperCase()}`)
           return
         } else {
           setError('You have already joined, but escrow details could not be loaded.')

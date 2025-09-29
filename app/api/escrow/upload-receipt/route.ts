@@ -33,16 +33,28 @@ import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
  *   500: { error: string } (upload or DB error)
  */
 export async function POST(request: NextRequest) {
+  const makeJson = (payload: any, authenticatedUser?: any, debugEscrowId?: string | null, status?: number) => {
+    try {
+      if (process.env.DEBUG) {
+        payload._debug = payload._debug || {}
+        try { payload._debug.cookie = request.headers.get('cookie') || null } catch (e) {}
+        try { payload._debug.serverUser = (authenticatedUser) ? (authenticatedUser.id || null) : null } catch (e) {}
+        try { payload._debug.escrowId = debugEscrowId || null } catch (e) {}
+        payload._debug.ts = Date.now()
+      }
+    } catch (e) {}
+    return typeof status === 'number' ? NextResponse.json(payload, { status }) : NextResponse.json(payload)
+  }
+
+  // Track the escrowId value used for lookups so it can be returned in _debug
+  let debugEscrowId: string | null = null
+
   // Ensure route is only used for POST requests
   if (request.method !== 'POST') {
-    if (process.env.DEBUG) console.log('405 - Method Not Allowed:', request.method, request.url)
-    return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 })
+    return makeJson({ error: 'Method Not Allowed' }, null, null, 405)
   }
   let uploadedFilePath: string | null = null
   try {
-  // Minimal audit log
-  if (process.env.DEBUG) console.log('Receipt upload API called')
-    
   const supabase = createServerClientWithAuthHeader(request)
     const serviceClient = createServiceRoleClient()
     
@@ -54,6 +66,8 @@ export async function POST(request: NextRequest) {
     // Use simple authentication instead of requireAuth
   const { data: { user }, error: authError } = await supabase.auth.getUser()
     let authenticatedUser = user
+    if (process.env.DEBUG) {
+    }
 
     // If no user in session, allow one-time token authentication
     if (!authenticatedUser) {
@@ -72,14 +86,13 @@ export async function POST(request: NextRequest) {
       if (token) {
         try {
           const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
-          console.debug('Upload receipt: one-time token present')
+          // Attempt one-time token verification (no verbose logs)
           const userId = await verifyAndConsumeSignedToken(token)
-          console.debug('Upload receipt: verifyAndConsumeSignedToken result ok=', !!userId)
           if (userId) {
             authenticatedUser = { id: userId } as any
           } else {
             console.warn('Upload receipt: one-time token present but not valid/expired')
-            return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+            return makeJson({ error: 'Invalid or expired one-time token' }, null, null, 401)
           }
         } catch (e) {
           console.warn('Error importing/verifying one-time token')
@@ -88,11 +101,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (!authenticatedUser) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      return makeJson({ error: 'Authentication required' }, null, null, 401)
     }
     
 
-    const escrowId = escrowIdFromForm
+  const escrowId = escrowIdFromForm
+  debugEscrowId = escrowId
 
     // For testing: allow empty file
     if (!receiptFile && process.env.NODE_ENV === 'development') {
@@ -109,34 +123,56 @@ export async function POST(request: NextRequest) {
     })
     const parseResult = schema.safeParse({ escrowId, file: receiptFile })
     if (!parseResult.success) {
-      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
+      return makeJson({ error: parseResult.error.errors[0].message }, authenticatedUser, debugEscrowId, 400)
     }
 
-    // Get escrow using service client
-    const { data: escrow, error: escrowError } = await (serviceClient as any)
-      .from('escrows')
-      .select('*')
-      .eq('id', escrowId)
-      .single()
+    // Get escrow using service client. Accept either the UUID id or the human-friendly code.
+    let escrow = null
+    let escrowError: any = null
+    try {
+      const byId = await (serviceClient as any)
+        .from('escrows')
+        .select('*')
+        .eq('id', escrowId)
+        .single()
+      escrow = byId.data
+      escrowError = byId.error
+    } catch (e) {
+      // ignore
+    }
+
+    if (!escrow) {
+      try {
+        const byCode = await (serviceClient as any)
+          .from('escrows')
+          .select('*')
+          .eq('code', escrowId)
+          .single()
+        escrow = byCode.data
+        escrowError = byCode.error
+      } catch (e) {
+        // ignore
+      }
+    }
 
     if (escrowError || !escrow) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+      return makeJson({ error: 'Transaction not found' }, authenticatedUser, debugEscrowId, 404)
     }
 
     // Check if user is the buyer
     if (escrow.buyer_id !== authenticatedUser.id) {
-      return NextResponse.json({ error: 'Only the buyer can upload receipts' }, { status: 403 })
+      return makeJson({ error: 'Only the buyer can upload receipts' }, authenticatedUser, debugEscrowId, 403)
     }
 
     // Validate file
     if (!isValidReceiptType(receiptFile.type)) {
-      return NextResponse.json({ 
+      return makeJson({ 
         error: 'Invalid file type. Only JPEG, PNG, WebP, and PDF are allowed.' 
-      }, { status: 400 })
+      }, authenticatedUser, debugEscrowId, 400)
     }
 
     if (receiptFile.size > 10 * 1024 * 1024) { // 10MB limit
-      return NextResponse.json({ error: 'File too large. Maximum size is 10MB.' }, { status: 400 })
+      return makeJson({ error: 'File too large. Maximum size is 10MB.' }, authenticatedUser, debugEscrowId, 400)
     }
 
 
@@ -146,8 +182,6 @@ export async function POST(request: NextRequest) {
     const fileName = `${fileId}.${extension}`
     const filePath = `${escrow.id}/${authenticatedUser.id}/${fileName}`
     uploadedFilePath = filePath
-
-    if (process.env.DEBUG) console.log('Starting file upload for escrow:', escrow.id)
 
     // Upload to storage using service client
     const { error: uploadError } = await serviceClient.storage
@@ -161,13 +195,11 @@ export async function POST(request: NextRequest) {
       // Clean up any partial file
       await serviceClient.storage.from('receipts').remove([filePath])
       console.error('Error uploading receipt:', uploadError)
-      return NextResponse.json({ 
+      return makeJson({ 
         error: 'Failed to upload receipt', 
         details: uploadError.message 
-      }, { status: 500 })
+      }, authenticatedUser, debugEscrowId, 500)
     }
-
-    if (process.env.DEBUG) console.log('File uploaded successfully')
 
     // Insert receipt record
     const { error: receiptError } = await (serviceClient as any)
@@ -182,7 +214,7 @@ export async function POST(request: NextRequest) {
       console.error('Error creating receipt record')
       // Clean up uploaded file
       await serviceClient.storage.from('receipts').remove([filePath])
-      return NextResponse.json({ error: 'Failed to save receipt' }, { status: 500 })
+      return makeJson({ error: 'Failed to save receipt' }, authenticatedUser, debugEscrowId, 500)
     }
 
     // Update escrow status to waiting_admin if transitioning from waiting_payment
@@ -198,7 +230,7 @@ export async function POST(request: NextRequest) {
         console.error('Error updating escrow status:', statusError)
         // Clean up uploaded file
         await serviceClient.storage.from('receipts').remove([filePath])
-        return NextResponse.json({ error: 'Failed to update escrow status' }, { status: 500 })
+        return makeJson({ error: 'Failed to update escrow status' }, authenticatedUser, debugEscrowId, 500)
       }
 
       // Log status change
@@ -216,7 +248,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true })
+  return makeJson({ ok: true }, authenticatedUser, debugEscrowId)
 
   } catch (error) {
     // Clean up uploaded file if it exists
@@ -228,6 +260,6 @@ export async function POST(request: NextRequest) {
       }
     }
     console.error('Upload receipt error:', error)
-    return NextResponse.json({ error: 'Failed to upload receipt' }, { status: 500 })
+    return makeJson({ error: 'Failed to upload receipt' }, null, null, 500)
   }
 }

@@ -1,4 +1,6 @@
+
 'use client'
+import React from 'react'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -22,6 +24,7 @@ interface Escrow {
 }
 
 export default function AdminDashboard() {
+
   const [escrows, setEscrows] = useState<Escrow[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('')
@@ -30,6 +33,25 @@ export default function AdminDashboard() {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
   const [user, setUser] = useState<any | null>(null)
 
+  const fetchEscrows = React.useCallback(async () => {
+    try {
+      const params = new URLSearchParams()
+      if (filter) params.append('status', filter)
+      if (search) params.append('q', search)
+      params.append('limit', '50')
+
+  const response = await fetch(`/api/admin/escrows?${params}`, { credentials: 'include' })
+      if (response.ok) {
+        const data = await response.json()
+        setEscrows(data.escrows)
+      }
+    } catch (error) {
+      console.error('Error fetching escrows:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [filter, search])
+
   useEffect(() => {
     fetchEscrows()
     detectCurrentUser()
@@ -37,10 +59,9 @@ export default function AdminDashboard() {
       try {
         const { supabase } = await import('@/lib/supabaseClient')
         const { data } = await supabase.auth.getUser()
-        setUser(data?.user ?? null)
-        
-        // Also fetch user profile to ensure auth state is refreshed
-        const response = await fetch('/api/auth/me')
+          setUser(data?.user ?? null)
+          // Also fetch user profile to ensure auth state is refreshed
+        const response = await fetch('/api/auth/me', { credentials: 'include' })
         if (response.ok) {
           const userData = await response.json()
           // This helps ensure the Header component detects the user
@@ -49,13 +70,8 @@ export default function AdminDashboard() {
         console.error('Failed to get user on mount', e)
       }
     })()
-    if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
-      // Minimal client-side debug hint to confirm dashboard mounted
-      // Do not print user/session data.
-      // eslint-disable-next-line no-console
-      console.debug('AdminDashboard mounted (client)')
-    }
-  }, [filter, search])
+    // No-op in production: avoid client-side debug logs
+  }, [filter, search, fetchEscrows])
 
   const detectCurrentUser = async () => {
     try {
@@ -69,31 +85,13 @@ export default function AdminDashboard() {
     }
   }
 
-  const fetchEscrows = async () => {
-    try {
-      const params = new URLSearchParams()
-      if (filter) params.append('status', filter)
-      if (search) params.append('q', search)
-      params.append('limit', '50')
-
-      const response = await fetch(`/api/admin/escrows?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setEscrows(data.escrows)
-      }
-    } catch (error) {
-      console.error('Error fetching escrows:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleLogout = async () => {
     try {
       // Clear client session
       await supabase.auth.signOut()
       // Call server-side logout for cookie/session cleanup
-      await fetch('/api/auth/logout', { method: 'POST' })
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
       window.location.href = '/'
     } catch (error) {
       console.error('Logout error:', error)
@@ -289,9 +287,7 @@ export default function AdminDashboard() {
             <AdminManagement 
             currentUserEmail={currentUserEmail || undefined}
             onAdminUpdate={() => {
-              if (process.env.NEXT_PUBLIC_DEBUG === '1' || process.env.DEBUG) {
-                console.log('Admin data updated')
-              }
+              // Refresh or update any parent state if needed
             }}
           />
         )}

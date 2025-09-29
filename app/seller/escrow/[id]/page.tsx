@@ -9,6 +9,7 @@ import { formatNaira } from '@/lib/utils'
 import { getStatusLabel, getStatusColor } from '@/lib/status'
 import StatusBadge from '@/components/StatusBadge'
 import EscrowChat from '@/components/EscrowChat'
+import { supabase } from '@/lib/supabaseClient'
 
 interface Escrow {
   id: string
@@ -28,6 +29,7 @@ interface Escrow {
     id: string
     created_at: string
     file_path: string
+    signed_url?: string
   }>
   status_logs?: Array<{
     id: string
@@ -80,6 +82,7 @@ export default function SellerEscrowPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
+  const [statusChangeNotification, setStatusChangeNotification] = useState<string | null>(null)
 
   useEffect(() => {
     fetchEscrow()
@@ -91,6 +94,31 @@ export default function SellerEscrowPage() {
         fetchEscrow()
       }
     }, 15000)
+    // real-time subscription for escrow updates (status changes, receipts)
+    // DISABLED: Temporarily disabled to test if it interferes with chat real-time
+    let channel: any = null
+    if (false && id) {  // Disabled
+      try {
+        const ch = supabase.channel(`escrow-updates-${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${id}` }, (payload: any) => {
+          console.debug('[SellerEscrowPage] escrow realtime payload', payload)
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            setEscrow(prev => {
+              const merged = { ...(prev || {}), ...(payload.new || {}) }
+              // Check if status changed
+              if (prev && prev.status !== merged.status) {
+                setStatusChangeNotification(`Status changed to: ${merged.status}`)
+                // Auto-dismiss notification after 5 seconds
+                setTimeout(() => setStatusChangeNotification(null), 5000)
+              }
+              return merged
+            })
+          }
+        }).subscribe()
+        channel = ch
+      } catch (e) {
+        // ignore, fall back to polling
+      }
+    }
     return () => clearInterval(interval)
   }, [id])
 
@@ -145,10 +173,18 @@ export default function SellerEscrowPage() {
   // Fetch signed URL for delivery proof
   const fetchDeliveryProofSignedUrl = async (path: string) => {
     try {
+      // If escrow returned a signed URL for delivery proof, use it
+      // Note: the escrow object might contain delivery_proof_signed_url or similar
+      if ((escrow as any)?.delivery_proof_signed_url && (escrow as any).delivery_proof_signed_url.startsWith('http')) {
+        setDeliveryProofSignedUrl((escrow as any).delivery_proof_signed_url)
+        return
+      }
+
       const response = await fetch('/api/storage/sign-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, bucket: 'product-images' })
+        body: JSON.stringify({ path, bucket: 'product-images' }),
+        credentials: 'include'
       })
       if (response.ok) {
         const data = await response.json()
@@ -169,7 +205,7 @@ export default function SellerEscrowPage() {
     let lastError: any = null
     while (attempt < maxAttempts) {
       try {
-        const response = await fetch(`/api/escrow/by-id/${id}`)
+  const response = await fetch(`/api/escrow/by-id/${id}`, { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           setEscrow(data.escrow)
@@ -199,13 +235,13 @@ export default function SellerEscrowPage() {
 
   const fetchCurrentUser = async () => {
     try {
-      const response = await fetch('/api/auth/me')
+      const response = await fetch('/api/auth/me', { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
-        setCurrentUser(data)
+        setCurrentUser((data && data.user) ? data.user : data)
       }
     } catch (error) {
-      console.error('Error fetching current user:', error)
+      console.error('[SellerPage] Error fetching current user:', error)
     }
   }
 
@@ -213,6 +249,12 @@ export default function SellerEscrowPage() {
     if (!escrow?.product_image_url) return
 
     try {
+      // Prefer server-provided signed URL if present
+      if ((escrow as any).product_image_signed_url) {
+        setProductImageUrl((escrow as any).product_image_signed_url)
+        return
+      }
+
       const response = await fetch('/api/storage/sign-url', {
         method: 'POST',
         headers: {
@@ -240,11 +282,17 @@ export default function SellerEscrowPage() {
     
     for (const receipt of escrow.receipts) {
       try {
+        // Prefer server-provided signed_url
+        if (receipt.signed_url) {
+          urls[receipt.id] = receipt.signed_url
+          continue
+        }
         const response = await fetch('/api/storage/sign-url', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify({
             path: receipt.file_path,
             bucket: 'receipts'
@@ -729,19 +777,17 @@ export default function SellerEscrowPage() {
         )}
 
         {/* Communication Chat (always show, even if buyer not present) */}
-        {currentUser && (
-          <div className="card mb-6">
-            <h2 className="text-xl font-semibold mb-4">💬 Communication</h2>
-            <EscrowChat 
-              escrowId={escrow.id}
-              currentUserId={currentUser.id}
-              isAdmin={false}
-            />
-            {!escrow.buyer && (
-              <div className="text-gray-500 text-sm mt-2">Waiting for buyer to join. Messages will be delivered when buyer joins.</div>
-            )}
-          </div>
-        )}
+        <div className="mt-8">
+          <EscrowChat
+            escrowId={escrow.id || ""}
+            currentUserId={currentUser?.id || ""}
+            isAdmin={false}
+            supabaseClient={supabase}
+          />
+          {!escrow.buyer && (
+            <div className="text-gray-500 text-sm mt-2">Waiting for buyer to join. Messages will be delivered when buyer joins.</div>
+          )}
+        </div>
 
         {/* Feedback banners */}
         {error && (
@@ -757,6 +803,15 @@ export default function SellerEscrowPage() {
             type="success"
             onClose={() => setSuccess('')}
           />
+        )}
+
+        {statusChangeNotification && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <div className="text-blue-400 mr-3">🔄</div>
+              <p className="text-blue-800 font-medium">{statusChangeNotification}</p>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -1,0 +1,312 @@
+[
+  {
+    "type": "info",
+    "text": "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold",
+    "location": {
+      "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+      "lineNumber": 38559,
+      "columnNumber": 16
+    },
+    "timestamp": 1759092754780
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_set_header_color {color_key: bg_color}",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757080
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_set_bottom_bar_color {color: #ffffff}",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757081
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_theme ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757081
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_viewport ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757082
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_safe_area ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757083
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_content_safe_area ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757084
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "location": {
+      "url": "http://localhost:3000/favicon.ico",
+      "lineNumber": 0,
+      "columnNumber": 0
+    },
+    "timestamp": 1759092757084
+  },
+  {
+    "type": "error",
+    "text": "Warning: Extra attributes from the server: %s%s style \n    at html\n    at RootLayout (Server)\n    at RedirectErrorBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/redirect-boundary.js:74:9)\n    at RedirectBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/redirect-boundary.js:82:11)\n    at NotFoundErrorBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/not-found-boundary.js:76:9)\n    at NotFoundBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/not-found-boundary.js:84:11)\n    at DevRootNotFoundBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/dev-root-not-found-boundary.js:33:11)\n    at ReactDevOverlay (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/react-dev-overlay/app/ReactDevOverlay.js:87:9)\n    at HotReload (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:321:11)\n    at Router (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/app-router.js:207:11)\n    at ErrorBoundaryHandler (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/error-boundary.js:113:9)\n    at ErrorBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/error-boundary.js:160:11)\n    at AppRouter (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/app-router.js:585:13)\n    at ServerRoot (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/app-index.js:112:27)\n    at Root (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/app-index.js:117:11)",
+    "location": {
+      "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/app-index.js",
+      "lineNumber": 32,
+      "columnNumber": 21
+    },
+    "timestamp": 1759092757085
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_ready ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757086
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_expand ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757087
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_ready ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757088
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_expand ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092757088
+  },
+  {
+    "type": "warning",
+    "text": "Image with src \"/logo.png\" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: \"auto\"' or 'height: \"auto\"' to maintain the aspect ratio.",
+    "location": {
+      "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/shared/lib/utils/warn-once.js",
+      "lineNumber": 15,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092757090
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][fetch] -> POST /api/dev/signin {credentials: omit, headers: Object, documentCookie: (empty)}",
+    "location": {
+      "url": "",
+      "lineNumber": 50,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092757110
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][document.cookie] -> sb-hbphcrwgmxapqrecmunh-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJleUpoYkdjaU9pSklVekkxTmlJc0ltdHBaQ0k2SW1kWGNuaHVSbEpyVEhOdmRHcGxURTBpTENKMGVYQWlPaUpLVjFRaWZRLmV5SnBjM01pT2lKb2RIUndjem92TDJoaWNHaGpjbmRuYlhoaGNIRnlaV050ZFc1b0xuTjFjR0ZpWVhObExtTnZMMkYxZEdndmRqRWlMQ0p6ZFdJaU9pSTROVEEwTnpsak5DMHhZekk1TFRSak9HSXRPR1ZtWkMxaFpUVTROREJqT0RJd1pEUWlMQ0poZFdRaU9pSmhkWFJvWlc1MGFXTmhkR1ZrSWl3aVpYaHdJam94TnpVNU1EazJNelUzTENKcFlYUWlPakUzTlRrd09USTNOVGNzSW1WdFlXbHNJam9pWW5WNVFHdHlZWFJ2Y3k1dVp5SXNJbkJvYjI1bElqb2lJaXdpWVhCd1gyMWxkR0ZrWVhSaElqcDdJbkJ5YjNacFpHVnlJam9pWlcxaGFXd2lMQ0p3Y205MmFXUmxjbk1pT2xzaVpXMWhhV3dpWFgwc0luVnpaWEpmYldWMFlXUmhkR0VpT25zaVpXMWhhV3dpT2lKaWRYbEFhM0poZEc5ekxtNW5JaXdpWlcxaGFXeGZkbVZ5YVdacFpXUWlPblJ5ZFdVc0ltWjFiR3hmYm1GdFpTSTZJa0oxZVdWeUlGUmxjM1FpTENKd2FHOXVaVjkyWlhKcFptbGxaQ0k2Wm1Gc2MyVXNJbk4xWWlJNklqZzFNRFEzT1dNMExURmpNamt0TkdNNFlpMDRaV1prTFdGbE5UZzBNR000TWpCa05DSjlMQ0p5YjJ4bElqb2lZWFYwYUdWdWRHbGpZWFJsWkNJc0ltRmhiQ0k2SW1GaGJERWlMQ0poYlhJaU9sdDdJbTFsZEdodlpDSTZJbkJoYzNOM2IzSmtJaXdpZEdsdFpYTjBZVzF3SWpveE56VTVNRGt5TnpVM2ZWMHNJbk5sYzNOcGIyNWZhV1FpT2lJeU9EQTFPR1kzWmkxa056a3hMVFJoWWpZdFlXWTFZaTFrTkRRM09UTXpaV0ZpT0dNaUxDSnBjMTloYm05dWVXMXZkWE1pT21aaGJITmxmUS5pckh5SlVFaWVlSzhBNTFPd3VwTmd4cGdxUUVJYXJtQ1o4ZmdpOTU4Q0JJIiwidG9rZW5fdHlwZSI6ImJlYXJlciIsImV4cGlyZXNfaW4iOjM2MDAsImV4cGlyZXNfYXQiOjE3NTkwOTYzNTcsInJlZnJlc2hfdG9rZW4iOiJncnlza21oYm00NDYiLCJ1c2VyIjp7ImlkIjoiODUwNDc5YzQtMWMyOS00YzhiLThlZmQtYWU1ODQwYzgyMGQ0IiwiYXVkIjoiYXV0aGVudGljYXRlZCIsInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiZW1haWwiOiJidXlAa3JhdG9zLm5nIiwiZW1haWxfY29uZmlybWVkX2F0IjoiMjAyNS0wOS0xMFQyMzoxNzowMy41NTcwMzJaIiwicGhvbmUiOiIiLCJjb25maXJtZWRfYXQiOiIyMDI1LTA5LTEwVDIzOjE3OjAzLjU1NzAzMloiLCJsYXN0X3NpZ25faW5fYXQiOiIyMDI1LTA5LTI4VDIwOjUyOjM3LjAwNzIwNDUyNVoiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6ImJ1eUBrcmF0b3MubmciLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQnV5ZXIgVGVzdCIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiODUwNDc5YzQtMWMyOS00YzhiLThlZmQtYWU1ODQwYzgyMGQ0In0sImlkZW50aXRpZXMiOlt7ImlkZW50aXR5X2lkIjoiNTExNWI0NDUtNmM5ZC00NGI4LTg3ZTgtNzRjMGJiNWYyY2NkIiwiaWQiOiI4NTA0NzljNC0xYzI5LTRjOGItOGVmZC1hZTU4NDBjODIwZDQiLCJ1c2VyX2lkIjoiODUwNDc5YzQtMWMyOS00YzhiLThlZmQtYWU1ODQwYzgyMGQ0IiwiaWRlbnRpdHlfZGF0YSI6eyJlbWFpbCI6ImJ1eUBrcmF0b3MubmciLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImZ1bGxfbmFtZSI6IkJ1eWVyIFRlc3QiLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6Ijg1MDQ3OWM0LTFjMjktNGM4Yi04ZWZkLWFlNTg0MGM4MjBkNCJ9LCJwcm92aWRlciI6ImVtYWlsIiwibGFzdF9zaWduX2luX2F0IjoiMjAyNS0wOS0xMFQyMzoxNzowMy41NDU3OTJaIiwiY3JlYXRlZF9hdCI6IjIwMjUtMDktMTBUMjM6MTc6MDMuNTQ1ODQyWiIsInVwZGF0ZWRfYXQiOiIyMDI1LTA5LTEwVDIzOjE3OjAzLjU0NTg0MloiLCJlbWFpbCI6ImJ1eUBrcmF0b3MubmcifV0sImNyZWF0ZWRfYXQiOiIyMDI1LTA5LTEwVDIzOjE3OjAzLjUxMzA0MVoiLCJ1cGRhdGVkX2F0IjoiMjAyNS0wOS0yOFQyMDo1MjozNy4wMjAzMTdaIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0sIndlYWtfcGFzc3dvcmQiOm51bGx9",
+    "location": {
+      "url": "",
+      "lineNumber": 2,
+      "columnNumber": 18
+    },
+    "timestamp": 1759092759196
+  },
+  {
+    "type": "info",
+    "text": "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold",
+    "location": {
+      "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+      "lineNumber": 38559,
+      "columnNumber": 16
+    },
+    "timestamp": 1759092767975
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_set_header_color {color_key: bg_color}",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092771009
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_set_bottom_bar_color {color: #ffffff}",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092771011
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_theme ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092771016
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_viewport ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092771018
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_safe_area ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092771018
+  },
+  {
+    "type": "log",
+    "text": "[Telegram.WebView] > postEvent web_app_request_content_safe_area ",
+    "location": {
+      "url": "https://telegram.org/js/telegram-web-app.js",
+      "lineNumber": 134,
+      "columnNumber": 12
+    },
+    "timestamp": 1759092771019
+  },
+  {
+    "type": "error",
+    "text": "Warning: Extra attributes from the server: %s%s style \n    at html\n    at RootLayout (Server)\n    at RedirectErrorBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/redirect-boundary.js:74:9)\n    at RedirectBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/redirect-boundary.js:82:11)\n    at NotFoundErrorBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/not-found-boundary.js:76:9)\n    at NotFoundBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/not-found-boundary.js:84:11)\n    at DevRootNotFoundBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/dev-root-not-found-boundary.js:33:11)\n    at ReactDevOverlay (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/react-dev-overlay/app/ReactDevOverlay.js:87:9)\n    at HotReload (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/react-dev-overlay/app/hot-reloader-client.js:321:11)\n    at Router (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/app-router.js:207:11)\n    at ErrorBoundaryHandler (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/error-boundary.js:113:9)\n    at ErrorBoundary (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/error-boundary.js:160:11)\n    at AppRouter (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/components/app-router.js:585:13)\n    at ServerRoot (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/app-index.js:112:27)\n    at Root (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/app-index.js:117:11)",
+    "location": {
+      "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/client/app-index.js",
+      "lineNumber": 32,
+      "columnNumber": 21
+    },
+    "timestamp": 1759092771021
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][fetch] -> GET /api/escrow/by-id/MG171MFW7GRE {credentials: include, headers: Object, documentCookie: sb-hbphcrwgmxapqrecmunh-auth-token=base64-eyJhY2Nl…vbnltb3VzIjpmYWxzZX0sIndlYWtfcGFzc3dvcmQiOm51bGx9}",
+    "location": {
+      "url": "",
+      "lineNumber": 50,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092771022
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][fetch] -> GET /api/auth/me {credentials: include, headers: Object, documentCookie: sb-hbphcrwgmxapqrecmunh-auth-token=base64-eyJhY2Nl…vbnltb3VzIjpmYWxzZX0sIndlYWtfcGFzc3dvcmQiOm51bGx9}",
+    "location": {
+      "url": "",
+      "lineNumber": 50,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092771061
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][fetch] -> GET /api/escrow/by-id/MG171MFW7GRE {credentials: include, headers: Object, documentCookie: sb-hbphcrwgmxapqrecmunh-auth-token=base64-eyJhY2Nl…vbnltb3VzIjpmYWxzZX0sIndlYWtfcGFzc3dvcmQiOm51bGx9}",
+    "location": {
+      "url": "",
+      "lineNumber": 50,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092771062
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][fetch] -> GET /api/auth/me {credentials: include, headers: Object, documentCookie: sb-hbphcrwgmxapqrecmunh-auth-token=base64-eyJhY2Nl…vbnltb3VzIjpmYWxzZX0sIndlYWtfcGFzc3dvcmQiOm51bGx9}",
+    "location": {
+      "url": "",
+      "lineNumber": 50,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092771063
+  },
+  {
+    "type": "warning",
+    "text": "Image with src \"/logo.png\" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: \"auto\"' or 'height: \"auto\"' to maintain the aspect ratio.",
+    "location": {
+      "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@14.2.32_react-dom@18.3.1_react@18.3.1/node_modules/next/dist/shared/lib/utils/warn-once.js",
+      "lineNumber": 15,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092771064
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][fetch] -> GET https://hbphcrwgmxapqrecmunh.supabase.co/auth/v1/user {credentials: omit, headers: Object, documentCookie: sb-hbphcrwgmxapqrecmunh-auth-token=base64-eyJhY2Nl…vbnltb3VzIjpmYWxzZX0sIndlYWtfcGFzc3dvcmQiOm51bGx9}",
+    "location": {
+      "url": "",
+      "lineNumber": 50,
+      "columnNumber": 20
+    },
+    "timestamp": 1759092771072
+  },
+  {
+    "type": "log",
+    "text": "[INSTRUMENT][document.cookie-after-nav] -> sb-hbphcrwgmxapqrecmunh-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJleUpoYkdjaU9pSklVekkxTmlJc0ltdHBaQ0k2SW1kWGNuaHVSbEpyVEhOdmRHcGxURTBpTENKMGVYQWlPaUpLVjFRaWZRLmV5SnBjM01pT2lKb2RIUndjem92TDJoaWNHaGpjbmRuYlhoaGNIRnlaV050ZFc1b0xuTjFjR0ZpWVhObExtTnZMMkYxZEdndmRqRWlMQ0p6ZFdJaU9pSTROVEEwTnpsak5DMHhZekk1TFRSak9HSXRPR1ZtWkMxaFpUVTROREJqT0RJd1pEUWlMQ0poZFdRaU9pSmhkWFJvWlc1MGFXTmhkR1ZrSWl3aVpYaHdJam94TnpVNU1EazJNelUzTENKcFlYUWlPakUzTlRrd09USTNOVGNzSW1WdFlXbHNJam9pWW5WNVFHdHlZWFJ2Y3k1dVp5SXNJbkJvYjI1bElqb2lJaXdpWVhCd1gyMWxkR0ZrWVhSaElqcDdJbkJ5YjNacFpHVnlJam9pWlcxaGFXd2lMQ0p3Y205MmFXUmxjbk1pT2xzaVpXMWhhV3dpWFgwc0luVnpaWEpmYldWMFlXUmhkR0VpT25zaVpXMWhhV3dpT2lKaWRYbEFhM0poZEc5ekxtNW5JaXdpWlcxaGFXeGZkbVZ5YVdacFpXUWlPblJ5ZFdVc0ltWjFiR3hmYm1GdFpTSTZJa0oxZVdWeUlGUmxjM1FpTENKd2FHOXVaVjkyWlhKcFptbGxaQ0k2Wm1Gc2MyVXNJbk4xWWlJNklqZzFNRFEzT1dNMExURmpNamt0TkdNNFlpMDRaV1prTFdGbE5UZzBNR000TWpCa05DSjlMQ0p5YjJ4bElqb2lZWFYwYUdWdWRHbGpZWFJsWkNJc0ltRmhiQ0k2SW1GaGJERWlMQ0poYlhJaU9sdDdJbTFsZEdodlpDSTZJbkJoYzNOM2IzSmtJaXdpZEdsdFpYTjBZVzF3SWpveE56VTVNRGt5TnpVM2ZWMHNJbk5sYzNOcGIyNWZhV1FpT2lJeU9EQTFPR1kzWmkxa056a3hMVFJoWWpZdFlXWTFZaTFrTkRRM09UTXpaV0ZpT0dNaUxDSnBjMTloYm05dWVXMXZkWE1pT21aaGJITmxmUS5pckh5SlVFaWVlSzhBNTFPd3VwTmd4cGdxUUVJYXJtQ1o4ZmdpOTU4Q0JJIiwidG9rZW5fdHlwZSI6ImJlYXJlciIsImV4cGlyZXNfaW4iOjM2MDAsImV4cGlyZXNfYXQiOjE3NTkwOTYzNTcsInJlZnJlc2hfdG9rZW4iOiJncnlza21oYm00NDYiLCJ1c2VyIjp7ImlkIjoiODUwNDc5YzQtMWMyOS00YzhiLThlZmQtYWU1ODQwYzgyMGQ0IiwiYXVkIjoiYXV0aGVudGljYXRlZCIsInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiZW1haWwiOiJidXlAa3JhdG9zLm5nIiwiZW1haWxfY29uZmlybWVkX2F0IjoiMjAyNS0wOS0xMFQyMzoxNzowMy41NTcwMzJaIiwicGhvbmUiOiIiLCJjb25maXJtZWRfYXQiOiIyMDI1LTA5LTEwVDIzOjE3OjAzLjU1NzAzMloiLCJsYXN0X3NpZ25faW5fYXQiOiIyMDI1LTA5LTI4VDIwOjUyOjM3LjAwNzIwNDUyNVoiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6ImJ1eUBrcmF0b3MubmciLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiQnV5ZXIgVGVzdCIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiODUwNDc5YzQtMWMyOS00YzhiLThlZmQtYWU1ODQwYzgyMGQ0In0sImlkZW50aXRpZXMiOlt7ImlkZW50aXR5X2lkIjoiNTExNWI0NDUtNmM5ZC00NGI4LTg3ZTgtNzRjMGJiNWYyY2NkIiwiaWQiOiI4NTA0NzljNC0xYzI5LTRjOGItOGVmZC1hZTU4NDBjODIwZDQiLCJ1c2VyX2lkIjoiODUwNDc5YzQtMWMyOS00YzhiLThlZmQtYWU1ODQwYzgyMGQ0IiwiaWRlbnRpdHlfZGF0YSI6eyJlbWFpbCI6ImJ1eUBrcmF0b3MubmciLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImZ1bGxfbmFtZSI6IkJ1eWVyIFRlc3QiLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6Ijg1MDQ3OWM0LTFjMjktNGM4Yi04ZWZkLWFlNTg0MGM4MjBkNCJ9LCJwcm92aWRlciI6ImVtYWlsIiwibGFzdF9zaWduX2luX2F0IjoiMjAyNS0wOS0xMFQyMzoxNzowMy41NDU3OTJaIiwiY3JlYXRlZF9hdCI6IjIwMjUtMDktMTBUMjM6MTc6MDMuNTQ1ODQyWiIsInVwZGF0ZWRfYXQiOiIyMDI1LTA5LTEwVDIzOjE3OjAzLjU0NTg0MloiLCJlbWFpbCI6ImJ1eUBrcmF0b3MubmcifV0sImNyZWF0ZWRfYXQiOiIyMDI1LTA5LTEwVDIzOjE3OjAzLjUxMzA0MVoiLCJ1cGRhdGVkX2F0IjoiMjAyNS0wOS0yOFQyMDo1MjozNy4wMjAzMTdaIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0sIndlYWtfcGFzc3dvcmQiOm51bGx9",
+    "location": {
+      "url": "",
+      "lineNumber": 2,
+      "columnNumber": 18
+    },
+    "timestamp": 1759092771560
+  }
+]

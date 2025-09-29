@@ -1,5 +1,6 @@
-'use client'
+"use client"
 
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
@@ -31,6 +32,7 @@ export default function HomePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ initData }),
+        credentials: 'include',
       })
 
       if (response.ok) {
@@ -48,7 +50,16 @@ export default function HomePage() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-12">
           <div className="flex justify-center mb-4">
-            <img src="/logo-white.png" alt="Escroway Logo" style={{ height: 60 }} />
+            <div style={{ width: 180, height: 60, position: 'relative' }}>
+              <Image
+                src="/logo-white.png"
+                alt="Escroway Logo"
+                fill
+                style={{ objectFit: 'contain' }}
+                sizes="180px"
+                priority
+              />
+            </div>
           </div>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Secure transactions between buyers and sellers with admin oversight
