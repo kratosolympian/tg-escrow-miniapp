@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     }
     
     // If sign in failed, try to create the user (dev only)
-    if (signInError && process.env.NODE_ENV !== 'production') {
+    if (signInError && (process.env.NODE_ENV as string) !== 'production') {
       try {
         console.log('Dev signin: user not found, attempting to create user')
         const signUpResult = await supabase.auth.signUp({

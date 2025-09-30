@@ -184,7 +184,7 @@ export async function POST(
       .single()
 
     if (insertError) {
-      if (process.env.NODE_ENV !== 'production') {
+      if ((process.env.NODE_ENV as string) !== 'production') {
         console.error('[DEBUG] Insert chat message failed', { insertError, insertObj });
       }
       return NextResponse.json({
@@ -217,7 +217,7 @@ export async function POST(
     })
 
   } catch (error) {
-    if (process.env.NODE_ENV !== 'production') {
+    if ((process.env.NODE_ENV as string) !== 'production') {
       console.error('[DEBUG] POST /api/escrow/[id]/chat error', error);
     }
     return NextResponse.json({ error: 'Internal server error', debug: String(error) }, { status: 500 })
