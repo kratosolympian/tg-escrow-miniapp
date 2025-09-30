@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabaseClient";
 
 export default function Header() {
   const [user, setUser] = useState<any | null>(null);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
   const [mounted, setMounted] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
@@ -20,6 +21,20 @@ export default function Header() {
         const { data, error } = await supabase.auth.getUser();
         if (data?.user) {
           setUser(data.user);
+          
+          // Fetch user profile to get role
+          try {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', data.user.id)
+              .single();
+            setUserProfile(profileData);
+          } catch (profileError) {
+            console.warn('Failed to fetch user profile:', profileError);
+            setUserProfile(null);
+          }
+          
           setAuthChecked(true);
           return;
         }
@@ -32,6 +47,22 @@ export default function Header() {
               const userData = await response.json();
               if (userData.user) {
                 setUser(userData.user);
+                
+                // Try to get profile from API response or fetch separately
+                if (userData.profile) {
+                  setUserProfile(userData.profile);
+                } else {
+                  try {
+                    const profileResponse = await fetch('/api/profile/banking', { credentials: 'include' });
+                    if (profileResponse.ok) {
+                      const profileData = await profileResponse.json();
+                      setUserProfile(profileData.profile);
+                    }
+                  } catch (profileError) {
+                    console.warn('Failed to fetch user profile from API:', profileError);
+                  }
+                }
+                
                 setAuthChecked(true);
                 return;
               }
@@ -46,11 +77,13 @@ export default function Header() {
           setTimeout(() => checkAuth(retryCount + 1), 100);
         } else {
           setUser(null);
+          setUserProfile(null);
           setAuthChecked(true);
         }
       } catch (error) {
         console.error('Header auth check error:', error);
         setUser(null);
+        setUserProfile(null);
         setAuthChecked(true);
       }
     };
@@ -60,10 +93,26 @@ export default function Header() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user);
+        
+        // Fetch user profile when auth state changes
+        supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: profileData }) => {
+            setUserProfile(profileData);
+          })
+          .catch((profileError) => {
+            console.warn('Failed to fetch user profile on auth change:', profileError);
+            setUserProfile(null);
+          });
+        
         setAuthChecked(true);
       } else {
         // When signed out, also check API to be sure
         setUser(null);
+        setUserProfile(null);
         setAuthChecked(true);
       }
     });
@@ -143,13 +192,15 @@ export default function Header() {
   const handleLogout = async () => {
     if (typeof window !== "undefined") {
       await supabase.auth.signOut();
+      setUser(null);
+      setUserProfile(null);
       window.location.href = "/";
     }
   };
 
   return (
     <header className="w-full bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
-      <div className="max-w-5xl mx-auto flex items-center justify-between px-4 py-2">
+      <div className="w-full max-w-5xl mx-auto flex items-center justify-between px-4 py-2">
         <Link href="/">
           <span className="flex items-center gap-2">
             <Image
@@ -163,20 +214,35 @@ export default function Header() {
             <span className="font-bold text-lg tracking-tight text-blue-700">Escroway</span>
           </span>
         </Link>
-        <nav className="flex gap-4 items-center">
-          <Link href="/admin/dashboard" className="hover:text-blue-700 font-medium">Admin</Link>
-          <Link href="/buyer" className="hover:text-blue-700 font-medium">Buyer</Link>
-          <Link href="/seller" className="hover:text-blue-700 font-medium">Seller</Link>
-          {authChecked && user && (
+        <nav className="flex gap-2 md:gap-4 items-center flex-wrap">
+          {/* Show role-based navigation links */}
+          {authChecked && user && userProfile && (
             <>
-              <Link href="/settings/profile" className="hover:text-blue-700 font-medium">Profile</Link>
+              {userProfile.role === 'buyer' && (
+                <Link href="/buyer" className="hover:text-blue-700 font-medium text-sm md:text-base">Buyer Portal</Link>
+              )}
+              {userProfile.role === 'seller' && (
+                <Link href="/seller" className="hover:text-blue-700 font-medium text-sm md:text-base">Seller Portal</Link>
+              )}
+              {(userProfile.role === 'admin' || userProfile.role === 'super_admin') && (
+                <Link href="/admin/dashboard" className="hover:text-blue-700 font-medium text-sm md:text-base">Admin</Link>
+              )}
+              <Link href="/settings/profile" className="hover:text-blue-700 font-medium text-sm md:text-base">Profile</Link>
               <button
                 onClick={handleLogout}
                 className="ml-2 btn-secondary text-sm font-semibold"
-                style={{ minWidth: 80 }}
+                style={{ minWidth: 70 }}
               >
                 Logout
               </button>
+            </>
+          )}
+          {/* Show all links when not logged in */}
+          {authChecked && !user && (
+            <>
+              <Link href="/admin/dashboard" className="hover:text-blue-700 font-medium text-sm md:text-base">Admin</Link>
+              <Link href="/buyer" className="hover:text-blue-700 font-medium text-sm md:text-base">Buyer</Link>
+              <Link href="/seller" className="hover:text-blue-700 font-medium text-sm md:text-base">Seller</Link>
             </>
           )}
         </nav>
