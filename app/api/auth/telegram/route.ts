@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
-import { verifyTelegramInitData, deriveEmailAndPassword } from '@/lib/telegram'
+import { verifyTelegramInitData } from '@/lib/telegram'
 import { z } from 'zod'
 
 const requestSchema = z.object({
@@ -35,84 +35,40 @@ export async function POST(request: NextRequest) {
 
   if (process.env.DEBUG) console.log('Telegram user verified: id=', telegramUser.id)
 
-    // Create service role client for admin operations
-    const serviceClient = createServiceRoleClient()
-    
-    // Derive email and password from Telegram ID
-    const { email, password } = deriveEmailAndPassword(telegramUser.id.toString())
-
-    // Check if user exists, if not create them
-    const { data: existingUser, error: signInError } = await serviceClient.auth.signInWithPassword({
-      email,
-      password
-    })
-
-    if (signInError) {
-      // User doesn't exist, create them
-      const { data: newUser, error: createError } = await serviceClient.auth.admin.createUser({
-        email,
-        password,
-        user_metadata: {
-          telegram_id: telegramUser.id,
-          first_name: telegramUser.first_name,
-          username: telegramUser.username
-        }
-      })
-
-      if (createError || !newUser.user) {
-        console.error('Error creating user')
-        console.error('User creation failed')
-        return NextResponse.json({ 
-          error: 'Failed to create user', 
-          details: createError?.message || 'Unknown error'
-        }, { status: 500 })
-      }
-
-      // Create profile
-      const { error: profileError } = await (serviceClient as any)
-        .from('profiles')
-        .insert({
-          id: newUser.user.id,
-          email: email,
-          telegram_id: telegramUser.id.toString(),
-          role: 'seller', // Default to seller for escrow creation
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-
-      if (profileError) {
-        console.error('Error creating profile')
-        console.error('Profile creation failed for user id:', newUser.user.id)
-        return NextResponse.json({ 
-          error: 'Failed to create profile', 
-          details: profileError.message || 'Unknown error'
-        }, { status: 500 })
-      }
-    } else if (existingUser.user) {
-      // Update profile with telegram_id if not set
-      await (serviceClient as any)
-        .from('profiles')
-        .upsert({
-          id: existingUser.user.id,
-          telegram_id: telegramUser.id.toString(),
-        }, {
-          onConflict: 'id'
-        })
-    }
-
-    // Now create a server client with cookies to sign in the user
+    // Check if user is already authenticated via email/password
     const supabase = createServerClientWithCookies()
-    const { error: clientSignInError } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
+    const { data: { user: currentUser }, error: getUserError } = await supabase.auth.getUser()
 
-    if (clientSignInError) {
-      console.error('Error signing in user')
-      return NextResponse.json({ error: 'Failed to sign in' }, { status: 500 })
+    if (getUserError || !currentUser) {
+      return NextResponse.json({ 
+        error: 'Please log in with email and password first before connecting Telegram', 
+        code: 'NOT_AUTHENTICATED' 
+      }, { status: 401 })
     }
 
-    return NextResponse.json({ ok: true })
+    // User is authenticated, associate Telegram ID with their profile
+    const serviceClient = createServiceRoleClient()
+    const { error: updateError } = await serviceClient
+      .from('profiles')
+      .update({
+        telegram_id: telegramUser.id.toString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', currentUser.id)
+
+    if (updateError) {
+      console.error('Error updating profile with Telegram ID:', updateError)
+      return NextResponse.json({ 
+        error: 'Failed to associate Telegram account', 
+        details: updateError.message 
+      }, { status: 500 })
+    }
+
+    console.log('Successfully associated Telegram ID with user profile:', currentUser.id)
+    return NextResponse.json({ 
+      ok: true, 
+      message: 'Telegram account connected successfully' 
+    })
 
   } catch (error) {
     console.error('Telegram auth error:', error)
