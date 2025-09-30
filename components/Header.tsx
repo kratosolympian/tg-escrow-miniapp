@@ -90,23 +90,22 @@ export default function Header() {
     
     checkAuth();
     
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user);
         
         // Fetch user profile when auth state changes
-        supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profileData }) => {
-            setUserProfile(profileData);
-          })
-          .catch((profileError) => {
-            console.warn('Failed to fetch user profile on auth change:', profileError);
-            setUserProfile(null);
-          });
+        try {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          setUserProfile(profileData);
+        } catch (profileError) {
+          console.warn('Failed to fetch user profile on auth change:', profileError);
+          setUserProfile(null);
+        }
         
         setAuthChecked(true);
       } else {
