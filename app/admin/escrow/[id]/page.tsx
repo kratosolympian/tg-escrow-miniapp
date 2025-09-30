@@ -18,6 +18,7 @@ interface EscrowDetail {
   admin_fee: number
   expires_at?: string | null
   product_image_url: string | null
+  delivery_proof_url: string | null
   status: string
   created_at: string
   updated_at: string
@@ -75,6 +76,8 @@ export default function AdminEscrowDetailPage() {
   const [adminNotes, setAdminNotes] = useState('')
   const [showNotesForm, setShowNotesForm] = useState(false)
   const [statusChangeNotification, setStatusChangeNotification] = useState<string | null>(null)
+  const [deliveryProofSignedUrl, setDeliveryProofSignedUrl] = useState<string | null>(null)
+  const [productImageUrl, setProductImageUrl] = useState<string | null>(null)
 
   // Countdown state: show time until escrow expires (uses `expires_at` if present,
   // otherwise falls back to created_at + 30 minutes)
@@ -115,6 +118,66 @@ export default function AdminEscrowDetailPage() {
   useEffect(() => {
     fetchCurrentUser()
   }, [])
+
+  // Fetch delivery proof signed URL when escrow has delivery proof
+  useEffect(() => {
+    if (!escrow?.delivery_proof_url) {
+      setDeliveryProofSignedUrl(null)
+      return
+    }
+
+    const fetchDeliveryProofSignedUrl = async () => {
+      try {
+        const response = await fetch('/api/storage/sign-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: escrow.delivery_proof_url, bucket: 'product-images' }),
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setDeliveryProofSignedUrl(data.signedUrl)
+        } else {
+          setDeliveryProofSignedUrl(null)
+        }
+      } catch (err) {
+        console.error('Error fetching delivery proof signed url:', err)
+        setDeliveryProofSignedUrl(null)
+      }
+    }
+
+    fetchDeliveryProofSignedUrl()
+  }, [escrow?.delivery_proof_url])
+
+  // Fetch product image signed URL when escrow loads
+  useEffect(() => {
+    if (!escrow?.product_image_url) {
+      setProductImageUrl(null)
+      return
+    }
+
+    const fetchProductImageSignedUrl = async () => {
+      try {
+        const response = await fetch('/api/storage/sign-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: escrow.product_image_url, bucket: 'product-images' }),
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setProductImageUrl(data.signedUrl)
+        } else {
+          setProductImageUrl(null)
+        }
+      } catch (err) {
+        console.error('Error fetching product image signed url:', err)
+        setProductImageUrl(null)
+      }
+    }
+
+    fetchProductImageSignedUrl()
+  }, [escrow?.product_image_url])
 
   // Subscribe to escrow updates (status changes, receipts, etc.) so UI updates in real-time
   useEffect(() => {
@@ -470,6 +533,20 @@ export default function AdminEscrowDetailPage() {
                 </div>
               </div>
 
+              {/* Product Image */}
+              {productImageUrl && (
+                <div className="mt-6">
+                  <h3 className="font-semibold text-gray-700 mb-2">Product Image</h3>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <img
+                      src={productImageUrl}
+                      alt="Product"
+                      className="w-full max-w-md h-auto rounded-lg object-cover border"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="mt-6">
                 <h3 className="font-semibold text-gray-700 mb-2">Description</h3>
                 <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{escrow.description}</p>
@@ -567,6 +644,49 @@ export default function AdminEscrowDetailPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Delivery Proof */}
+            {escrow.delivery_proof_url && (
+              <div className="card">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6">📦 Delivery Proof</h2>
+                
+                <div className="border rounded-lg p-4">
+                  <div className="mb-3">
+                    {escrow.delivery_proof_url.toLowerCase().endsWith('.pdf') ? (
+                      <a
+                        href={deliveryProofSignedUrl || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-lg"
+                      >
+                        📄 View PDF Delivery Proof
+                      </a>
+                    ) : (
+                      deliveryProofSignedUrl && (
+                        <img
+                          src={deliveryProofSignedUrl}
+                          alt="Delivery Proof"
+                          className="w-full h-48 object-cover rounded border"
+                        />
+                      )
+                    )}
+                  </div>
+                  {deliveryProofSignedUrl && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Delivery proof uploaded by seller</span>
+                      <a
+                        href={deliveryProofSignedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        View Full Size →
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

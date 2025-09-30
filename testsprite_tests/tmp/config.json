@@ -1,0 +1,16 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "loginUser": "buy@kratos.ng",
+  "loginPassword": "letmein",
+  "executionArgs": {
+    "projectName": "tg-escrow-miniapp",
+    "projectPath": "c:\\Users\\mrjoh\\Documents\\Projects\\escrow-services",
+    "testIds": [],
+    "additionalInstruction": "Test the recent fixes for product image display and escrow expiration functionality",
+    "envs": {}
+  },
+  "proxy": "http://3d5c492b-fd80-4ade-af48-35b799cc163f:3dkddVuArbsnejIe4AiUnzGMv2Wl4RA8@tun.testsprite.com:8080"
+}

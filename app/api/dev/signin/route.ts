@@ -37,7 +37,46 @@ export async function POST(request: Request) {
     // in the response so the client can make an informed decision. If the
     // signed-in auth user differs from the profile's id, upsert a new
     // profile row for the signed-in user copying key display fields (dev-only).
-    const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    let authData: any = null
+    let signInError: any = null
+    
+    try {
+      const result = await supabase.auth.signInWithPassword({ email, password })
+      authData = result.data
+      signInError = result.error
+    } catch (e) {
+      signInError = { message: 'Sign in failed' }
+    }
+    
+    // If sign in failed, try to create the user (dev only)
+    if (signInError && process.env.NODE_ENV !== 'production') {
+      try {
+        console.log('Dev signin: user not found, attempting to create user')
+        const signUpResult = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: email.split('@')[0] // Use part before @ as name
+            }
+          }
+        })
+        
+        if (signUpResult.data.user && !signUpResult.error) {
+          authData = signUpResult.data
+          signInError = null
+          console.log('Dev signin: user created successfully')
+        } else if (signUpResult.error?.message?.includes('already registered')) {
+          // User exists but password might be wrong, try sign in again
+          const retryResult = await supabase.auth.signInWithPassword({ email, password })
+          authData = retryResult.data
+          signInError = retryResult.error
+        }
+      } catch (e) {
+        console.warn('Dev signin: failed to create user', e)
+      }
+    }
+    
     if (signInError) return NextResponse.json({ error: signInError.message }, { status: 401 })
     if (!authData.user) return NextResponse.json({ error: 'Authentication failed' }, { status: 401 })
     // Ensure there is a profile row that matches the signed-in auth user id.

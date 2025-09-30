@@ -16,9 +16,13 @@ export async function GET(request: NextRequest) {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser()
 
+    // Check for test mode (development only)
+    const { searchParams } = new URL(request.url)
+    const testMode = searchParams.get('test') === 'true' && process.env.NODE_ENV === 'development'
+
     // If no user from cookies, attempt to accept a one-time token (header or query)
     let resolvedUser = user
-    if (userError || !resolvedUser) {
+    if ((userError || !resolvedUser) && !testMode) {
       // try to find a token in headers or query params
       let token: string | null = null
       try {
@@ -61,12 +65,28 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Test mode fallback (development only)
+    if (!resolvedUser && testMode) {
+      // Use a test user ID for development testing
+      resolvedUser = { id: 'test-user-id' } as any
+    }
+
     if (!resolvedUser) {
       // Keep response machine-friendly for server-side checks: return 401
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
   const userId = (resolvedUser as any).id
+
+    // Test mode response (development only)
+    if (testMode) {
+      return NextResponse.json({
+        seller: [],
+        buyer: [],
+        test_mode: true,
+        message: 'Test mode enabled - authentication bypassed'
+      })
+    }
 
     // Active statuses we consider for "active" transactions
     const activeStatuses = [

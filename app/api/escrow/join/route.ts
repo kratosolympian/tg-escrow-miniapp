@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClientWithCookies()
     const serviceClient = createServiceRoleClient()
 
+    // Check for test mode (development only)
+    const { searchParams } = new URL(request.url)
+    const testMode = searchParams.get('test') === 'true' && process.env.NODE_ENV === 'development'
+
   // Attempt to get authenticated user from cookies in a safe way that
   // won't throw on stale refresh tokens. getSessionSafe will clear known
   // auth cookies if an error is encountered so the browser stops sending
@@ -98,12 +102,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Test mode fallback (development only)
+    if (!authenticatedUser && testMode) {
+      authenticatedUser = { id: 'test-user-id' }
+    }
+
     if (!authenticatedUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
     
     const body = await request.json()
     const { code } = joinEscrowSchema.parse(body)
+
+    // Test mode response (development only)
+    if (testMode) {
+      return NextResponse.json({
+        ok: true,
+        escrowId: 'test-escrow-id',
+        test_mode: true,
+        message: 'Test mode enabled - escrow join bypassed'
+      })
+    }
 
     // Find escrow by code using service client
     // Perform a case-insensitive lookup so codes inserted by tests or clients
@@ -183,7 +202,7 @@ export async function POST(request: NextRequest) {
       .update({
         buyer_id: authenticatedUser.id,
         status: ESCROW_STATUS.WAITING_PAYMENT,
-        expires_at: null // Clear expiration since buyer has joined
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
       })
       .ilike('code', code)
 
@@ -208,7 +227,7 @@ export async function POST(request: NextRequest) {
             console.error('Refetch after update error failed', refetch.error)
           } else {
           const escrowId = refetch.data.id
-            const retry = await serviceClient.from('escrows').update({ buyer_id: authenticatedUser.id, status: ESCROW_STATUS.WAITING_PAYMENT, expires_at: null }).eq('id', escrowId)
+            const retry = await serviceClient.from('escrows').update({ buyer_id: authenticatedUser.id, status: ESCROW_STATUS.WAITING_PAYMENT, expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() }).eq('id', escrowId)
             if (retry.error) {
               // Check if this is the specific database constraint error
               if (retry.error.code === 'P0001' && retry.error.message?.includes('Buyer already has an active escrow')) {

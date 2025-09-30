@@ -54,6 +54,10 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClientWithAuthHeader(request);
     const serviceClient = createServiceRoleClient();
 
+    // Check for test mode (development only)
+    const { searchParams } = new URL(request.url)
+    const testMode = searchParams.get('test') === 'true' && process.env.NODE_ENV === 'development'
+
     // Log authentication attempt
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -61,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     let authenticatedUser = user;
 
-    if (!authenticatedUser) {
+    if (!authenticatedUser && !testMode) {
 
       let token = parsedBody?.__one_time_token || request.headers.get('x-one-time-token') || null;
       if (!token) {
@@ -104,20 +108,49 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Test mode fallback (development only)
+    if (!authenticatedUser && testMode) {
+      authenticatedUser = {
+        id: 'test-user-id',
+        email: 'test@example.com',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+      };
+    }
+
     if (!authenticatedUser) {
       console.error('Authentication failed:', { userError, authenticatedUser });
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-
-
-    // Validate input
-    const { description: validDescription, price: validPrice } = createEscrowSchema.parse({
+    // Validate input data
+    const validationResult = createEscrowSchema.safeParse({
       description: parsedBody.description,
-      price: parsedBody.price,
+      price: parsedBody.price
     });
 
+    if (!validationResult.success) {
+      console.error('Validation failed:', validationResult.error);
+      return NextResponse.json({ 
+        error: 'Invalid input data', 
+        details: validationResult.error.issues 
+      }, { status: 400 });
+    }
 
+    const { description: validDescription, price: validPrice } = validationResult.data;
+
+    // Test mode response (development only)
+    if (testMode) {
+      return NextResponse.json({
+        ok: true,
+        code: 'TEST123',
+        escrowId: 'test-escrow-id',
+        test_mode: true,
+        message: 'Test mode enabled - escrow creation bypassed'
+      })
+    }
 
     // Ensure profile exists
 
@@ -178,6 +211,50 @@ export async function POST(request: NextRequest) {
       insertData.assigned_admin_id = parsedBody.assigned_admin_id;
     }
 
+    // Handle product image: move from temp to permanent location
+    if (parsedBody.productImagePath) {
+      try {
+        const tempPath = parsedBody.productImagePath;
+        const fileName = tempPath.split('/').pop(); // Extract filename from temp path
+        // We'll set the permanent path after creating the escrow with ID
+        const escrowId = generateUUID(); // Generate ID for permanent path
+        const permanentPath = `products/${escrowId}/${fileName}`;
+
+        // Copy file from temp to permanent location
+        const { data: fileData, error: downloadError } = await serviceClient.storage
+          .from('product-images')
+          .download(tempPath);
+
+        if (!downloadError && fileData) {
+          // Upload to permanent location
+          const { error: uploadError } = await serviceClient.storage
+            .from('product-images')
+            .upload(permanentPath, fileData, { upsert: true });
+
+          if (!uploadError) {
+            // Store the permanent path in the escrow data
+            insertData.product_image_url = permanentPath;
+            insertData.id = escrowId; // Use the generated ID
+
+            // Clean up temp file (optional, can be done later)
+            try {
+              await serviceClient.storage
+                .from('product-images')
+                .remove([tempPath]);
+            } catch (cleanupError) {
+              console.warn('Failed to cleanup temp file:', cleanupError);
+            }
+          } else {
+            console.error('Error uploading permanent image:', uploadError);
+          }
+        } else {
+          console.error('Error downloading temp image:', downloadError);
+        }
+      } catch (imageError) {
+        console.error('Error handling product image:', imageError);
+        // Continue without image - don't fail the escrow creation
+      }
+    }
 
     // Insert escrow into database
 

@@ -1,0 +1,141 @@
+{
+  "project_name": "Telegram Escrow Service",
+  "description": "A secure escrow service built as a Telegram Mini App for facilitating transactions between buyers and sellers with admin oversight",
+  "version": "0.1.0",
+  "requirements": [
+    {
+      "id": "auth_telegram",
+      "title": "Telegram WebApp Authentication",
+      "description": "Users must authenticate through Telegram WebApp with secure token validation",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Telegram WebApp data is properly validated",
+        "User profiles are created automatically",
+        "Secure token-based authentication works"
+      ]
+    },
+    {
+      "id": "escrow_creation",
+      "title": "Escrow Transaction Creation",
+      "description": "Sellers can create escrow transactions with product details and images",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Sellers can input product details",
+        "Product images can be uploaded",
+        "Unique escrow codes are generated",
+        "Transaction data is stored securely"
+      ]
+    },
+    {
+      "id": "escrow_join",
+      "title": "Buyer Escrow Participation",
+      "description": "Buyers can join escrow transactions using codes and view product details",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Buyers can enter escrow codes",
+        "Product details and images display correctly",
+        "Buyer can view transaction status"
+      ]
+    },
+    {
+      "id": "payment_processing",
+      "title": "Payment Receipt Management",
+      "description": "Buyers upload payment receipts, admins review and confirm payments",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Buyers can upload payment receipts",
+        "Files are stored securely in Supabase Storage",
+        "Admins can review receipts",
+        "Payment confirmation updates escrow status"
+      ]
+    },
+    {
+      "id": "admin_oversight",
+      "title": "Administrative Functions",
+      "description": "Admins can manage escrows, confirm payments, and handle disputes",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Admins can view all transactions",
+        "Payment confirmations work properly",
+        "Funds can be released to sellers",
+        "Disputes can be resolved"
+      ]
+    },
+    {
+      "id": "image_display",
+      "title": "Product Image Display",
+      "description": "Product images must display correctly for all users",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Images load without errors",
+        "Signed URLs work for secure access",
+        "Images display in buyer and seller views",
+        "Recent display fixes are validated"
+      ]
+    },
+    {
+      "id": "escrow_expiration",
+      "title": "Automatic Escrow Expiration",
+      "description": "Escrows automatically expire when payment deadlines are reached",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Escrows expire after set time period",
+        "Expired escrows are cleaned up",
+        "Status changes are handled properly",
+        "Recent expiration fixes are validated"
+      ]
+    },
+    {
+      "id": "chat_system",
+      "title": "Communication System",
+      "description": "Buyers and sellers can communicate through the escrow chat",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Chat interface is accessible",
+        "Messages are delivered between parties",
+        "Chat history is maintained"
+      ]
+    },
+    {
+      "id": "security_rls",
+      "title": "Database Security",
+      "description": "Row Level Security ensures users only access authorized data",
+      "priority": "high",
+      "acceptance_criteria": [
+        "RLS policies are enforced",
+        "Users cannot access unauthorized data",
+        "Service role operations work correctly"
+      ]
+    }
+  ],
+  "user_stories": [
+    {
+      "role": "seller",
+      "goal": "create secure escrow transactions",
+      "benefit": "protect against non-payment risks"
+    },
+    {
+      "role": "buyer",
+      "goal": "make safe purchases",
+      "benefit": "protection against undelivered goods"
+    },
+    {
+      "role": "admin",
+      "goal": "facilitate legitimate transactions",
+      "benefit": "maintain platform integrity"
+    }
+  ],
+  "technical_constraints": [
+    "Next.js 14 App Router framework",
+    "Supabase PostgreSQL database",
+    "Telegram WebApp integration",
+    "TypeScript for type safety",
+    "TailwindCSS for styling"
+  ],
+  "recent_fixes_to_test": [
+    "Fixed product image display issues for buyers",
+    "Implemented automatic escrow expiration with server-side cleanup",
+    "Added comprehensive debugging for image loading",
+    "Enhanced signed URL generation for secure file access"
+  ]
+}

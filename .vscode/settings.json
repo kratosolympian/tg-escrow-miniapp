@@ -1,3 +1,12 @@
 {
-  "npm.packageManager": "pnpm"
+  "npm.packageManager": "pnpm",
+  "mcpServers": {
+    "TestSprite": {
+      "command": "npx",
+      "args": ["@testsprite/testsprite-mcp@latest"],
+      "env": {
+        "API_KEY": "sk-user-q_iF9e6mvQgo3ad4znHcp5zjOatM0fKM0biYlD995izjtLyjBIhFdy9d3JJMHJMUtytGcHW1MG23XRyY9r5NBogtggGgY14R12jQcuOBBpUJF2MXROmx9JSAy_QD2nFRvnU"
+      }
+    }
+  }
 }

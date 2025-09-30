@@ -299,9 +299,6 @@ export default React.memo(function EscrowChat({ escrowId, currentUserId, isAdmin
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">💬 Escrow Chat</h3>
           <div className="flex items-center gap-2">
-            <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-              POLLING
-            </span>
             {isAdmin && (
               <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
                 👨‍💼 Admin View
@@ -319,6 +316,19 @@ export default React.memo(function EscrowChat({ escrowId, currentUserId, isAdmin
               <p className="text-amber-700">
                 Keep all communication within this chat. Taking conversations outside the escrow system 
                 means admin cannot provide assistance or intervention if disputes arise.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Admin Contact */}
+        <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex">
+            <div className="text-blue-400 mr-2">📧</div>
+            <div className="text-sm">
+              <p className="text-blue-800 font-medium mb-1">Need Help?</p>
+              <p className="text-blue-700">
+                Contact our CEO directly: <a href="mailto:ceo@kratos.ng" className="text-blue-600 hover:text-blue-800 underline font-medium">ceo@kratos.ng</a>
               </p>
             </div>
           </div>

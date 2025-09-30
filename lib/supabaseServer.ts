@@ -6,8 +6,8 @@ import type { Database } from './supabaseClient'
 
 // Create a Supabase client using the Authorization header (Bearer token) if present, else cookies
 export function createServerClientWithAuthHeader(request?: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hbphcrwgmxapqrecmunh.supabase.co';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhicGhjcndnbXhhcHFyZWNtdW5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMjk2MTcsImV4cCI6MjA3MjkwNTYxN30.Cy033qSbGGHTqg8q66_523T1q1AmaQdT-7MPooIiCCU';
   let accessToken: string | undefined;
   if (request) {
     const authHeader = request.headers.get('authorization');
@@ -28,8 +28,8 @@ export function createServerClientWithAuthHeader(request?: NextRequest) {
 export function createServerClientWithCookies() {
   const cookieStore = cookies()
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hbphcrwgmxapqrecmunh.supabase.co',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhicGhjcndnbXhhcHFyZWNtdW5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMjk2MTcsImV4cCI6MjA3MjkwNTYxN30.Cy033qSbGGHTqg8q66_523T1q1AmaQdT-7MPooIiCCU',
     {
       cookies: {
         getAll() {
@@ -53,8 +53,8 @@ export function createServerClientWithCookies() {
 
 export function createServiceRoleClient() {
   return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hbphcrwgmxapqrecmunh.supabase.co',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhicGhjcndnbXhhcHFyZWNtdW5oIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzMyOTYxNywiZXhwIjoyMDcyOTA1NjE3fQ.MdmItnBTJ7TkzymtDgY8LM3FFJIg_1AMFng5bI3e6Ao',
     {
       auth: {
         autoRefreshToken: false,

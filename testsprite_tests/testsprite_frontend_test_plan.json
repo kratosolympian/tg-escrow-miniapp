@@ -1,0 +1,88 @@
+[
+  {
+    "id": "auth_telegram_login",
+    "title": "Telegram Authentication Flow",
+    "description": "Test Telegram WebApp authentication and user login",
+    "steps": [
+      "Navigate to application",
+      "Verify Telegram WebApp authentication works",
+      "Check user profile creation"
+    ]
+  },
+  {
+    "id": "seller_create_escrow",
+    "title": "Seller Creates Escrow Transaction",
+    "description": "Test escrow creation with product details and image upload",
+    "steps": [
+      "Login as seller",
+      "Navigate to seller dashboard",
+      "Create new escrow with product details",
+      "Upload product image",
+      "Verify escrow code generation"
+    ]
+  },
+  {
+    "id": "buyer_join_escrow",
+    "title": "Buyer Joins Escrow Transaction",
+    "description": "Test buyer joining escrow and viewing product details",
+    "steps": [
+      "Login as buyer",
+      "Enter escrow code",
+      "View product details and image",
+      "Verify image displays correctly"
+    ]
+  },
+  {
+    "id": "payment_receipt_upload",
+    "title": "Payment Receipt Upload",
+    "description": "Test buyer uploading payment receipt",
+    "steps": [
+      "As buyer, upload payment receipt",
+      "Verify file upload to Supabase Storage",
+      "Check receipt visibility to admin"
+    ]
+  },
+  {
+    "id": "admin_payment_confirmation",
+    "title": "Admin Payment Confirmation",
+    "description": "Test admin reviewing and confirming payments",
+    "steps": [
+      "Login as admin",
+      "View pending payments",
+      "Review payment receipt",
+      "Confirm legitimate payment"
+    ]
+  },
+  {
+    "id": "escrow_expiration",
+    "title": "Escrow Expiration Handling",
+    "description": "Test automatic escrow expiration when payment timer expires",
+    "steps": [
+      "Create escrow with expiration timer",
+      "Wait for or simulate expiration",
+      "Verify escrow status changes to expired",
+      "Check cleanup of expired escrows"
+    ]
+  },
+  {
+    "id": "product_image_display",
+    "title": "Product Image Display Fix",
+    "description": "Verify recent fixes for product image display issues",
+    "steps": [
+      "Upload product image as seller",
+      "View image as buyer",
+      "Check image loading and display",
+      "Test image accessibility and signed URLs"
+    ]
+  },
+  {
+    "id": "chat_functionality",
+    "title": "Escrow Chat System",
+    "description": "Test real-time chat between buyer and seller",
+    "steps": [
+      "Initiate chat in escrow",
+      "Send messages between parties",
+      "Verify message delivery"
+    ]
+  }
+]

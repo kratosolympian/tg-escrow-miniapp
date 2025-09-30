@@ -86,7 +86,7 @@ export default function AdminLoginPage() {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder=""
+                placeholder="Enter your password"
                 className="input"
                 required
                 disabled={loading}

@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "test:dev-upload": "node scripts/dev-e2e-upload-test.js",
+    "expire-sweep": "node scripts/expire-escrows.js",
     "db:check": "echo 'Test database connection at: http://localhost:3000/api/setup/database (POST)'",
     "db:migrate": "echo 'Run SQL files in Supabase dashboard or use the API endpoint above'",
     "db:migrate:run": "node ./scripts/run-migration.js",

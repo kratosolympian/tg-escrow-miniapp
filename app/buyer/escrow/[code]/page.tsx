@@ -19,6 +19,7 @@ export type Escrow = {
   seller_id?: string | null;
   admin_fee?: number | null;
   product_image_url?: string | null;
+  delivery_proof_url?: string | null;
   // DB uses `description` and `price` (seller page). Accept both for compatibility.
   description?: string | null;
   product_description?: string | null;
@@ -41,6 +42,15 @@ export default function BuyerEscrowPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [uploading, setUploading] = useState(false)
   const [statusChangeNotification, setStatusChangeNotification] = useState<string | null>(null)
+  const [bankDetails, setBankDetails] = useState<{
+    bank_name: string;
+    account_number: string;
+    account_holder: string;
+  } | null>(null)
+  const [deliveryProofSignedUrl, setDeliveryProofSignedUrl] = useState<string | null>(null)
+  const [confirmationTimeLeft, setConfirmationTimeLeft] = useState<number | null>(null)
+  const [confirmingDelivery, setConfirmingDelivery] = useState(false)
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)
 
   useEffect(() => {
     async function fetchEscrow() {
@@ -153,24 +163,36 @@ export default function BuyerEscrowPage() {
   useEffect(() => {
     if (!escrow) return
     const fetchProductImage = async () => {
-      if (!escrow.product_image_url) return
+      console.log('Escrow data:', escrow)
+      console.log('Product image URL:', escrow.product_image_url)
+      if (!escrow.product_image_url) {
+        console.log('No product_image_url found, skipping image fetch')
+        return
+      }
       try {
         // If the server already returned a signed URL (preferred), use it
         if ((escrow as any).product_image_signed_url) {
+          console.log('Using server-provided signed URL:', (escrow as any).product_image_signed_url)
           setProductImageUrl((escrow as any).product_image_signed_url)
           return
         }
 
         // Fallback: request a signed URL from the sign-url API
+        console.log('Requesting signed URL for path:', escrow.product_image_url)
         const resp = await fetch('/api/storage/sign-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ path: escrow.product_image_url, bucket: 'product-images' })
         })
+        console.log('Sign URL response status:', resp.status)
         if (resp.ok) {
           const d = await resp.json()
+          console.log('Signed URL response:', d)
           setProductImageUrl(d.signedUrl)
+        } else {
+          const errorText = await resp.text()
+          console.error('Sign URL error response:', errorText)
         }
       } catch (err) {
         console.error('Error fetching product image signed url', err)
@@ -209,6 +231,170 @@ export default function BuyerEscrowPage() {
     fetchProductImage()
     fetchReceiptImages()
   }, [escrow])
+
+  // Fetch bank details for payment instructions
+  useEffect(() => {
+    async function fetchBankDetails() {
+      try {
+        const resp = await fetch('/api/settings/bank')
+        if (resp.ok) {
+          const data = await resp.json()
+          setBankDetails(data)
+        }
+      } catch (err) {
+        console.error('Error fetching bank details:', err)
+      }
+    }
+    fetchBankDetails()
+  }, [])
+
+  // Fetch delivery proof signed URL when escrow has delivery proof
+  useEffect(() => {
+    if (!escrow?.delivery_proof_url) {
+      setDeliveryProofSignedUrl(null)
+      return
+    }
+
+    const fetchDeliveryProofSignedUrl = async () => {
+      try {
+        // If escrow returned a signed URL for delivery proof, use it
+        if ((escrow as any)?.delivery_proof_signed_url && (escrow as any).delivery_proof_signed_url.startsWith('http')) {
+          setDeliveryProofSignedUrl((escrow as any).delivery_proof_signed_url)
+          return
+        }
+
+        const response = await fetch('/api/storage/sign-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: escrow.delivery_proof_url, bucket: 'product-images' }),
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setDeliveryProofSignedUrl(data.signedUrl)
+        } else {
+          setDeliveryProofSignedUrl(null)
+        }
+      } catch (err) {
+        console.error('Error fetching delivery proof signed url:', err)
+        setDeliveryProofSignedUrl(null)
+      }
+    }
+
+    fetchDeliveryProofSignedUrl()
+  }, [escrow?.delivery_proof_url])
+
+  // Calculate and display timer based on escrow status
+  useEffect(() => {
+    if (!escrow) {
+      setTimeLeft(null)
+      return
+    }
+
+    let timerEnd: Date | null = null
+    let timerLabel = ''
+
+    if (escrow.status === 'waiting_payment') {
+      // Use expires_at if set, otherwise default to 30 minutes from creation
+      if ((escrow as any).expires_at) {
+        timerEnd = new Date((escrow as any).expires_at)
+      } else {
+        timerEnd = new Date(new Date(escrow.created_at || '').getTime() + 30 * 60 * 1000)
+      }
+      timerLabel = 'Time left to complete payment:'
+    } else if (escrow.status === 'in_progress' && confirmationTimeLeft !== null) {
+      // Use the confirmation timer that's already running
+      return
+    }
+
+    if (timerEnd) {
+      const updateTimer = () => {
+        const now = Date.now()
+        const secs = Math.max(0, Math.floor((timerEnd!.getTime() - now) / 1000))
+        setTimeLeft(secs)
+
+        if (secs <= 0) {
+          // Timer expired - call expire API to close the escrow
+          setTimeLeft(0)
+          if (escrow?.id && escrow.status === 'waiting_payment') {
+            // Call expire API
+            fetch('/api/escrow/expire', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ escrowId: escrow.id })
+            }).then(resp => {
+              if (resp.ok) {
+                console.log('Escrow expired successfully')
+                // The realtime subscription will update the UI
+              } else {
+                console.error('Failed to expire escrow')
+              }
+            }).catch(err => {
+              console.error('Error expiring escrow:', err)
+            })
+          }
+        }
+      }
+
+      updateTimer()
+      const interval = setInterval(updateTimer, 1000)
+      return () => clearInterval(interval)
+    } else {
+      setTimeLeft(null)
+    }
+  }, [escrow?.status, escrow?.created_at, confirmationTimeLeft])
+
+  // Start confirmation timer when delivery proof is available and escrow is in progress
+  useEffect(() => {
+    if (escrow?.status === 'in_progress' && escrow.delivery_proof_url && currentUser?.id === escrow.buyer_id) {
+      // Start 5-minute (300 seconds) countdown
+      setConfirmationTimeLeft(300)
+
+      const timer = setInterval(() => {
+        setConfirmationTimeLeft(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(timer)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+
+      return () => clearInterval(timer)
+    } else {
+      setConfirmationTimeLeft(null)
+    }
+  }, [escrow?.status, escrow?.delivery_proof_url, currentUser?.id, escrow?.buyer_id])
+
+  // Handle buyer confirmation of receipt
+  const handleConfirmReceipt = async () => {
+    if (!escrow?.id) return
+
+    setConfirmingDelivery(true)
+    try {
+      const response = await fetch('/api/escrow/confirm-received', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ escrowId: escrow.id })
+      })
+
+      if (response.ok) {
+        setStatusChangeNotification('Transaction completed successfully!')
+        // Refresh escrow data
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        setError(data.error || 'Failed to confirm receipt')
+      }
+    } catch (err) {
+      console.error('Error confirming receipt:', err)
+      setError('Failed to confirm receipt')
+    } finally {
+      setConfirmingDelivery(false)
+    }
+  }
 
   // Subscribe to escrow updates (status changes, receipts, etc.) so UI updates in real-time
   useEffect(() => {
@@ -353,9 +539,31 @@ export default function BuyerEscrowPage() {
                 {getStatusLabel((escrow.status as any) || "created")}
               </span>
             </div>
-            {(productImageUrl || escrow.product_image_url) && (
+            {/* Timer Display */}
+            {timeLeft !== null && timeLeft > 0 && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="text-yellow-600 text-xl">⏱️</div>
+                  <div>
+                    <div className="font-semibold text-yellow-800">Time Remaining</div>
+                    <div className="text-2xl font-mono font-bold text-yellow-700">
+                      {Math.floor(timeLeft / 3600).toString().padStart(2, '0')}:
+                      {Math.floor((timeLeft % 3600) / 60).toString().padStart(2, '0')}:
+                      {(timeLeft % 60).toString().padStart(2, '0')}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 text-sm text-yellow-700">
+                  {escrow.status === 'waiting_payment' 
+                    ? 'Complete your payment before the timer expires to avoid transaction cancellation.'
+                    : 'Please complete the required action before time runs out.'
+                  }
+                </div>
+              </div>
+            )}
+            {productImageUrl && (
               <div className="mb-6 flex justify-center">
-                <Image src={productImageUrl || escrow.product_image_url || ''} alt="Product" width={320} height={220} className="rounded-2xl object-cover shadow-lg border border-gray-200" />
+                <Image src={productImageUrl} alt="Product" width={320} height={220} className="rounded-2xl object-cover shadow-lg border border-gray-200" />
               </div>
             )}
             <div className="space-y-4">
@@ -365,6 +573,26 @@ export default function BuyerEscrowPage() {
               <div>
                 <span className="font-semibold">Amount:</span> {(escrow.price ?? escrow.amount) !== null && (escrow.price ?? escrow.amount) !== undefined ? formatNaira((escrow.price ?? escrow.amount) as number) : "-"}
               </div>
+              {/* Bank Details Display */}
+              {bankDetails && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h3 className="font-semibold text-blue-800 mb-2">Payment Instructions</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="font-medium">Bank Name:</span> {bankDetails.bank_name || "-"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Account Name:</span> {bankDetails.account_holder || "-"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Account Number:</span> {bankDetails.account_number || "-"}
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs text-blue-600">
+                    Please make payment to the above account and upload your receipt below.
+                  </div>
+                </div>
+              )}
               <div>
                 <span className="font-semibold">Created At:</span> {escrow.created_at ? new Date(escrow.created_at).toLocaleString() : "-"}
               </div>
@@ -508,6 +736,63 @@ export default function BuyerEscrowPage() {
                   </div>
                 )}
               </div>
+              {/* Delivery Proof Display */}
+              {escrow.delivery_proof_url && (
+                <div className="mt-6">
+                  <span className="font-semibold">Delivery Proof:</span>{" "}
+                  <div className="mt-2">
+                    {escrow.delivery_proof_url.toLowerCase().endsWith('.pdf') ? (
+                      <a
+                        href={deliveryProofSignedUrl || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline hover:text-blue-800"
+                      >
+                        📄 View PDF Delivery Proof
+                      </a>
+                    ) : (
+                      deliveryProofSignedUrl && (
+                        <Image
+                          src={deliveryProofSignedUrl}
+                          alt="Delivery Proof"
+                          width={320}
+                          height={220}
+                          className="rounded-lg border shadow max-h-48 object-contain"
+                        />
+                      )
+                    )}
+                    {/* Confirmation Timer and Button */}
+                    {escrow.status === 'in_progress' && currentUser?.id === escrow.buyer_id && confirmationTimeLeft !== null && (
+                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="font-semibold text-green-800 mb-2">Confirm Receipt</h4>
+                        <p className="text-sm text-green-700 mb-3">
+                          The seller has marked this transaction as delivered. Please review the delivery proof above and confirm receipt within the time limit.
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm">
+                            <span className="font-medium">Time remaining: </span>
+                            <span className={`font-mono ${confirmationTimeLeft < 60 ? 'text-red-600' : 'text-green-600'}`}>
+                              {Math.floor(confirmationTimeLeft / 60)}:{(confirmationTimeLeft % 60).toString().padStart(2, '0')}
+                            </span>
+                          </div>
+                          <button
+                            onClick={handleConfirmReceipt}
+                            disabled={confirmingDelivery || confirmationTimeLeft === 0}
+                            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {confirmingDelivery ? 'Confirming...' : 'Confirm Receipt'}
+                          </button>
+                        </div>
+                        {confirmationTimeLeft === 0 && (
+                          <p className="text-sm text-red-600 mt-2">
+                            Time limit expired. Please contact support if you have issues with the delivery.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Chat Section */}
               <div className="mt-8">
                 <EscrowChat escrowId={escrow.id || ""} currentUserId={currentUser?.id || ""} supabaseClient={supabase} />

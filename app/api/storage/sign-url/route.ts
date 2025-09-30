@@ -108,24 +108,32 @@ async function buyerHandler(
   } else if (bucket === 'product-images') {
     // Buyers can access product images for escrows they are part of
     const pathParts = path.split('/');
-    if (pathParts.length < 2) {
+    if (pathParts.length < 3) {
       return makeJson({ error: 'Invalid path format' }, request, profile, 400);
     }
 
-    const sellerId = pathParts[0];
-    const fileName = pathParts[1];
-
-    // Check if buyer is part of any escrow with this seller and product image
-    const { data: escrow } = await serviceClient
-      .from('escrows')
-      .select('id, buyer_id, product_image_url')
-      .eq('seller_id', sellerId)
-      .eq('buyer_id', profile.id)
-      .eq('product_image_url', `${sellerId}/${fileName}`)
-      .single();
-
-    if (!escrow) {
+    // Buyers cannot access temp images
+    if (pathParts[0] === 'temp') {
       return makeJson({ error: 'Access denied' }, request, profile, 403);
+    }
+
+    // Handle permanent images: products/{escrowId}/{fileName}
+    if (pathParts[0] === 'products') {
+      const escrowId = pathParts[1];
+
+      // Check if buyer is part of this escrow
+      const { data: escrow } = await serviceClient
+        .from('escrows')
+        .select('id, buyer_id, seller_id')
+        .eq('id', escrowId)
+        .eq('buyer_id', profile.id)
+        .single();
+
+      if (!escrow) {
+        return makeJson({ error: 'Access denied' }, request, profile, 403);
+      }
+    } else {
+      return makeJson({ error: 'Invalid path format' }, request, profile, 403);
     }
   } else {
     return makeJson({ error: 'Access denied' }, request, profile, 403);
@@ -149,8 +157,33 @@ async function sellerHandler(
   }
 
   const pathParts = path.split('/');
-  if (pathParts.length < 2 || pathParts[0] !== profile.id) {
-    return makeJson({ error: 'Access denied' }, request, profile, 403);
+  if (pathParts.length < 3) {
+    return makeJson({ error: 'Invalid path format' }, request, profile, 403);
+  }
+
+  // Handle temp images: temp/{userId}/{fileName}
+  if (pathParts[0] === 'temp') {
+    if (pathParts[1] !== profile.id) {
+      return makeJson({ error: 'Access denied' }, request, profile, 403);
+    }
+  }
+  // Handle permanent images: products/{escrowId}/{fileName}
+  else if (pathParts[0] === 'products') {
+    const escrowId = pathParts[1];
+
+    // Check if seller owns this escrow
+    const { data: escrow } = await serviceClient
+      .from('escrows')
+      .select('id, seller_id')
+      .eq('id', escrowId)
+      .eq('seller_id', profile.id)
+      .single();
+
+    if (!escrow) {
+      return makeJson({ error: 'Access denied' }, request, profile, 403);
+    }
+  } else {
+    return makeJson({ error: 'Invalid path format' }, request, profile, 403);
   }
 
   const signedUrl = await generateSignedUrl(serviceClient, bucket, path);

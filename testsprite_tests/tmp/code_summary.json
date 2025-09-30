@@ -1,0 +1,148 @@
+{
+  "project_name": "Telegram Escrow Service",
+  "description": "A secure escrow service built as a Telegram Mini App for facilitating transactions between buyers and sellers with admin oversight",
+  "tech_stack": {
+    "frontend": {
+      "framework": "Next.js 14 (App Router)",
+      "language": "TypeScript",
+      "styling": "TailwindCSS",
+      "ui_components": "React components",
+      "state_management": "React useState/useEffect hooks"
+    },
+    "backend": {
+      "framework": "Next.js API Routes",
+      "language": "TypeScript",
+      "database": "Supabase (PostgreSQL)",
+      "authentication": "Supabase Auth with Telegram WebApp integration",
+      "storage": "Supabase Storage",
+      "validation": "Zod schemas"
+    },
+    "infrastructure": {
+      "deployment": "Vercel",
+      "database_hosting": "Supabase",
+      "messaging": "Telegram Bot API"
+    },
+    "testing": {
+      "e2e_testing": "Playwright",
+      "test_runner": "TestSprite MCP (configured)"
+    },
+    "development": {
+      "package_manager": "pnpm",
+      "linting": "ESLint",
+      "formatting": "Prettier",
+      "build_tool": "Next.js build system"
+    }
+  },
+  "features": {
+    "core_functionality": [
+      "Secure escrow transactions between buyers and sellers",
+      "Admin oversight and payment verification",
+      "Telegram WebApp integration",
+      "Real-time status tracking and audit logs",
+      "File storage for product images and payment receipts"
+    ],
+    "user_roles": [
+      {
+        "role": "seller",
+        "capabilities": [
+          "Create escrow transactions with product details",
+          "Upload product images",
+          "Share transaction codes with buyers",
+          "Mark transactions as delivered",
+          "Receive funds after buyer confirmation"
+        ]
+      },
+      {
+        "role": "buyer",
+        "capabilities": [
+          "Join escrow transactions using codes",
+          "Review product details and pricing",
+          "Upload payment receipts",
+          "Confirm product/service delivery",
+          "View transaction status and history"
+        ]
+      },
+      {
+        "role": "admin",
+        "capabilities": [
+          "Review payment receipts",
+          "Confirm legitimate payments",
+          "Handle disputes and refunds",
+          "Release funds to sellers",
+          "Manage bank account settings",
+          "Monitor all transactions"
+        ]
+      }
+    ],
+    "security_features": [
+      "Row Level Security (RLS) on all database tables",
+      "Server-side file uploads using Service Role",
+      "Signed URLs for secure file access",
+      "Telegram WebApp data verification",
+      "Deterministic user authentication"
+    ],
+    "api_endpoints": {
+      "authentication": [
+        "POST /api/auth/telegram - Telegram WebApp auth",
+        "POST /api/auth/logout - Logout"
+      ],
+      "escrow_management": [
+        "POST /api/escrow/create - Create new escrow",
+        "POST /api/escrow/join - Join escrow as buyer",
+        "GET /api/escrow/by-code/[code] - Get escrow by code",
+        "GET /api/escrow/by-id/[id] - Get escrow by ID",
+        "POST /api/escrow/upload-receipt - Upload payment receipt",
+        "POST /api/escrow/mark-delivered - Mark as delivered (seller)",
+        "POST /api/escrow/confirm-received - Confirm receipt (buyer)"
+      ],
+      "admin": [
+        "GET /api/admin/escrows - List all escrows",
+        "POST /api/admin/confirm-payment - Confirm payment",
+        "POST /api/admin/release-funds - Release funds",
+        "POST /api/admin/refund - Process refund",
+        "POST /api/admin/update-bank - Update bank settings"
+      ],
+      "utilities": [
+        "GET /api/settings/bank - Get bank details",
+        "POST /api/storage/sign-url - Get signed URL for files"
+      ]
+    }
+  },
+  "architecture": {
+    "application_structure": {
+      "app_router": "Next.js 14 App Router with nested routes",
+      "role_based_routing": "Separate routes for buyer, seller, and admin portals",
+      "api_routes": "RESTful API endpoints under /api/",
+      "component_architecture": "Reusable React components in /components/",
+      "utility_library": "Shared utilities and configurations in /lib/"
+    },
+    "database_schema": {
+      "tables": [
+        "profiles - User profiles with roles",
+        "escrows - Transaction records",
+        "receipts - Payment receipt files",
+        "status_logs - Transaction status history",
+        "admin_settings - Platform configuration"
+      ],
+      "security": "Row Level Security (RLS) policies on all tables",
+      "migrations": "SQL files in /SQL/ directory for schema management"
+    },
+    "file_storage": {
+      "buckets": "product-images and receipts buckets in Supabase Storage",
+      "upload_flow": "Temp storage → Permanent storage with signed URLs",
+      "access_control": "Role-based access to storage buckets"
+    }
+  },
+  "recent_fixes": [
+    "Fixed product image display issues for buyers",
+    "Implemented automatic escrow expiration with server-side cleanup",
+    "Added comprehensive debugging for image loading",
+    "Configured TestSprite MCP for automated testing"
+  ],
+  "known_issues_to_test": [
+    "Product image display in buyer escrow pages",
+    "Automatic escrow expiration when payment timer expires",
+    "Signed URL generation for secure file access",
+    "Role-based access control for different user types"
+  ]
+}

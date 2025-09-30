@@ -90,14 +90,14 @@ export default function SellerEscrowPage() {
     const interval = setInterval(() => {
       // poll escrow to pick up status changes, but only if escrow loaded
       if (escrow) {
-        // refresh every 15s
+        // refresh every 30s as fallback
         fetchEscrow()
       }
-    }, 15000)
+    }, 30000)
     // real-time subscription for escrow updates (status changes, receipts)
-    // DISABLED: Temporarily disabled to test if it interferes with chat real-time
+    // Re-enabled for real-time updates
     let channel: any = null
-    if (false && id) {  // Disabled
+    if (id) {
       try {
         const ch = supabase.channel(`escrow-updates-${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${id}` }, (payload: any) => {
           console.debug('[SellerEscrowPage] escrow realtime payload', payload)
@@ -452,8 +452,19 @@ export default function SellerEscrowPage() {
                   const m = Math.floor((secs % 3600) / 60)
                   const s = secs % 60
                   return (
-                    <div className="text-sm text-gray-600 mt-1">
-                      {timerLabel} <span className="font-mono font-semibold">{`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`}</span>
+                    <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="text-yellow-600 text-xl">⏱️</div>
+                        <div>
+                          <div className="font-semibold text-yellow-800">Time Remaining</div>
+                          <div className="text-2xl font-mono font-bold text-yellow-700">
+                            {h.toString().padStart(2, '0')}:{m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-yellow-700">
+                        {timerLabel.replace('Time left for ', '').replace('Time left for you to ', '').replace(':', '')}
+                      </div>
                     </div>
                   )
                 }

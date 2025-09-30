@@ -43,26 +43,24 @@ export async function POST(request: NextRequest) {
   let file = formData.get('file') as File | null
   if (!file) file = formData.get('image') as File | null
 
-  // Extract one-time token if present
-  let token = formData.get('__one_time_token') as string
-  if (!token) {
+  // Extract one-time token if present (but prefer cookie auth for normal users)
+  let oneTimeToken = formData.get('__one_time_token') as string
+  if (!oneTimeToken) {
     const headerToken = request.headers.get('x-one-time-token') || null
-    if (headerToken) token = headerToken
-  }
-  if (!token) {
-    const authHeader = request.headers.get('authorization') || ''
-    if (authHeader.toLowerCase().startsWith('bearer ')) {
-      token = authHeader.slice(7).trim()
-    }
+    if (headerToken) oneTimeToken = headerToken
   }
 
   let authenticatedUser = null
 
-  if (token) {
+  // First try cookie authentication (normal case for logged-in users)
+  const { data: { user }, error: userErr } = await supabase.auth.getUser()
+  if (!userErr && user) {
+    authenticatedUser = user
+  } else if (oneTimeToken) {
+    // Fallback to one-time token if cookie auth fails and we have a token
     try {
-  const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
-  // Attempt one-time token verification
-  const userId = await verifyAndConsumeSignedToken(token)
+      const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+      const userId = await verifyAndConsumeSignedToken(oneTimeToken)
       if (userId) {
         authenticatedUser = { id: userId }
       } else {
@@ -70,15 +68,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
       }
     } catch (e) {
-      console.warn('Error importing/verifying one-time token')
+      console.warn('Error verifying one-time token:', e)
+      return NextResponse.json({ error: 'Authentication failed' }, { status: 401 })
     }
   } else {
-    // Fallback to cookie authentication
-    const { data: { user }, error: userErr } = await supabase.auth.getUser()
-    if (userErr || !user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-    authenticatedUser = user
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
   if (!authenticatedUser) {

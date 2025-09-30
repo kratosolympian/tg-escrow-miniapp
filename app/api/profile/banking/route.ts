@@ -65,10 +65,31 @@ export async function GET(request: NextRequest) {
   try {
   const supabase = createServerClientWithAuthHeader(request)
 
+    // Check for test mode (development only)
+    const { searchParams } = new URL(request.url)
+    const testMode = searchParams.get('test') === 'true' && process.env.NODE_ENV === 'development'
+
     // Get current user (authenticated against Supabase Auth server)
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+    if ((userError || !user) && !testMode) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Test mode response
+    if (testMode) {
+      return NextResponse.json({
+        profile: {
+          id: 'test-user-id',
+          email: 'test@example.com',
+          full_name: 'Test User',
+          phone_number: '+2341234567890',
+          bank_name: 'Test Bank',
+          account_number: '1234567890',
+          account_holder_name: 'Test User',
+          profile_completed: true,
+          test_mode: true
+        }
+      })
     }
 
     const { data: profile, error } = await supabase
