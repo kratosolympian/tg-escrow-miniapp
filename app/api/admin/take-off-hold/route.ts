@@ -5,6 +5,7 @@ import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/su
 import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 const takeOffHoldSchema = z.object({
   escrowId: z.string().uuid()
@@ -77,6 +78,9 @@ export async function POST(request: NextRequest) {
       console.error('Error updating escrow:', updateError)
       return NextResponse.json({ error: 'Failed to resume transaction' }, { status: 500 })
     }
+
+    // Send Telegram notifications
+    await sendEscrowStatusNotification(escrow.id, escrow.status, resumeStatus, serviceClient)
 
     // Log status change
     await (serviceClient as any)

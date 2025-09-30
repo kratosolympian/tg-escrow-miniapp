@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabaseServer'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
 import { Escrow } from '@/lib/types'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 const confirmPaymentSchema = z.object({
   escrowId: z.string().uuid()
@@ -43,6 +44,9 @@ export async function POST(request: NextRequest) {
     if (updateError) {
       return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
     }
+
+    // Send Telegram notifications
+    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.PAYMENT_CONFIRMED, supabase)
 
     // Log status change
     const { error: logError } = await (supabase as any)

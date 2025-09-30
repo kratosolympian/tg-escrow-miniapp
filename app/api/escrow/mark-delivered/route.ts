@@ -5,6 +5,7 @@ import { createServerClientWithAuthHeader, createServerClientWithCookies, create
 import { requireAuth } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 
 /**
@@ -119,18 +120,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
     }
 
+    // Send Telegram notifications
+    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.IN_PROGRESS, serviceClient)
+
     // Log status change
     await serviceClient
       .from('status_logs')
       .insert({
         escrow_id: escrow.id,
         status: ESCROW_STATUS.IN_PROGRESS,
-  changed_by: authenticatedUser.id
+        changed_by: authenticatedUser.id
       })
 
-    return NextResponse.json({ ok: true })
-
-  } catch (error) {
+    return NextResponse.json({ ok: true })  } catch (error) {
     console.error('Mark delivered error:', error)
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })

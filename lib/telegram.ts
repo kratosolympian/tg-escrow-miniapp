@@ -26,6 +26,162 @@ export async function sendTelegramMessage(telegramId: string, message: string): 
     return false
   }
 }
+
+// Send notification to all parties involved in an escrow transaction
+export async function sendEscrowStatusNotification(
+  escrowId: string,
+  oldStatus: string,
+  newStatus: string,
+  serviceClient: any
+): Promise<void> {
+  try {
+    // Get escrow with all involved parties
+    const { data: escrow, error } = await serviceClient
+      .from('escrows')
+      .select(`
+        id,
+        code,
+        description,
+        price,
+        seller:profiles!seller_id(id, telegram_id, full_name),
+        buyer:profiles!buyer_id(id, telegram_id, full_name),
+        assigned_admin_id
+      `)
+      .eq('id', escrowId)
+      .single()
+
+    if (error || !escrow) {
+      console.error('Failed to fetch escrow for notification:', error)
+      return
+    }
+
+    // Get admin's telegram ID if assigned
+    let adminTelegramId = null
+    if (escrow.assigned_admin_id) {
+      const { data: adminProfile } = await serviceClient
+        .from('profiles')
+        .select('telegram_id, full_name')
+        .eq('id', escrow.assigned_admin_id)
+        .single()
+      adminTelegramId = adminProfile?.telegram_id
+    }
+
+    // Prepare notification message
+    const statusLabels: Record<string, string> = {
+      'created': 'Created',
+      'waiting_payment': 'Waiting for Payment',
+      'waiting_admin': 'Waiting for Admin Confirmation',
+      'payment_confirmed': 'Payment Confirmed',
+      'in_progress': 'In Progress',
+      'completed': 'Completed',
+      'on_hold': 'On Hold',
+      'refunded': 'Refunded',
+      'closed': 'Closed'
+    }
+
+    const message = `🚨 *Escrow Status Update*
+
+Transaction: \`${escrow.code}\`
+Description: ${escrow.description}
+Amount: ₦${escrow.price.toLocaleString()}
+
+Status changed from *${statusLabels[oldStatus] || oldStatus}* to *${statusLabels[newStatus] || newStatus}*
+
+Please check your escrow dashboard for details.`
+
+    // Send to seller
+    if (escrow.seller?.telegram_id) {
+      await sendTelegramMessage(escrow.seller.telegram_id, message)
+    }
+
+    // Send to buyer
+    if (escrow.buyer?.telegram_id) {
+      await sendTelegramMessage(escrow.buyer.telegram_id, message)
+    }
+
+    // Send to assigned admin
+    if (adminTelegramId) {
+      await sendTelegramMessage(adminTelegramId, message)
+    }
+
+  } catch (error) {
+    console.error('Error sending escrow status notification:', error)
+  }
+}
+
+// Send chat message notification
+export async function sendChatMessageNotification(
+  escrowId: string,
+  senderId: string,
+  message: string,
+  serviceClient: any
+): Promise<void> {
+  try {
+    // Get escrow with parties
+    const { data: escrow, error } = await serviceClient
+      .from('escrows')
+      .select(`
+        id,
+        code,
+        seller:profiles!seller_id(id, telegram_id, full_name),
+        buyer:profiles!buyer_id(id, telegram_id, full_name)
+      `)
+      .eq('id', escrowId)
+      .single()
+
+    if (error || !escrow) {
+      console.error('Failed to fetch escrow for chat notification:', error)
+      return
+    }
+
+    // Get sender info
+    const { data: senderProfile } = await serviceClient
+      .from('profiles')
+      .select('full_name, role')
+      .eq('id', senderId)
+      .single()
+
+    const senderName = senderProfile?.full_name || 'Unknown'
+    const senderRole = senderProfile?.role || 'user'
+
+    // Determine recipient
+    let recipientTelegramId = null
+    let recipientName = ''
+
+    if (escrow.seller?.id === senderId) {
+      // Seller sent message, notify buyer
+      recipientTelegramId = escrow.buyer?.telegram_id
+      recipientName = escrow.buyer?.full_name || 'Buyer'
+    } else if (escrow.buyer?.id === senderId) {
+      // Buyer sent message, notify seller
+      recipientTelegramId = escrow.seller?.telegram_id
+      recipientName = escrow.seller?.full_name || 'Seller'
+    }
+
+    if (!recipientTelegramId) {
+      return // No telegram ID for recipient
+    }
+
+    // Truncate message if too long
+    const truncatedMessage = message.length > 100
+      ? message.substring(0, 100) + '...'
+      : message
+
+    const notificationMessage = `💬 *New Message*
+
+From: ${senderName} (${senderRole})
+Transaction: \`${escrow.code}\`
+
+"${truncatedMessage}"
+
+Check your escrow chat for the full conversation.`
+
+    await sendTelegramMessage(recipientTelegramId, notificationMessage)
+
+  } catch (error) {
+    console.error('Error sending chat message notification:', error)
+  }
+}
 import { createHmac } from 'crypto'
 
 export interface TelegramUser {

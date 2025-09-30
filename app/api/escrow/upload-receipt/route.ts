@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/rbac'
 import { generateUUID, getFileExtension, isValidReceiptType } from '@/lib/utils'
 import { z } from 'zod'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 /**
  * POST /api/escrow/upload-receipt
@@ -232,6 +233,9 @@ export async function POST(request: NextRequest) {
         await serviceClient.storage.from('receipts').remove([filePath])
         return makeJson({ error: 'Failed to update escrow status' }, authenticatedUser, debugEscrowId, 500)
       }
+
+      // Send Telegram notifications
+      await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.WAITING_ADMIN, serviceClient)
 
       // Log status change
       const { error: logError } = await (serviceClient as any)

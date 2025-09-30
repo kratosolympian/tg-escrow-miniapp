@@ -92,31 +92,18 @@ export default function Header() {
     
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        // Use getUser() to authenticate the user data instead of session.user
+        setUser(session.user);
+        
+        // Fetch user profile when auth state changes
         try {
-          const { data: { user: authenticatedUser }, error } = await supabase.auth.getUser();
-          if (authenticatedUser && !error) {
-            setUser(authenticatedUser);
-            
-            // Fetch user profile when auth state changes
-            try {
-              const { data: profileData } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', authenticatedUser.id)
-                .single();
-              setUserProfile(profileData);
-            } catch (profileError) {
-              console.warn('Failed to fetch user profile on auth change:', profileError);
-              setUserProfile(null);
-            }
-          } else {
-            setUser(null);
-            setUserProfile(null);
-          }
-        } catch (authError) {
-          console.warn('Failed to authenticate user on auth change:', authError);
-          setUser(null);
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          setUserProfile(profileData);
+        } catch (profileError) {
+          console.warn('Failed to fetch user profile on auth change:', profileError);
           setUserProfile(null);
         }
         
@@ -227,14 +214,6 @@ export default function Header() {
           </span>
         </Link>
         <nav className="flex gap-2 md:gap-4 items-center flex-wrap">
-          {/* Debug info - remove in production */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="text-xs text-gray-500 mr-4">
-              Auth: {authChecked ? '✓' : '✗'} | 
-              User: {user ? '✓' : '✗'} | 
-              Profile: {userProfile ? userProfile.role : 'null'}
-            </div>
-          )}
           {/* Show role-based navigation links */}
           {authChecked && user && userProfile && (
             <>

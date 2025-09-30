@@ -5,6 +5,7 @@ import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/su
 import { requireAuth } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 
 /**
@@ -84,6 +85,9 @@ export async function POST(request: NextRequest) {
       console.error('Error updating escrow status:', updateError)
       return NextResponse.json({ error: 'Failed to expire escrow' }, { status: 500 })
     }
+
+    // Send Telegram notifications
+    await sendEscrowStatusNotification(escrowId, escrow.status, ESCROW_STATUS.CLOSED, serviceClient)
 
     // Log the status change
     const { error: logError } = await serviceClient

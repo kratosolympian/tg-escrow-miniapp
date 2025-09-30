@@ -5,6 +5,7 @@ import { createServerClientWithCookies } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 const releaseFundsSchema = z.object({
   escrowId: z.string().uuid()
@@ -48,6 +49,9 @@ export async function POST(request: NextRequest) {
       console.error('Error updating escrow:', updateError)
       return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
     }
+
+    // Send Telegram notifications
+    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.CLOSED, supabase)
 
     // Log status change
     await (supabase as any)

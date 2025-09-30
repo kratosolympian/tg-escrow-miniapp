@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer';
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
+import { sendChatMessageNotification } from '@/lib/telegram';
 
 // Get chat messages for an escrow
 export async function GET(
@@ -210,6 +211,9 @@ export async function POST(
     await serviceClient2
       .from('chat_participants')
       .upsert(upsertObj, { onConflict: 'escrow_id,user_id' })
+
+    // Send Telegram notifications for the new chat message
+    await sendChatMessageNotification(params.id, user.id, message.trim(), serviceClient2)
 
     return NextResponse.json({
       success: true,
