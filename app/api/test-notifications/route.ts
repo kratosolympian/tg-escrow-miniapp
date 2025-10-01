@@ -149,14 +149,14 @@ export async function GET(request: NextRequest) {
         recipients,
         notificationsSent: totalRecipients,
         statusNotification: '✅ Attempted (Telegram + Email)',
-        chatNotification: '✅ Attempted (Telegram + Email)',
+        chatNotification: '✅ Attempted (Telegram only - preserves email quota)',
         expectedRecipients: [
           ...((recipients.seller.will_receive_telegram || recipients.seller.will_receive_email) ? [`${recipients.seller.name} (seller)`] : []),
           ...((recipients.buyer.will_receive_telegram || recipients.buyer.will_receive_email) ? [`${recipients.buyer.name} (buyer)`] : []),
           ...recipients.admins.filter(admin => admin.will_receive_telegram || admin.will_receive_email).map(admin => `${admin.name} (admin)`)
         ]
       },
-      note: 'Check your Telegram and email for the test notifications! Users with telegram_id will receive Telegram messages, and users with email addresses will receive email notifications.'
+      note: 'Check your Telegram for notifications! Status changes send both Telegram + Email, while chat messages send Telegram only (to preserve email quota). Users with telegram_id will receive Telegram messages, and users with email addresses will receive emails for status changes only.'
     })
 
   } catch (error) {

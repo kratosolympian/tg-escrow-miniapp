@@ -120,12 +120,15 @@ pnpm run dev
 The escrow service sends notifications via Telegram and email for:
 
 - **Escrow Status Changes**: When escrow status changes (created → waiting_payment → waiting_admin → payment_confirmed → in_progress → completed)
+  - **Telegram**: Instant messaging for users with `telegram_id`
+  - **Email**: Professional HTML emails for users with `email` addresses
 - **Chat Messages**: When users send messages in the escrow chat
+  - **Telegram only**: To preserve email quota (Resend free tier: 100/day, 3000/month)
 
 ### Recipients
 
-- **Telegram**: Users with `telegram_id` in their profile
-- **Email**: Users with `email` in their profile
+- **Telegram**: Users with `telegram_id` in their profile (for all notification types)
+- **Email**: Users with `email` in their profile (status changes only)
 - **Admins**: All users with `role = 'admin'` or `role = 'super_admin'` receive notifications regardless of assignment
 
 ### Testing Notifications

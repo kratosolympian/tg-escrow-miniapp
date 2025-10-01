@@ -173,23 +173,20 @@ export async function sendChatMessageNotification(
 
     // Determine recipient
     let recipientTelegramId = null
-    let recipientEmail = null
     let recipientName = ''
 
     if (escrow.seller?.id === senderId) {
       // Seller sent message, notify buyer
       recipientTelegramId = escrow.buyer?.telegram_id
-      recipientEmail = escrow.buyer?.email
       recipientName = escrow.buyer?.full_name || 'Buyer'
     } else if (escrow.buyer?.id === senderId) {
       // Buyer sent message, notify seller
       recipientTelegramId = escrow.seller?.telegram_id
-      recipientEmail = escrow.seller?.email
       recipientName = escrow.seller?.full_name || 'Seller'
     }
 
-    if (!recipientTelegramId && !recipientEmail) {
-      return // No telegram ID or email for recipient
+    if (!recipientTelegramId) {
+      return // No telegram ID for recipient
     }
 
     // Truncate message if too long
@@ -206,47 +203,22 @@ Transaction: \`${escrow.code}\`
 
 Check your escrow chat for the full conversation.`
 
-    // Create HTML email content
-    const emailSubject = `New Message - Escrow ${escrow.code}`
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">💬 New Message</h2>
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>From:</strong> ${senderName} (${senderRole})</p>
-          <p><strong>Transaction:</strong> ${escrow.code}</p>
-          <div style="background-color: white; padding: 15px; border-radius: 4px; margin: 10px 0; border-left: 4px solid #007bff;">
-            "${truncatedMessage}"
-          </div>
-        </div>
-        <p>Check your escrow chat for the full conversation.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="color: #666; font-size: 12px;">This is an automated notification from the Escrow Service.</p>
-      </div>
-    `
-
-    // Get ALL admins for chat notifications
+    // Get ALL admins for chat notifications (Telegram only)
     const { data: allAdmins } = await serviceClient
       .from('profiles')
-      .select('telegram_id, full_name, email')
+      .select('telegram_id, full_name')
       .in('role', ['admin', 'super_admin'])
+      .not('telegram_id', 'is', null)
 
     const adminRecipients = allAdmins || []
 
-    // Send to the other party in the escrow
-    if (recipientTelegramId) {
-      await sendTelegramMessage(recipientTelegramId, notificationMessage)
-    }
-    if (recipientEmail) {
-      await sendEmailNotification(recipientEmail, emailSubject, emailHtml)
-    }
+    // Send Telegram notifications only (no email for chat messages to preserve quota)
+    await sendTelegramMessage(recipientTelegramId, notificationMessage)
 
-    // Send to ALL admins
+    // Send to ALL admins via Telegram
     for (const admin of adminRecipients) {
       if (admin.telegram_id) {
         await sendTelegramMessage(admin.telegram_id, notificationMessage)
-      }
-      if (admin.email) {
-        await sendEmailNotification(admin.email, emailSubject, emailHtml)
       }
     }
 
