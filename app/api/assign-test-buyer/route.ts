@@ -18,12 +18,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get a buyer with telegram_id
-    const { data: buyers, error: buyerError } = await serviceClient
+    const buyerQuery = serviceClient
       .from('profiles')
       .select('id, full_name, telegram_id')
       .not('telegram_id', 'is', null)
-      .neq('id', escrow.seller_id) // Don't assign seller as buyer
-      .limit(5)
+
+    // Don't assign seller as buyer (only if seller_id exists)
+    if (escrow.seller_id) {
+      buyerQuery.neq('id', escrow.seller_id)
+    }
+
+    const { data: buyers, error: buyerError } = await buyerQuery.limit(5)
 
     if (buyerError || !buyers || buyers.length === 0) {
       return NextResponse.json({ error: 'No buyers with telegram_id found' }, { status: 404 })

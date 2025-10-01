@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     // Get ALL admins for analysis
     const { data: allAdmins } = await serviceClient
       .from('profiles')
-      .select('id, telegram_id, full_name, role')
+      .select('id, telegram_id, full_name, role, email')
       .in('role', ['admin', 'super_admin'])
 
     // Analyze who would receive notifications
