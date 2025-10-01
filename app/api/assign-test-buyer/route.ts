@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createServiceRoleClient } from '@/lib/supabaseServer'
+
+export async function POST(request: NextRequest) {
+  try {
+    const serviceClient = createServiceRoleClient()
+
+    // Get an escrow without a buyer
+    const { data: escrow, error: escrowError } = await serviceClient
+      .from('escrows')
+      .select('id, code, seller_id, buyer_id')
+      .is('buyer_id', null)
+      .limit(1)
+      .single()
+
+    if (escrowError || !escrow) {
+      return NextResponse.json({ error: 'No available escrow found' }, { status: 404 })
+    }
+
+    // Get a buyer with telegram_id
+    const { data: buyers, error: buyerError } = await serviceClient
+      .from('profiles')
+      .select('id, full_name, telegram_id')
+      .not('telegram_id', 'is', null)
+      .neq('id', escrow.seller_id) // Don't assign seller as buyer
+      .limit(5)
+
+    if (buyerError || !buyers || buyers.length === 0) {
+      return NextResponse.json({ error: 'No buyers with telegram_id found' }, { status: 404 })
+    }
+
+    // Pick the first available buyer
+    const buyer = buyers[0]
+
+    // Assign buyer to escrow
+    const { error: updateError } = await serviceClient
+      .from('escrows')
+      .update({
+        buyer_id: buyer.id,
+        status: 'waiting_payment', // Reset to allow testing
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', escrow.id)
+
+    if (updateError) {
+      return NextResponse.json({ error: 'Failed to assign buyer', details: updateError }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Assigned buyer "${buyer.full_name}" to escrow "${escrow.code}"`,
+      escrow: {
+        id: escrow.id,
+        code: escrow.code,
+        seller: 'Seller Test',
+        buyer: buyer.full_name,
+        buyer_telegram_id: buyer.telegram_id
+      },
+      note: 'Now test notifications at /api/test-notifications to see both seller and buyer receive them!'
+    })
+
+  } catch (error) {
+    console.error('Assign buyer error:', error)
+    return NextResponse.json({
+      error: 'Assignment failed',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 })
+  }
+}

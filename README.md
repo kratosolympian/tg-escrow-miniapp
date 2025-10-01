@@ -7,7 +7,8 @@ A secure escrow service built as a Telegram Mini App using Next.js, TypeScript, 
 - 🔐 Secure escrow transactions between buyers and sellers
 - 👨‍💼 Admin oversight and payment verification
 - 📱 Telegram WebApp integration
-- 💾 PostgreSQL database with Row Level Security (RLS)
+- � Email notifications for status updates and messages
+- �💾 PostgreSQL database with Row Level Security (RLS)
 - 🗂️ File storage for product images and payment receipts
 - 📊 Real-time status tracking and audit logs
 
@@ -41,6 +42,11 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 # Telegram
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TG_AUTH_SECRET=your_random_long_secret_for_auth
+
+# Email Notifications (Optional)
+EMAIL_SERVICE=resend  # or 'sendgrid'
+EMAIL_API_KEY=your_email_service_api_key
+EMAIL_FROM=noreply@escrow-service.com
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -108,6 +114,30 @@ pnpm run dev
 ├── lib/                   # Utility functions and configs
 └── SQL/                   # Database schema and policies
 ```
+
+## Notifications
+
+The escrow service sends notifications via Telegram and email for:
+
+- **Escrow Status Changes**: When escrow status changes (created → waiting_payment → waiting_admin → payment_confirmed → in_progress → completed)
+- **Chat Messages**: When users send messages in the escrow chat
+
+### Recipients
+
+- **Telegram**: Users with `telegram_id` in their profile
+- **Email**: Users with `email` in their profile
+- **Admins**: All users with `role = 'admin'` or `role = 'super_admin'` receive notifications regardless of assignment
+
+### Testing Notifications
+
+Test the notification system:
+
+```bash
+# Test notifications for a sample escrow
+curl http://localhost:3000/api/test-notifications
+```
+
+This will send both Telegram and email notifications to all eligible recipients for a test escrow.
 
 ## How It Works
 
