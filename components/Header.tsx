@@ -14,87 +14,74 @@ export default function Header() {
 
   useEffect(() => {
     setMounted(true);
-    
-    // Check authentication state with retry logic
-    const checkAuth = async (retryCount = 0) => {
+
+    // Simplified auth check - prioritize speed over comprehensive fallback
+    const checkAuth = async () => {
+      try {
+        // First, try the API endpoint (fastest for established sessions)
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include',
+          // Add timeout to prevent hanging
+          signal: AbortSignal.timeout(3000)
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          if (userData.user) {
+            setUser(userData.user);
+            setUserProfile(userData.profile || { role: userData.role });
+            setAuthChecked(true);
+            return;
+          }
+        }
+      } catch (apiError) {
+        console.warn('API auth check failed, trying Supabase:', apiError);
+      }
+
+      // Fallback to Supabase (slower but more reliable)
       try {
         const { data, error } = await supabase.auth.getUser();
-        if (data?.user) {
+        if (data?.user && !error) {
           setUser(data.user);
-          
-          // Fetch user profile to get role
+
+          // Fetch profile with timeout
+          const profilePromise = supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', data.user.id)
+            .single();
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 2000)
+          );
+
           try {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', data.user.id)
-              .single();
+            const { data: profileData } = await Promise.race([profilePromise, timeoutPromise]) as any;
             setUserProfile(profileData);
           } catch (profileError) {
-            console.warn('Failed to fetch user profile:', profileError);
-            setUserProfile(null);
+            console.warn('Profile fetch failed, using default role');
+            setUserProfile({ role: 'buyer' }); // Default fallback
           }
-          
+
           setAuthChecked(true);
           return;
         }
-        
-        // If no user from Supabase, try the API endpoint as fallback
-        if (!error && retryCount < 2) {
-          try {
-            const response = await fetch('/api/auth/me', { credentials: 'include' });
-            if (response.ok) {
-              const userData = await response.json();
-              if (userData.user) {
-                setUser(userData.user);
-                
-                // Try to get profile from API response or fetch separately
-                if (userData.profile) {
-                  setUserProfile(userData.profile);
-                } else {
-                  try {
-                    const profileResponse = await fetch('/api/profile/banking', { credentials: 'include' });
-                    if (profileResponse.ok) {
-                      const profileData = await profileResponse.json();
-                      setUserProfile(profileData.profile);
-                    }
-                  } catch (profileError) {
-                    console.warn('Failed to fetch user profile from API:', profileError);
-                  }
-                }
-                
-                setAuthChecked(true);
-                return;
-              }
-            }
-          } catch (apiError) {
-            console.warn('API auth check failed:', apiError);
-          }
-        }
-        
-        if (!error && retryCount < 2) {
-          // Retry once more after a short delay if no error but no user
-          setTimeout(() => checkAuth(retryCount + 1), 100);
-        } else {
-          setUser(null);
-          setUserProfile(null);
-          setAuthChecked(true);
-        }
-      } catch (error) {
-        console.error('Header auth check error:', error);
-        setUser(null);
-        setUserProfile(null);
-        setAuthChecked(true);
+      } catch (supabaseError) {
+        console.warn('Supabase auth check failed:', supabaseError);
       }
+
+      // No authentication found
+      setUser(null);
+      setUserProfile(null);
+      setAuthChecked(true);
     };
-    
+
     checkAuth();
     
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user);
-        
-        // Fetch user profile when auth state changes
+        // Simplified profile fetch for auth changes
         try {
           const { data: profileData } = await supabase
             .from('profiles')
@@ -104,36 +91,16 @@ export default function Header() {
           setUserProfile(profileData);
         } catch (profileError) {
           console.warn('Failed to fetch user profile on auth change:', profileError);
-          setUserProfile(null);
+          setUserProfile({ role: 'buyer' }); // Default fallback
         }
-        
-        setAuthChecked(true);
       } else {
-        // When signed out, also check API to be sure
         setUser(null);
         setUserProfile(null);
-        setAuthChecked(true);
       }
     });
-    
-    // Also check auth on window focus (helps when user switches tabs)
-    // Debounce the focus handler to avoid repeated calls when focus events
-    // fire rapidly (some platforms generate multiple focus events).
-    const focusTimer = { current: 0 as any }
-    const handleFocus = () => {
-      try {
-        if (focusTimer.current) clearTimeout(focusTimer.current)
-      } catch (e) {}
-      focusTimer.current = setTimeout(() => {
-        checkAuth()
-      }, 250)
-    }
 
-    window.addEventListener('focus', handleFocus as any);
-    
     return () => {
-  listener?.subscription.unsubscribe();
-  try { window.removeEventListener('focus', handleFocus as any) } catch (e) {}
+      listener?.subscription.unsubscribe();
     };
   }, []);
 
@@ -214,16 +181,8 @@ export default function Header() {
           </span>
         </Link>
         <nav className="flex gap-2 md:gap-4 items-center flex-wrap">
-          {/* Show loading state while checking auth */}
-          {!authChecked && (
-            <div className="flex gap-2 items-center">
-              <div className="text-gray-400 text-sm">Loading...</div>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            </div>
-          )}
-
-          {/* Show role-based navigation links */}
-          {authChecked && user && userProfile && (
+          {/* Show navigation immediately with optimistic defaults, update when auth completes */}
+          {user && userProfile && (
             <>
               {userProfile.role === 'buyer' && (
                 <Link href="/buyer" className="hover:text-blue-700 font-medium text-sm md:text-base">Buyer Portal</Link>
@@ -245,8 +204,8 @@ export default function Header() {
             </>
           )}
 
-          {/* Show all links when not logged in */}
-          {authChecked && !user && (
+          {/* Show all links when not logged in or still checking */}
+          {(!user || !authChecked) && (
             <>
               <Link href="/admin/dashboard" className="hover:text-blue-700 font-medium text-sm md:text-base">Admin</Link>
               <Link href="/buyer" className="hover:text-blue-700 font-medium text-sm md:text-base">Buyer</Link>
