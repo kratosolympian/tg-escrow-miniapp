@@ -214,6 +214,14 @@ export default function Header() {
           </span>
         </Link>
         <nav className="flex gap-2 md:gap-4 items-center flex-wrap">
+          {/* Show loading state while checking auth */}
+          {!authChecked && (
+            <div className="animate-pulse flex gap-2">
+              <div className="h-4 w-16 bg-gray-200 rounded"></div>
+              <div className="h-4 w-16 bg-gray-200 rounded"></div>
+            </div>
+          )}
+
           {/* Show role-based navigation links */}
           {authChecked && user && userProfile && (
             <>
@@ -236,6 +244,7 @@ export default function Header() {
               </button>
             </>
           )}
+
           {/* Show all links when not logged in */}
           {authChecked && !user && (
             <>

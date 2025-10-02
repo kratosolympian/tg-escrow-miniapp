@@ -211,47 +211,74 @@ export async function POST(request: NextRequest) {
       insertData.assigned_admin_id = parsedBody.assigned_admin_id;
     }
 
-    // Handle product image: move from temp to permanent location
+    // Handle product image: move from temp to permanent location asynchronously
     if (parsedBody.productImagePath) {
       try {
         const tempPath = parsedBody.productImagePath;
         const fileName = tempPath.split('/').pop(); // Extract filename from temp path
-        // We'll set the permanent path after creating the escrow with ID
         const escrowId = generateUUID(); // Generate ID for permanent path
         const permanentPath = `products/${escrowId}/${fileName}`;
 
-        // Copy file from temp to permanent location
-        const { data: fileData, error: downloadError } = await serviceClient.storage
-          .from('product-images')
-          .download(tempPath);
+        // Set the escrow ID and image path immediately
+        insertData.id = escrowId;
+        insertData.product_image_url = permanentPath;
 
-        if (!downloadError && fileData) {
-          // Upload to permanent location
-          const { error: uploadError } = await serviceClient.storage
-            .from('product-images')
-            .upload(permanentPath, fileData, { upsert: true });
+        // Process image move asynchronously (don't await)
+        setImmediate(async () => {
+          try {
+            // Add timeout for download operation
+            const downloadPromise = serviceClient.storage
+              .from('product-images')
+              .download(tempPath);
 
-          if (!uploadError) {
-            // Store the permanent path in the escrow data
-            insertData.product_image_url = permanentPath;
-            insertData.id = escrowId; // Use the generated ID
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Image download timeout')), 30000) // 30 second timeout
+            );
 
-            // Clean up temp file (optional, can be done later)
-            try {
-              await serviceClient.storage
+            const { data: fileData, error: downloadError } = await Promise.race([
+              downloadPromise,
+              timeoutPromise
+            ]) as any;
+
+            if (!downloadError && fileData) {
+              // Upload to permanent location with timeout
+              const uploadPromise = serviceClient.storage
                 .from('product-images')
-                .remove([tempPath]);
-            } catch (cleanupError) {
-              console.warn('Failed to cleanup temp file:', cleanupError);
+                .upload(permanentPath, fileData, { upsert: true });
+
+              const uploadTimeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Image upload timeout')), 30000)
+              );
+
+              const { error: uploadError } = await Promise.race([
+                uploadPromise,
+                uploadTimeoutPromise
+              ]) as any;
+
+              if (!uploadError) {
+                console.log(`Successfully moved image for escrow ${escrowId}`);
+                // Clean up temp file
+                try {
+                  await serviceClient.storage
+                    .from('product-images')
+                    .remove([tempPath]);
+                  console.log(`Cleaned up temp file: ${tempPath}`);
+                } catch (cleanupError) {
+                  console.warn('Failed to cleanup temp file:', cleanupError);
+                }
+              } else {
+                console.error('Error uploading permanent image:', uploadError);
+              }
+            } else {
+              console.error('Error downloading temp image:', downloadError);
             }
-          } else {
-            console.error('Error uploading permanent image:', uploadError);
+          } catch (imageError) {
+            console.error('Error processing product image asynchronously:', imageError);
           }
-        } else {
-          console.error('Error downloading temp image:', downloadError);
-        }
+        });
+
       } catch (imageError) {
-        console.error('Error handling product image:', imageError);
+        console.error('Error setting up image processing:', imageError);
         // Continue without image - don't fail the escrow creation
       }
     }
