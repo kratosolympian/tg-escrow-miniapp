@@ -223,8 +223,8 @@ export async function POST(request: NextRequest) {
         insertData.id = escrowId;
         insertData.product_image_url = permanentPath;
 
-        // Process image move asynchronously (don't await)
-        setImmediate(async () => {
+        // Process image move asynchronously (fire-and-forget, don't block escrow creation)
+        (async () => {
           try {
             // Add timeout for download operation
             const downloadPromise = serviceClient.storage
@@ -275,6 +275,8 @@ export async function POST(request: NextRequest) {
           } catch (imageError) {
             console.error('Error processing product image asynchronously:', imageError);
           }
+        })().catch((err) => {
+          console.error('Unhandled error in async image processing:', err);
         });
 
       } catch (imageError) {

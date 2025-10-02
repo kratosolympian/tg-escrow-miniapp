@@ -10,10 +10,9 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
   try {
     const { createServerClientWithCookies } = await import('@/lib/supabaseServer')
     const supabase = createServerClientWithCookies()
-    const { data } = await supabase.auth.getSession()
-    const session = data?.session
+    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (!user) {
       // Not authenticated on server; but if a one-time token is present in the URL,
       // pass it through to the my-active API so SSR can use it to identify the user.
       const oneTime = searchParams?.__one_time_token
@@ -76,7 +75,6 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
       return <SellerPortalClient />
     }
 
-    const token = session.access_token
     // Query active escrows directly using the server-side Supabase client.
     try {
       const activeStatuses = [
@@ -91,7 +89,7 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
       const { data: sellerData, error: sellerErr } = await supabase
         .from('escrows')
         .select('id, code, status, seller_id, buyer_id')
-        .eq('seller_id', session.user.id)
+        .eq('seller_id', user.id)
         .in('status', activeStatuses)
         .order('created_at', { ascending: false })
         .limit(10)
@@ -106,7 +104,7 @@ export default async function SellerPage({ searchParams }: { searchParams?: Reco
     }
 
     // No active escrow found (or non-200 response): render client UI
-    return <SellerPortalClient initialAuthState={{ authenticated: true, user: session.user }} />
+    return <SellerPortalClient initialAuthState={{ authenticated: true, user: user }} />
   } catch (err) {
     // On error, fall back to client rendering to avoid breaking the page
     // eslint-disable-next-line no-console
