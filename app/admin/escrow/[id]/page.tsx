@@ -124,7 +124,7 @@ export default function AdminEscrowDetailPage() {
     if (!escrow) return; // Only poll if escrow is loaded
 
     const interval = setInterval(() => {
-      fetchEscrowDetails(); // Reuse the same fetch function
+      pollEscrowDetails(); // Use polling function that doesn't affect loading state
       fetchAdminActions(); // Also refresh admin actions
     }, 30000); // 30 seconds
 
@@ -251,6 +251,19 @@ export default function AdminEscrowDetailPage() {
       setError('Failed to fetch escrow details')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const pollEscrowDetails = async () => {
+    try {
+  const response = await fetch(`/api/escrow/by-id/${escrowId}`, { credentials: 'include' })
+      if (response.ok) {
+        const data = await response.json()
+        setEscrow(data.escrow)
+      }
+    } catch (error) {
+      // Silently handle polling errors to avoid disrupting user experience
+      console.warn('Polling error:', error)
     }
   }
 

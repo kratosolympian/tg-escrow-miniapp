@@ -91,7 +91,7 @@ export default function SellerEscrowPage() {
       // poll escrow to pick up status changes, but only if escrow loaded
       if (escrow) {
         // refresh every 30s as fallback
-        fetchEscrow()
+        pollEscrow()
       }
     }, 30000)
     // real-time subscription for escrow updates (status changes, receipts)
@@ -231,6 +231,19 @@ export default function SellerEscrowPage() {
 
     if (lastError) setError(lastError)
     setLoading(false)
+  }
+
+  const pollEscrow = async () => {
+    try {
+  const response = await fetch(`/api/escrow/by-id/${id}`, { credentials: 'include' })
+      if (response.ok) {
+        const data = await response.json()
+        setEscrow(data.escrow)
+      }
+    } catch (error) {
+      // Silently handle polling errors to avoid disrupting user experience
+      console.warn('Polling error:', error)
+    }
   }
 
   const fetchCurrentUser = async () => {

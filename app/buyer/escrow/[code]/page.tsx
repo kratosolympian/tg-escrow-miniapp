@@ -77,6 +77,21 @@ export default function BuyerEscrowPage() {
     }
   };
 
+  // Function to poll escrow data without affecting loading state
+  const pollEscrow = async () => {
+    const codeStr = Array.isArray(code) ? code[0] : code;
+    try {
+      const resp = await fetch(`/api/escrow/by-id/${encodeURIComponent(String(codeStr))}`, { credentials: 'include' })
+      if (resp.ok) {
+        const j = await resp.json()
+        setEscrow(j.escrow as Escrow)
+      }
+    } catch (err) {
+      // Silently handle polling errors to avoid disrupting user experience
+      console.warn('Polling error:', err)
+    }
+  };
+
   useEffect(() => {
     if (code) fetchEscrow();
   }, [code]);
@@ -86,7 +101,7 @@ export default function BuyerEscrowPage() {
     if (!escrow) return; // Only poll if escrow is loaded
 
     const interval = setInterval(() => {
-      fetchEscrow(); // Reuse the same fetch function
+      pollEscrow(); // Use polling function that doesn't affect loading state
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
