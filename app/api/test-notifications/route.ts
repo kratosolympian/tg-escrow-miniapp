@@ -3,6 +3,19 @@ import { createServiceRoleClient } from '@/lib/supabaseServer'
 import { sendEscrowStatusNotification, sendChatMessageNotification } from '@/lib/telegram'
 
 export async function GET(request: NextRequest) {
+  // Prevent execution during build/static generation
+  if (process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production') {
+    return NextResponse.json({
+      error: 'Test endpoint disabled in production'
+    }, { status: 403 })
+  }
+
+  // Also prevent during Vercel builds
+  if (process.env.VERCEL) {
+    return NextResponse.json({
+      error: 'Test endpoint disabled during build'
+    }, { status: 403 })
+  }
   try {
     const serviceClient = createServiceRoleClient()
 
@@ -119,44 +132,54 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Test status notification
-    console.log('🧪 Testing status notification for escrow:', testEscrow.code)
-    await sendEscrowStatusNotification(
-      testEscrow.id,
-      testEscrow.status,
-      'testing_status_change',
-      serviceClient
-    )
+    // Check if we're in a build environment - don't send actual notifications
+    const isBuildEnvironment = process.env.VERCEL || process.env.CI || process.env.NODE_ENV === 'production'
+    const shouldSendNotifications = !isBuildEnvironment
 
-    // Test chat notification
-    console.log('🧪 Testing chat notification for escrow:', testEscrow.code)
-    const senderId = testEscrow.seller?.id || testEscrow.buyer?.id
-    if (senderId) {
-      await sendChatMessageNotification(
+    if (shouldSendNotifications) {
+      // Test status notification
+      console.log('🧪 Testing status notification for escrow:', testEscrow.code)
+      await sendEscrowStatusNotification(
         testEscrow.id,
-        senderId,
-        '🧪 This is a test notification from the notification testing endpoint!',
+        testEscrow.status,
+        'testing_status_change',
         serviceClient
       )
+
+      // Test chat notification
+      console.log('🧪 Testing chat notification for escrow:', testEscrow.code)
+      const senderId = testEscrow.seller?.id || testEscrow.buyer?.id
+      if (senderId) {
+        await sendChatMessageNotification(
+          testEscrow.id,
+          senderId,
+          '🧪 This is a test notification from the notification testing endpoint!',
+          serviceClient
+        )
+      }
+    } else {
+      console.log('🧪 Build environment detected - skipping actual notifications for escrow:', testEscrow.code)
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Telegram notifications sent successfully!',
+      message: shouldSendNotifications ? 'Telegram notifications sent successfully!' : 'Analysis completed (notifications skipped in build environment)',
       testResults: {
         escrowCode: testEscrow.code,
         status: testEscrow.status,
         recipients,
-        notificationsSent: totalRecipients,
-        statusNotification: '✅ Attempted (Telegram + Email)',
-        chatNotification: '✅ Attempted (Telegram only - preserves email quota)',
+        notificationsSent: shouldSendNotifications ? totalRecipients : 0,
+        statusNotification: shouldSendNotifications ? '✅ Attempted (Telegram + Email)' : '⏭️ Skipped (build environment)',
+        chatNotification: shouldSendNotifications ? '✅ Attempted (Telegram only - preserves email quota)' : '⏭️ Skipped (build environment)',
         expectedRecipients: [
           ...((recipients.seller.will_receive_telegram || recipients.seller.will_receive_email) ? [`${recipients.seller.name} (seller)`] : []),
           ...((recipients.buyer.will_receive_telegram || recipients.buyer.will_receive_email) ? [`${recipients.buyer.name} (buyer)`] : []),
           ...recipients.admins.filter(admin => admin.will_receive_telegram || admin.will_receive_email).map(admin => `${admin.name} (admin)`)
         ]
       },
-      note: 'Check your Telegram for notifications! Status changes send both Telegram + Email, while chat messages send Telegram only (to preserve email quota). Users with telegram_id will receive Telegram messages, and users with email addresses will receive emails for status changes only.'
+      note: shouldSendNotifications
+        ? 'Check your Telegram for notifications! Status changes send both Telegram + Email, while chat messages send Telegram only (to preserve email quota). Users with telegram_id will receive Telegram messages, and users with email addresses will receive emails for status changes only.'
+        : 'This is a build environment - no actual notifications were sent. The analysis shows who would receive notifications in production.'
     })
 
   } catch (error) {
