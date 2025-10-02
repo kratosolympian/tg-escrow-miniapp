@@ -79,6 +79,17 @@ export default function BuyerEscrowPage() {
     if (code) fetchEscrow();
   }, [code]);
 
+  // Add polling for real-time status updates (every 30 seconds)
+  useEffect(() => {
+    if (!escrow) return; // Only poll if escrow is loaded
+
+    const interval = setInterval(() => {
+      fetchEscrow(); // Reuse the same fetch function
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [escrow?.id]); // Depend on escrow ID to restart polling when escrow changes
+
   // Fetch current user (to determine if buyer and allow upload)
   useEffect(() => {
     async function fetchCurrentUser() {

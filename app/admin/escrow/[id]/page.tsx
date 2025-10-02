@@ -119,6 +119,18 @@ export default function AdminEscrowDetailPage() {
     fetchCurrentUser()
   }, [])
 
+  // Add polling for real-time status updates (every 30 seconds)
+  useEffect(() => {
+    if (!escrow) return; // Only poll if escrow is loaded
+
+    const interval = setInterval(() => {
+      fetchEscrowDetails(); // Reuse the same fetch function
+      fetchAdminActions(); // Also refresh admin actions
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [escrow?.id]); // Depend on escrow ID to restart polling when escrow changes
+
   // Fetch delivery proof signed URL when escrow has delivery proof
   useEffect(() => {
     if (!escrow?.delivery_proof_url) {
@@ -338,8 +350,11 @@ export default function AdminEscrowDetailPage() {
     }
   }
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return 'Date not available'
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Invalid date'
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -622,7 +637,7 @@ export default function AdminEscrowDetailPage() {
                     <div key={receipt.id} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="font-semibold">Receipt #{receipt.id.slice(0, 8)}</h3>
-                        <span className="text-xs text-gray-500">{formatDateTime(receipt.uploaded_at)}</span>
+                        <span className="text-xs text-gray-500">{formatDateTime(receipt.uploaded_at || receipt.created_at)}</span>
                       </div>
                       <div className="mb-3">
                         <img 

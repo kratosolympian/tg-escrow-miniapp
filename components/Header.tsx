@@ -216,9 +216,9 @@ export default function Header() {
         <nav className="flex gap-2 md:gap-4 items-center flex-wrap">
           {/* Show loading state while checking auth */}
           {!authChecked && (
-            <div className="animate-pulse flex gap-2">
-              <div className="h-4 w-16 bg-gray-200 rounded"></div>
-              <div className="h-4 w-16 bg-gray-200 rounded"></div>
+            <div className="flex gap-2 items-center">
+              <div className="text-gray-400 text-sm">Loading...</div>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
             </div>
           )}
 
