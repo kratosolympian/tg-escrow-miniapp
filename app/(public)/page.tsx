@@ -3,26 +3,64 @@
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
 
 export default function HomePage() {
   const [isInTelegram, setIsInTelegram] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
-    // Check if we're in Telegram WebApp
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-      const webApp = window.Telegram.WebApp
-      setIsInTelegram(true)
-      webApp.ready?.()
-      webApp.expand?.()
+    // Check if user is already authenticated and redirect if so
+    const checkExistingAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser()
+        if (user && !error) {
+          // User is already authenticated, get their profile and redirect
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+          
+          if (profile && !profileError) {
+            switch (profile.role) {
+              case 'admin':
+                router.push('/admin/dashboard')
+                break
+              case 'seller':
+                router.push('/seller')
+                break
+              case 'buyer':
+              default:
+                router.push('/buyer')
+                break
+            }
+            return // Don't continue with Telegram check
+          }
+        }
+      } catch (error) {
+        console.error('Auth check error:', error)
+      }
 
-      // Auto-authenticate with Telegram
-      const initData = webApp.initData
-      if (initData) {
-        authenticateWithTelegram(initData)
+      // Check if we're in Telegram WebApp
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        const webApp = window.Telegram.WebApp
+        setIsInTelegram(true)
+        webApp.ready?.()
+        webApp.expand?.()
+
+        // Auto-authenticate with Telegram
+        const initData = webApp.initData
+        if (initData) {
+          authenticateWithTelegram(initData)
+        }
       }
     }
-  }, [])
+
+    checkExistingAuth()
+  }, [router])
 
   const authenticateWithTelegram = async (initData: string) => {
     try {
@@ -37,6 +75,32 @@ export default function HomePage() {
 
       if (response.ok) {
         setIsAuthenticated(true)
+        
+        // Get current user and their profile to determine role-based redirection
+        const { data: { user }, error } = await supabase.auth.getUser()
+        if (user && !error) {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+          
+          if (profile && !profileError) {
+            // Redirect based on role
+            switch (profile.role) {
+              case 'admin':
+                router.push('/admin/dashboard')
+                break
+              case 'seller':
+                router.push('/seller')
+                break
+              case 'buyer':
+              default:
+                router.push('/buyer')
+                break
+            }
+          }
+        }
       } else {
         console.error('Authentication failed')
       }
