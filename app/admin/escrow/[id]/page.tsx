@@ -637,7 +637,7 @@ export default function AdminEscrowDetailPage() {
                     <div key={receipt.id} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="font-semibold">Receipt #{receipt.id.slice(0, 8)}</h3>
-                        <span className="text-xs text-gray-500">{formatDateTime(receipt.uploaded_at || receipt.created_at)}</span>
+                        <span className="text-xs text-gray-500">{formatDateTime(receipt.uploaded_at)}</span>
                       </div>
                       <div className="mb-3">
                         <img 

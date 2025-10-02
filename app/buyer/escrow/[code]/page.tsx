@@ -52,30 +52,32 @@ export default function BuyerEscrowPage() {
   const [confirmingDelivery, setConfirmingDelivery] = useState(false)
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
 
-  useEffect(() => {
-    async function fetchEscrow() {
-      setLoading(true);
-      setError("");
-      const codeStr = Array.isArray(code) ? code[0] : code;
-      try {
-        const resp = await fetch(`/api/escrow/by-id/${encodeURIComponent(String(codeStr))}`, { credentials: 'include' })
-        if (!resp.ok) {
-          const j = await resp.json().catch(() => ({}))
-          setError(j.error || 'Failed to load')
-          setEscrow(null)
-          if (resp.status === 403) console.warn('[dev] escrow fetch returned 403')
-        } else {
-          const j = await resp.json()
-          setEscrow(j.escrow as Escrow)
-        }
-      } catch (err) {
-        console.error('Error fetching escrow (server API):', err)
-        setError('Failed to load')
+  // Function to fetch escrow data
+  const fetchEscrow = async () => {
+    setLoading(true);
+    setError("");
+    const codeStr = Array.isArray(code) ? code[0] : code;
+    try {
+      const resp = await fetch(`/api/escrow/by-id/${encodeURIComponent(String(codeStr))}`, { credentials: 'include' })
+      if (!resp.ok) {
+        const j = await resp.json().catch(() => ({}))
+        setError(j.error || 'Failed to load')
         setEscrow(null)
-      } finally {
-        setLoading(false)
+        if (resp.status === 403) console.warn('[dev] escrow fetch returned 403')
+      } else {
+        const j = await resp.json()
+        setEscrow(j.escrow as Escrow)
       }
+    } catch (err) {
+      console.error('Error fetching escrow (server API):', err)
+      setError('Failed to load')
+      setEscrow(null)
+    } finally {
+      setLoading(false)
     }
+  };
+
+  useEffect(() => {
     if (code) fetchEscrow();
   }, [code]);
 
