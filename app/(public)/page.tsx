@@ -27,6 +27,7 @@ export default function HomePage() {
           if (profile && !profileError) {
             switch (profile.role) {
               case 'admin':
+              case 'super_admin':
                 router.push('/admin/dashboard')
                 break
               case 'seller':
@@ -89,6 +90,7 @@ export default function HomePage() {
             // Redirect based on role
             switch (profile.role) {
               case 'admin':
+              case 'super_admin':
                 router.push('/admin/dashboard')
                 break
               case 'seller':
