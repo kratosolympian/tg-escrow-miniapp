@@ -159,12 +159,40 @@ export default React.memo(function EscrowChat({ escrowId, currentUserId, isAdmin
   useEffect(() => {
     loadMessages()
 
-    // Poll for new messages every 5 seconds
+    // Set up real-time subscription for new messages
+    const channel = supabase
+      .channel(`chat-${escrowId}`)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'chat_messages', 
+        filter: `escrow_id=eq.${escrowId}` 
+      }, (payload: any) => {
+        console.debug('[EscrowChat] new message payload', payload)
+        const newMessage = payload.new as ChatMessage
+        
+        // Add sender info if available
+        if (newMessage.sender_id && senderCache[newMessage.sender_id]) {
+          newMessage.sender = senderCache[newMessage.sender_id]
+        }
+        
+        setMessages(prev => {
+          // Avoid duplicates
+          if (prev.find(m => m.id === newMessage.id)) return prev
+          return [...prev, newMessage]
+        })
+      })
+      .subscribe()
+
+    // Keep polling as fallback (less frequent)
     const pollInterval = setInterval(() => {
       loadMessages()
-    }, 5000)
+    }, 30000) // 30 seconds instead of 5
 
-    return () => clearInterval(pollInterval)
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(pollInterval)
+    }
   }, [escrowId, loadMessages])
 
   useEffect(() => {

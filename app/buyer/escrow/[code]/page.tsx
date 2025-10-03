@@ -104,8 +104,31 @@ export default function BuyerEscrowPage() {
       pollEscrow(); // Use polling function that doesn't affect loading state
     }, 30000); // 30 seconds
 
-    return () => clearInterval(interval);
-  }, [escrow?.id]); // Depend on escrow ID to restart polling when escrow changes
+    // Add real-time subscription for escrow updates
+    const channel = supabase
+      .channel(`escrow-updates-${escrow.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${escrow.id}` }, (payload) => {
+        console.debug('[BuyerEscrowPage] escrow realtime payload', payload)
+        if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+          setEscrow(prev => {
+            const merged = { ...(prev || {}), ...(payload.new as Partial<Escrow>) }
+            // Check if status changed
+            if (prev && prev.status !== merged.status) {
+              setStatusChangeNotification(`Status changed to: ${merged.status}`)
+              // Auto-dismiss notification after 5 seconds
+              setTimeout(() => setStatusChangeNotification(null), 5000)
+            }
+            return merged as Escrow
+          })
+        }
+      })
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
+  }, [escrow?.id]); // Depend on escrow ID to restart when escrow changes
 
   // Fetch current user (to determine if buyer and allow upload)
   useEffect(() => {

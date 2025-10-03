@@ -99,7 +99,7 @@ export default function SellerEscrowPage() {
     let channel: any = null
     if (id) {
       try {
-        const ch = supabase.channel(`escrow-updates-${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${id}` }, (payload: any) => {
+        channel = supabase.channel(`escrow-updates-${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${id}` }, (payload: any) => {
           console.debug('[SellerEscrowPage] escrow realtime payload', payload)
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             setEscrow(prev => {
@@ -114,12 +114,18 @@ export default function SellerEscrowPage() {
             })
           }
         }).subscribe()
-        channel = ch
       } catch (e) {
+        console.error('[SellerEscrowPage] Failed to set up real-time subscription:', e)
         // ignore, fall back to polling
       }
     }
-    return () => clearInterval(interval)
+    
+    return () => {
+      clearInterval(interval)
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
   }, [id])
 
   useEffect(() => {
