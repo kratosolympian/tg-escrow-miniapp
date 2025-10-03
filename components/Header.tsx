@@ -19,6 +19,11 @@ export default function Header() {
     setAuthRefreshTrigger(prev => prev + 1);
   };
 
+  // Debug userProfile changes
+  useEffect(() => {
+    console.log('[Header] userProfile changed:', userProfile);
+  }, [userProfile]);
+
   useEffect(() => {
     setMounted(true);
 
@@ -137,13 +142,16 @@ export default function Header() {
             .single();
           console.log('[Header] Auth change profile data:', profileData);
           setUserProfile(profileData);
+          setAuthChecked(true); // Ensure auth is marked as checked
         } catch (profileError) {
           console.warn('[Header] Failed to fetch user profile on auth change:', profileError);
           setUserProfile({ role: 'buyer' }); // Default fallback
+          setAuthChecked(true);
         }
       } else {
         setUser(null);
         setUserProfile(null);
+        setAuthChecked(true);
       }
     });
 
@@ -276,6 +284,7 @@ export default function Header() {
           {/* Show navigation immediately with optimistic defaults, update when auth completes */}
           {user && userProfile && (
             <>
+              {console.log('[Header] Rendering with userProfile:', userProfile)}
               {userProfile.role === 'buyer' && (
                 <Link href="/buyer" className="hover:text-blue-700 font-medium text-sm md:text-base">Buyer Portal</Link>
               )}
@@ -307,6 +316,7 @@ export default function Header() {
           {/* Show all links when not logged in or still checking */}
           {(!user || !authChecked) && (
             <>
+              {console.log('[Header] Showing unauthenticated nav, user:', !!user, 'authChecked:', authChecked)}
               <Link href="/admin/dashboard" className="hover:text-blue-700 font-medium text-sm md:text-base">Admin</Link>
               <Link href="/buyer" className="hover:text-blue-700 font-medium text-sm md:text-base">Buyer</Link>
               <Link href="/seller" className="hover:text-blue-700 font-medium text-sm md:text-base">Seller</Link>
