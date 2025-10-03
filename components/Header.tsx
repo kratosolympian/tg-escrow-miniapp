@@ -15,6 +15,7 @@ export default function Header() {
   const [authRefreshTrigger, setAuthRefreshTrigger] = useState(0);
 
   const refreshAuth = () => {
+    console.log('[Header] Manual auth refresh triggered');
     setAuthRefreshTrigger(prev => prev + 1);
   };
 
@@ -28,6 +29,7 @@ export default function Header() {
 
     // Simplified auth check - prioritize speed over comprehensive fallback
     const checkAuth = async () => {
+      console.log('[Header] Checking auth state...');
       try {
         // First, try the API endpoint (fastest for established sessions)
         const response = await fetch('/api/auth/me', {
@@ -53,6 +55,7 @@ export default function Header() {
       try {
         const { data, error } = await supabase.auth.getUser();
         if (data?.user && !error) {
+          console.log('[Header] Auth check successful, user found:', data.user.id);
           setUser(data.user);
 
           // Fetch profile with timeout
@@ -82,6 +85,7 @@ export default function Header() {
       }
 
       // No authentication found
+      console.log('[Header] No authentication found');
       setUser(null);
       setUserProfile(null);
       setAuthChecked(true);
@@ -94,7 +98,29 @@ export default function Header() {
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
       refreshInterval = setInterval(() => {
         checkAuth();
-      }, 10000); // Refresh every 10 seconds for Telegram users
+      }, 5000); // Refresh every 5 seconds for Telegram users (increased frequency)
+
+      // Also refresh when page becomes visible (user switches back to tab)
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          checkAuth();
+        }
+      };
+
+      // Refresh when window gains focus
+      const handleFocus = () => {
+        checkAuth();
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+
+      // Cleanup function
+      return () => {
+        if (refreshInterval) clearInterval(refreshInterval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
+      };
     }
     
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -178,10 +204,24 @@ export default function Header() {
   }, [])
 
   const handleLogout = async () => {
-    if (typeof window !== "undefined") {
+    console.log('[Header] Logout initiated');
+    try {
       await supabase.auth.signOut();
       setUser(null);
       setUserProfile(null);
+      console.log('[Header] Auth state cleared locally');
+
+      // For Telegram WebApp, use Telegram's navigation
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        console.log('[Header] Using Telegram WebApp navigation');
+        window.location.href = '/';
+      } else {
+        console.log('[Header] Using standard navigation');
+        window.location.href = "/";
+      }
+    } catch (error) {
+      console.error('[Header] Logout error:', error);
+      // Fallback navigation
       window.location.href = "/";
     }
   };
@@ -243,6 +283,14 @@ export default function Header() {
                 <Link href="/admin/dashboard" className="hover:text-blue-700 font-medium text-sm md:text-base">Admin</Link>
               )}
               <Link href="/settings/profile" className="hover:text-blue-700 font-medium text-sm md:text-base">Profile</Link>
+              <button
+                onClick={refreshAuth}
+                className="ml-1 text-gray-500 hover:text-blue-700 text-sm"
+                title="Refresh authentication state"
+                style={{ minWidth: 24, fontSize: '12px' }}
+              >
+                ↻
+              </button>
               <button
                 onClick={handleLogout}
                 className="ml-2 btn-secondary text-sm font-semibold"
