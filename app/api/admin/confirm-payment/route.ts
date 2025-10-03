@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceRoleClient } from '@/lib/supabaseServer'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
+import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
 import { Escrow } from '@/lib/types'
@@ -11,8 +12,11 @@ const confirmPaymentSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Use service role client for admin operations
-    const supabase = createServiceRoleClient()
+    const supabase = createServerClientWithCookies()
+    const serviceClient = createServiceRoleClient()
+
+    // Require admin role
+    const profile = await requireRole(supabase, 'admin')
     
     const body = await request.json()
     const { escrowId } = confirmPaymentSchema.parse(body)
@@ -46,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send Telegram notifications
-    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.PAYMENT_CONFIRMED, supabase, process.env.TELEGRAM_MINIAPP_URL)
+    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.PAYMENT_CONFIRMED, supabase, process.env.TELEGRAM_MINIAPP_URL, profile.id)
 
     // Log status change
     const { error: logError } = await (supabase as any)
