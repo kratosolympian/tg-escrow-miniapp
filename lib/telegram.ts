@@ -46,6 +46,10 @@ export async function sendEscrowStatusNotification(
   miniAppUrl?: string,
   changedByUserId?: string
 ): Promise<void> {
+  // If no miniAppUrl provided, try to construct one from environment
+  if (!miniAppUrl) {
+    miniAppUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined
+  }
   try {
     // Get escrow with all involved parties
     const { data: escrow, error } = await serviceClient

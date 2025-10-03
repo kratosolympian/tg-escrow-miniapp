@@ -94,39 +94,45 @@ export default function SellerEscrowPage() {
         pollEscrow()
       }
     }, 30000)
-    // real-time subscription for escrow updates (status changes, receipts)
-    // Re-enabled for real-time updates
-    let channel: any = null
-    if (id) {
-      try {
-        channel = supabase.channel(`escrow-updates-${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${id}` }, (payload: any) => {
-          console.debug('[SellerEscrowPage] escrow realtime payload', payload)
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            setEscrow(prev => {
-              const merged = { ...(prev || {}), ...(payload.new || {}) }
-              // Check if status changed
-              if (prev && prev.status !== merged.status) {
-                setStatusChangeNotification(`Status changed to: ${merged.status}`)
-                // Auto-dismiss notification after 5 seconds
-                setTimeout(() => setStatusChangeNotification(null), 5000)
-              }
-              return merged
-            })
-          }
-        }).subscribe()
-      } catch (e) {
-        console.error('[SellerEscrowPage] Failed to set up real-time subscription:', e)
-        // ignore, fall back to polling
-      }
-    }
     
     return () => {
       clearInterval(interval)
+    }
+  }, [id])
+
+  // Separate useEffect for real-time subscription that depends on escrow being loaded
+  useEffect(() => {
+    if (!escrow?.id) return; // Only set up subscription when escrow is loaded
+
+    // real-time subscription for escrow updates (status changes, receipts)
+    let channel: any = null
+    try {
+      channel = supabase.channel(`escrow-updates-${escrow.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'escrows', filter: `id=eq.${escrow.id}` }, (payload: any) => {
+        console.debug('[SellerEscrowPage] escrow realtime payload', payload)
+        if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+          setEscrow(prev => {
+            const merged = { ...(prev || {}), ...(payload.new || {}) }
+            // Check if status changed
+            if (prev && prev.status !== merged.status) {
+              setStatusChangeNotification(`Status changed to: ${merged.status}`)
+              // Auto-dismiss notification after 5 seconds
+              setTimeout(() => setStatusChangeNotification(null), 5000)
+            }
+            return merged
+          })
+        }
+      }).subscribe()
+    } catch (e) {
+      console.error('[SellerEscrowPage] Failed to set up real-time subscription:', e)
+      // ignore, fall back to polling
+    }
+    
+    return () => {
       if (channel) {
         supabase.removeChannel(channel)
       }
     }
-  }, [id])
+  }, [escrow?.id]) // Only run when escrow ID changes
 
   useEffect(() => {
     if (escrow?.product_image_url) {
