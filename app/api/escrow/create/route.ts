@@ -5,6 +5,7 @@ import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib
 import { shortCode, generateUUID, getFileExtension, isValidImageType } from '@/lib/utils'
 import { ESCROW_STATUS } from '@/lib/status'
 import { z } from 'zod'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 
 /**
@@ -298,6 +299,20 @@ export async function POST(request: NextRequest) {
     if (escrowError) {
       console.error('Error creating escrow:', escrowError);
       return NextResponse.json({ error: 'Failed to create escrow', details: escrowError.message }, { status: 500 });
+    }
+
+    // Send notification to admins about new escrow creation
+    try {
+      await sendEscrowStatusNotification(
+        escrow.id,
+        'created', // old status (doesn't exist yet)
+        escrow.status,
+        serviceClient,
+        process.env.TELEGRAM_MINIAPP_URL
+      );
+    } catch (notificationError) {
+      console.error('Error sending escrow creation notification:', notificationError);
+      // Don't fail the escrow creation if notification fails
     }
 
     return NextResponse.json({ ok: true, code: escrow.code, escrowId: escrow.id });

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient, getSessionSafe } from '@/lib/supabaseServer'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 
 /**
@@ -276,6 +277,20 @@ export async function POST(request: NextRequest) {
       if (logError) console.error('Error logging status:', logError)
     } catch (e) {
       console.error('Exception when inserting status log:', e)
+    }
+
+    // Send notification about buyer joining escrow
+    try {
+      await sendEscrowStatusNotification(
+        finalEscrowId,
+        (escrow as any).status, // old status
+        ESCROW_STATUS.WAITING_PAYMENT, // new status
+        serviceClient,
+        process.env.TELEGRAM_MINIAPP_URL
+      );
+    } catch (notificationError) {
+      console.error('Error sending escrow join notification:', notificationError);
+      // Don't fail the join if notification fails
     }
 
     const payload: any = { ok: true, escrowId: finalEscrowId }

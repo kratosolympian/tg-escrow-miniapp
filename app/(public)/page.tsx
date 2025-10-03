@@ -12,24 +12,37 @@ export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
+    // Check for deep link parameters from Telegram miniapp FIRST
+    const urlParams = new URLSearchParams(window.location.search)
+    const startapp = urlParams.get('startapp')
+    
+    if (startapp) {
+      // Store deep link parameter for processing after authentication
+      sessionStorage.setItem('telegram_deep_link', startapp)
+    }
+
     // Check if user is already authenticated and redirect if so
     const checkExistingAuth = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser()
         if (user && !error) {
-          // Check for deep link parameters from Telegram miniapp
-          const urlParams = new URLSearchParams(window.location.search)
-          const startapp = urlParams.get('startapp')
+          // Check for stored deep link or current deep link parameters
+          const storedDeepLink = sessionStorage.getItem('telegram_deep_link')
+          const currentStartapp = urlParams.get('startapp')
+          const deepLink = storedDeepLink || currentStartapp
           
-          if (startapp) {
+          if (deepLink) {
+            // Clear stored deep link
+            sessionStorage.removeItem('telegram_deep_link')
+            
             // Handle deep links: escrow_CODE or chat_CODE
-            if (startapp.startsWith('escrow_')) {
-              const code = startapp.replace('escrow_', '')
+            if (deepLink.startsWith('escrow_')) {
+              const code = deepLink.replace('escrow_', '')
               // Redirect to escrow page
               router.push(`/buyer/escrow/${code}`)
               return
-            } else if (startapp.startsWith('chat_')) {
-              const code = startapp.replace('chat_', '')
+            } else if (deepLink.startsWith('chat_')) {
+              const code = deepLink.replace('chat_', '')
               // For chat, we need to find the escrow by code first
               // This will be handled by the escrow page itself
               router.push(`/buyer/escrow/${code}`)
@@ -107,19 +120,24 @@ export default function HomePage() {
             .single()
           
           if (profile && !profileError) {
-            // Check for deep link parameters from Telegram miniapp
+            // Check for stored deep link or current deep link parameters
+            const storedDeepLink = sessionStorage.getItem('telegram_deep_link')
             const urlParams = new URLSearchParams(window.location.search)
-            const startapp = urlParams.get('startapp')
+            const currentStartapp = urlParams.get('startapp')
+            const deepLink = storedDeepLink || currentStartapp
             
-            if (startapp) {
+            if (deepLink) {
+              // Clear stored deep link
+              sessionStorage.removeItem('telegram_deep_link')
+              
               // Handle deep links: escrow_CODE or chat_CODE
-              if (startapp.startsWith('escrow_')) {
-                const code = startapp.replace('escrow_', '')
+              if (deepLink.startsWith('escrow_')) {
+                const code = deepLink.replace('escrow_', '')
                 // Redirect to escrow page
                 router.push(`/buyer/escrow/${code}`)
                 return
-              } else if (startapp.startsWith('chat_')) {
-                const code = startapp.replace('chat_', '')
+              } else if (deepLink.startsWith('chat_')) {
+                const code = deepLink.replace('chat_', '')
                 // For chat, we need to find the escrow by code first
                 // This will be handled by the escrow page itself
                 router.push(`/buyer/escrow/${code}`)

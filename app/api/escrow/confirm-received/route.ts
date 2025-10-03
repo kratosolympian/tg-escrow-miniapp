@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithAuthHeader, createServiceRoleClient, createServerClientWithCookies } from '@/lib/supabaseServer'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
+import { sendEscrowStatusNotification } from '@/lib/telegram'
 
 
 /**
@@ -152,6 +153,20 @@ export async function POST(request: NextRequest) {
         status: ESCROW_STATUS.COMPLETED,
         changed_by: profile.id
       })
+
+    // Send notification about escrow completion
+    try {
+      await sendEscrowStatusNotification(
+        escrow.id,
+        escrow.status, // old status
+        ESCROW_STATUS.COMPLETED, // new status
+        serviceClient,
+        process.env.TELEGRAM_MINIAPP_URL
+      );
+    } catch (notificationError) {
+      console.error('Error sending escrow completion notification:', notificationError);
+      // Don't fail the completion if notification fails
+    }
 
     return NextResponse.json({ ok: true })
 
