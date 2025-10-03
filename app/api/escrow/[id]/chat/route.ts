@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
-import { requireRole, canAccessEscrow, isAdmin } from '@/lib/rbac'
+import { requireAuth, canAccessEscrow, isAdmin } from '@/lib/rbac'
 import { sendChatMessageNotification } from '@/lib/telegram';
 
 // Get chat messages for an escrow
@@ -12,7 +12,7 @@ export async function GET(
     const supabase = createServerClientWithCookies();
     
     // Get current user and check permissions
-    const profile = await requireRole(supabase, 'buyer'); // Any authenticated user can try
+    const profile = await requireAuth(supabase); // Any authenticated user can try
     
     // Use service role client to read escrow
     const serviceClient = createServiceRoleClient()
@@ -82,7 +82,7 @@ export async function POST(
     const supabase = createServerClientWithCookies();
     
     // Get current user and check permissions
-    const profile = await requireRole(supabase, 'buyer'); // Any authenticated user can try
+    const profile = await requireAuth(supabase); // Any authenticated user can try
     
     const body = await request.json()
     const { message, message_type = 'text' } = body
