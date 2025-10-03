@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
 import { z } from 'zod'
@@ -14,6 +14,7 @@ const releaseFundsSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClientWithCookies()
+    const serviceClient = createServiceRoleClient()
     
     // Require admin role
     const profile = await requireRole(supabase, 'admin')
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send Telegram notifications
-    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.CLOSED, supabase, process.env.TELEGRAM_MINIAPP_URL)
+    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.CLOSED, serviceClient, process.env.TELEGRAM_MINIAPP_URL)
 
     // Log status change
     await (supabase as any)
