@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
+import { requireRole, canAccessEscrow, isAdmin } from '@/lib/rbac'
 import { sendChatMessageNotification } from '@/lib/telegram';
 
 // Get chat messages for an escrow
@@ -9,18 +10,11 @@ export async function GET(
 ) {
   try {
     const supabase = createServerClientWithCookies();
-    const sb: any = supabase
-    // Get current user (guarded)
-    let user = null
-    try {
-      const r = await supabase.auth.getUser()
-      user = r?.data?.user ?? null
-    } catch (e) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    // Use service role client to read escrow (server enforces access control below)
+    
+    // Get current user and check permissions
+    const profile = await requireRole(supabase, 'buyer'); // Any authenticated user can try
+    
+    // Use service role client to read escrow
     const serviceClient = createServiceRoleClient()
     const { data: escrow, error: escrowError } = await serviceClient
       .from('escrows')
@@ -32,17 +26,8 @@ export async function GET(
       return NextResponse.json({ error: 'Escrow not found' }, { status: 404 })
     }
 
-    // Check if user is admin by consulting admin_users (using service client)
-    const { data: adminRow } = await serviceClient
-      .from('admin_users')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-    const isAdmin = !!adminRow
-    const escrowAny: any = escrow
-    const hasAccess = isAdmin || escrowAny.seller_id === user.id || escrowAny.buyer_id === user.id
-
-    if (!hasAccess) {
+    // Check if user can access this escrow
+    if (!canAccessEscrow(profile, { seller_id: escrow.seller_id || '', buyer_id: escrow.buyer_id })) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -68,13 +53,13 @@ export async function GET(
     }
 
     // Mark messages as read for current user (service client, server-side check already done)
-    if (!isAdmin) {
+    if (!isAdmin(profile)) {
       const updateObj: any = { is_read: true }
       await serviceClient
         .from('chat_messages')
         .update(updateObj)
         .eq('escrow_id', params.id)
-        .neq('sender_id', user.id)
+        .neq('sender_id', profile.id)
     }
 
     return NextResponse.json({
@@ -95,17 +80,10 @@ export async function POST(
 ) {
   try {
     const supabase = createServerClientWithCookies();
-    const sb: any = supabase
-    // Get current user (guarded)
-    let user = null
-    try {
-      const r = await supabase.auth.getUser()
-      user = r?.data?.user ?? null
-    } catch (e) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+    
+    // Get current user and check permissions
+    const profile = await requireRole(supabase, 'buyer'); // Any authenticated user can try
+    
     const body = await request.json()
     const { message, message_type = 'text' } = body
 
@@ -117,9 +95,9 @@ export async function POST(
       return NextResponse.json({ error: 'Message too long (max 500 characters)' }, { status: 400 })
     }
 
-    // Use service client to read escrow (server enforces access control below)
-    const serviceClient2 = createServiceRoleClient()
-    const { data: escrow, error: escrowError } = await serviceClient2
+    // Use service client to read escrow
+    const serviceClient = createServiceRoleClient()
+    const { data: escrow, error: escrowError } = await serviceClient
       .from('escrows')
       .select('seller_id, buyer_id')
       .eq('id', params.id)
@@ -129,47 +107,21 @@ export async function POST(
       return NextResponse.json({ error: 'Escrow not found' }, { status: 404 })
     }
 
-    // Check if user is admin by consulting admin_users table (service client)
-    const { data: adminRow2 } = await serviceClient2
-      .from('admin_users')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-  const isAdmin = !!adminRow2
-  const escrowAny2: any = escrow
-  const hasAccess = isAdmin || escrowAny2.seller_id === user.id || escrowAny2.buyer_id === user.id
-
-
-    if (!hasAccess) {
-      return NextResponse.json({
-        error: 'Access denied',
-        debug: {
-          user_id: user.id,
-          escrow_buyer_id: escrowAny2.buyer_id,
-          escrow_seller_id: escrowAny2.seller_id,
-          insert_sender_id: user.id,
-          insertObj: {
-            escrow_id: params.id,
-            sender_id: user.id,
-            message: message.trim(),
-            message_type,
-            is_read: false
-          }
-        }
-      }, { status: 403 })
+    // Check if user can access this escrow
+    if (!canAccessEscrow(profile, { seller_id: escrow.seller_id || '', buyer_id: escrow.buyer_id })) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
     // Insert the message
     const insertObj: any = {
       escrow_id: params.id,
-      sender_id: user.id,
+      sender_id: profile.id,
       message: message.trim(),
       message_type,
       is_read: false
     }
     // Insert message and return inserted row including sender profile
-    const { data: newMessage, error: insertError } = await serviceClient2
+    const { data: newMessage, error: insertError } = await serviceClient
       .from('chat_messages')
       .insert(insertObj)
       .select(`
@@ -191,10 +143,10 @@ export async function POST(
       return NextResponse.json({
         error: 'Failed to send message',
         debug: {
-          user_id: user.id,
-          escrow_buyer_id: escrowAny2.buyer_id,
-          escrow_seller_id: escrowAny2.seller_id,
-          insert_sender_id: user.id,
+          user_id: profile.id,
+          escrow_buyer_id: escrow.buyer_id,
+          escrow_seller_id: escrow.seller_id,
+          insert_sender_id: profile.id,
           insertObj,
           insertError
         }
@@ -205,15 +157,15 @@ export async function POST(
     // Add user to chat participants if not already there
     const upsertObj: any = {
       escrow_id: params.id,
-      user_id: user.id,
+      user_id: profile.id,
       last_read_at: new Date().toISOString()
     }
-    await serviceClient2
+    await serviceClient
       .from('chat_participants')
       .upsert(upsertObj, { onConflict: 'escrow_id,user_id' })
 
     // Send Telegram notifications for the new chat message
-    await sendChatMessageNotification(params.id, user.id, message.trim(), serviceClient2, process.env.TELEGRAM_MINIAPP_URL)
+    await sendChatMessageNotification(params.id, profile.id, message.trim(), serviceClient, process.env.TELEGRAM_MINIAPP_URL)
 
     return NextResponse.json({
       success: true,
