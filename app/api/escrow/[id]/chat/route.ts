@@ -213,7 +213,7 @@ export async function POST(
       .upsert(upsertObj, { onConflict: 'escrow_id,user_id' })
 
     // Send Telegram notifications for the new chat message
-    await sendChatMessageNotification(params.id, user.id, message.trim(), serviceClient2)
+    await sendChatMessageNotification(params.id, user.id, message.trim(), serviceClient2, process.env.TELEGRAM_MINIAPP_URL)
 
     return NextResponse.json({
       success: true,

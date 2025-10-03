@@ -1,5 +1,9 @@
 // Sends a Telegram message to a user by telegram_id using the bot token from env
-export async function sendTelegramMessage(telegramId: string, message: string): Promise<boolean> {
+export async function sendTelegramMessage(
+  telegramId: string,
+  message: string,
+  inlineKeyboard?: any
+): Promise<boolean> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN
   if (!botToken) {
     console.error('TELEGRAM_BOT_TOKEN not set')
@@ -7,15 +11,21 @@ export async function sendTelegramMessage(telegramId: string, message: string): 
   }
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`
   try {
+    const payload: any = {
+      chat_id: telegramId,
+      text: message,
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true
+    }
+
+    if (inlineKeyboard) {
+      payload.reply_markup = inlineKeyboard
+    }
+
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: telegramId,
-        text: message,
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
-      })
+      body: JSON.stringify(payload)
     })
     const data = await resp.json()
     if (data.ok) return true
@@ -32,7 +42,8 @@ export async function sendEscrowStatusNotification(
   escrowId: string,
   oldStatus: string,
   newStatus: string,
-  serviceClient: any
+  serviceClient: any,
+  miniAppUrl?: string
 ): Promise<void> {
   try {
     // Get escrow with all involved parties
@@ -87,6 +98,18 @@ Status changed from *${statusLabels[oldStatus] || oldStatus}* to *${statusLabels
 
 Please check your escrow dashboard for details.`
 
+    // Create inline keyboard with link to escrow page
+    const inlineKeyboard = miniAppUrl ? {
+      inline_keyboard: [
+        [
+          {
+            text: "View Escrow Details",
+            url: `${miniAppUrl}?startapp=escrow_${escrow.code}`
+          }
+        ]
+      ]
+    } : undefined
+
     // Create HTML email content
     const emailSubject = `Escrow Status Update - ${escrow.code}`
     const emailHtml = `
@@ -107,7 +130,7 @@ Please check your escrow dashboard for details.`
 
     // Send to seller
     if (escrow.seller?.telegram_id) {
-      await sendTelegramMessage(escrow.seller.telegram_id, message)
+      await sendTelegramMessage(escrow.seller.telegram_id, message, inlineKeyboard)
     }
     if (escrow.seller?.email) {
       await sendEmailNotification(escrow.seller.email, emailSubject, emailHtml)
@@ -115,7 +138,7 @@ Please check your escrow dashboard for details.`
 
     // Send to buyer
     if (escrow.buyer?.telegram_id) {
-      await sendTelegramMessage(escrow.buyer.telegram_id, message)
+      await sendTelegramMessage(escrow.buyer.telegram_id, message, inlineKeyboard)
     }
     if (escrow.buyer?.email) {
       await sendEmailNotification(escrow.buyer.email, emailSubject, emailHtml)
@@ -124,7 +147,7 @@ Please check your escrow dashboard for details.`
     // Send to ALL admins
     for (const admin of adminRecipients) {
       if (admin.telegram_id) {
-        await sendTelegramMessage(admin.telegram_id, message)
+        await sendTelegramMessage(admin.telegram_id, message, inlineKeyboard)
       }
       if (admin.email) {
         await sendEmailNotification(admin.email, emailSubject, emailHtml)
@@ -141,7 +164,8 @@ export async function sendChatMessageNotification(
   escrowId: string,
   senderId: string,
   message: string,
-  serviceClient: any
+  serviceClient: any,
+  miniAppUrl?: string
 ): Promise<void> {
   try {
     // Get escrow with parties
@@ -203,6 +227,18 @@ Transaction: \`${escrow.code}\`
 
 Check your escrow chat for the full conversation.`
 
+    // Create inline keyboard with link to escrow chat
+    const inlineKeyboard = miniAppUrl ? {
+      inline_keyboard: [
+        [
+          {
+            text: "View Chat",
+            url: `${miniAppUrl}?startapp=chat_${escrow.code}`
+          }
+        ]
+      ]
+    } : undefined
+
     // Get ALL admins for chat notifications (Telegram only)
     const { data: allAdmins } = await serviceClient
       .from('profiles')
@@ -213,12 +249,12 @@ Check your escrow chat for the full conversation.`
     const adminRecipients = allAdmins || []
 
     // Send Telegram notifications only (no email for chat messages to preserve quota)
-    await sendTelegramMessage(recipientTelegramId, notificationMessage)
+    await sendTelegramMessage(recipientTelegramId, notificationMessage, inlineKeyboard)
 
     // Send to ALL admins via Telegram
     for (const admin of adminRecipients) {
       if (admin.telegram_id) {
-        await sendTelegramMessage(admin.telegram_id, notificationMessage)
+        await sendTelegramMessage(admin.telegram_id, notificationMessage, inlineKeyboard)
       }
     }
 

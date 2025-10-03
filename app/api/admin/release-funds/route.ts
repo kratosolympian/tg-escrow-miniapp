@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send Telegram notifications
-    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.CLOSED, supabase)
+    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.CLOSED, supabase, process.env.TELEGRAM_MINIAPP_URL)
 
     // Log status change
     await (supabase as any)

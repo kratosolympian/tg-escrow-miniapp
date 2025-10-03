@@ -17,6 +17,26 @@ export default function HomePage() {
       try {
         const { data: { user }, error } = await supabase.auth.getUser()
         if (user && !error) {
+          // Check for deep link parameters from Telegram miniapp
+          const urlParams = new URLSearchParams(window.location.search)
+          const startapp = urlParams.get('startapp')
+          
+          if (startapp) {
+            // Handle deep links: escrow_CODE or chat_CODE
+            if (startapp.startsWith('escrow_')) {
+              const code = startapp.replace('escrow_', '')
+              // Redirect to escrow page
+              router.push(`/buyer/escrow/${code}`)
+              return
+            } else if (startapp.startsWith('chat_')) {
+              const code = startapp.replace('chat_', '')
+              // For chat, we need to find the escrow by code first
+              // This will be handled by the escrow page itself
+              router.push(`/buyer/escrow/${code}`)
+              return
+            }
+          }
+
           // User is already authenticated, get their profile and redirect
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
@@ -87,6 +107,26 @@ export default function HomePage() {
             .single()
           
           if (profile && !profileError) {
+            // Check for deep link parameters from Telegram miniapp
+            const urlParams = new URLSearchParams(window.location.search)
+            const startapp = urlParams.get('startapp')
+            
+            if (startapp) {
+              // Handle deep links: escrow_CODE or chat_CODE
+              if (startapp.startsWith('escrow_')) {
+                const code = startapp.replace('escrow_', '')
+                // Redirect to escrow page
+                router.push(`/buyer/escrow/${code}`)
+                return
+              } else if (startapp.startsWith('chat_')) {
+                const code = startapp.replace('chat_', '')
+                // For chat, we need to find the escrow by code first
+                // This will be handled by the escrow page itself
+                router.push(`/buyer/escrow/${code}`)
+                return
+              }
+            }
+
             // Redirect based on role
             switch (profile.role) {
               case 'admin':
