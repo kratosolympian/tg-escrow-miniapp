@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
 import { requireRole } from '@/lib/rbac'
 import { ESCROW_STATUS } from '@/lib/status'
 import { z } from 'zod'
@@ -14,6 +14,7 @@ const refundSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClientWithCookies()
+    const serviceClient = createServiceRoleClient()
     
     // Require admin role
     const profile = await requireRole(supabase, 'admin')
@@ -21,8 +22,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { escrowId } = refundSchema.parse(body)
 
-    // Get escrow
-    const { data: escrow, error: escrowError } = await (supabase as any)
+    // Get escrow using service client
+    const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -39,8 +40,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Update escrow status to refunded
-    const { error: updateError } = await (supabase as any)
+    // Update escrow status using service client
+    const { error: updateError } = await (serviceClient as any)
       .from('escrows')
       .update({ status: ESCROW_STATUS.REFUNDED })
       .eq('id', escrow.id)

@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { escrowId } = confirmPaymentSchema.parse(body)
 
-    // Get escrow
-    const { data: escrow, error: escrowError } = await (supabase as any)
+    // Get escrow using service client (bypasses RLS)
+    const { data: escrow, error: escrowError } = await (serviceClient as any)
       .from('escrows')
       .select('*')
       .eq('id', escrowId)
@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Update escrow status
-    const { error: updateError } = await (supabase as any)
+    // Update escrow status using service client
+    const { error: updateError } = await (serviceClient as any)
       .from('escrows')
       .update({ status: ESCROW_STATUS.PAYMENT_CONFIRMED })
       .eq('id', escrow.id)

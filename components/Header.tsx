@@ -71,9 +71,10 @@ export default function Header() {
 
           try {
             const { data: profileData } = await Promise.race([profilePromise, timeoutPromise]) as any;
+            console.log('[Header] Profile data fetched:', profileData);
             setUserProfile(profileData);
           } catch (profileError) {
-            console.warn('Profile fetch failed, using default role');
+            console.warn('[Header] Profile fetch failed, using default role. Error:', profileError);
             setUserProfile({ role: 'buyer' }); // Default fallback
           }
 
@@ -124,6 +125,7 @@ export default function Header() {
     }
     
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('[Header] Auth state change:', _event, session?.user?.id);
       if (session?.user) {
         setUser(session.user);
         // Simplified profile fetch for auth changes
@@ -133,9 +135,10 @@ export default function Header() {
             .select('role')
             .eq('id', session.user.id)
             .single();
+          console.log('[Header] Auth change profile data:', profileData);
           setUserProfile(profileData);
         } catch (profileError) {
-          console.warn('Failed to fetch user profile on auth change:', profileError);
+          console.warn('[Header] Failed to fetch user profile on auth change:', profileError);
           setUserProfile({ role: 'buyer' }); // Default fallback
         }
       } else {
