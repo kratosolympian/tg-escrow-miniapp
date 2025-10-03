@@ -43,7 +43,8 @@ export async function sendEscrowStatusNotification(
   oldStatus: string,
   newStatus: string,
   serviceClient: any,
-  miniAppUrl?: string
+  miniAppUrl?: string,
+  changedByUserId?: string
 ): Promise<void> {
   try {
     // Get escrow with all involved parties
@@ -75,6 +76,25 @@ export async function sendEscrowStatusNotification(
 
     const adminRecipients = allAdmins || []
 
+    // Get information about who made the change (if provided)
+    let changerInfo = null
+    if (changedByUserId) {
+      const { data: changerProfile } = await serviceClient
+        .from('profiles')
+        .select('telegram_id, full_name, email, role')
+        .eq('id', changedByUserId)
+        .single()
+
+      if (changerProfile) {
+        changerInfo = {
+          name: changerProfile.full_name || 'Unknown',
+          role: changerProfile.role || 'user',
+          telegramId: changerProfile.telegram_id,
+          email: changerProfile.email
+        }
+      }
+    }
+
     // Prepare notification message
     const statusLabels: Record<string, string> = {
       'created': 'Created',
@@ -97,6 +117,27 @@ Amount: ₦${escrow.price.toLocaleString()}
 Status changed from *${statusLabels[oldStatus] || oldStatus}* to *${statusLabels[newStatus] || newStatus}*
 
 Please check your escrow dashboard for details.`
+
+    // Create admin-specific message with changer info
+    let adminMessage = message
+    if (changerInfo) {
+      const contactInfo = changerInfo.telegramId
+        ? `\`${changerInfo.telegramId}\``
+        : changerInfo.email
+        ? `\`${changerInfo.email}\``
+        : 'Unknown'
+
+      adminMessage = `🚨 *Escrow Status Update*
+
+Transaction: \`${escrow.code}\`
+Description: ${escrow.description}
+Amount: ₦${escrow.price.toLocaleString()}
+
+Status changed from *${statusLabels[oldStatus] || oldStatus}* to *${statusLabels[newStatus] || newStatus}*
+Changed by: ${changerInfo.name} (${changerInfo.role}) - ${contactInfo}
+
+Please check your escrow dashboard for details.`
+    }
 
     // Create inline keyboard with link to escrow page
     const inlineKeyboard = miniAppUrl ? {
@@ -144,10 +185,10 @@ Please check your escrow dashboard for details.`
       await sendEmailNotification(escrow.buyer.email, emailSubject, emailHtml)
     }
 
-    // Send to ALL admins
+    // Send to ALL admins with changer info
     for (const admin of adminRecipients) {
       if (admin.telegram_id) {
-        await sendTelegramMessage(admin.telegram_id, message, inlineKeyboard)
+        await sendTelegramMessage(admin.telegram_id, adminMessage, inlineKeyboard)
       }
       if (admin.email) {
         await sendEmailNotification(admin.email, emailSubject, emailHtml)

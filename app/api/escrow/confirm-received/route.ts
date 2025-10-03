@@ -161,7 +161,8 @@ export async function POST(request: NextRequest) {
         escrow.status, // old status
         ESCROW_STATUS.COMPLETED, // new status
         serviceClient,
-        process.env.TELEGRAM_MINIAPP_URL
+        process.env.TELEGRAM_MINIAPP_URL,
+        authenticatedUser.id // Add the user who made the change
       );
     } catch (notificationError) {
       console.error('Error sending escrow completion notification:', notificationError);
