@@ -11,9 +11,20 @@ export default function Header() {
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [mounted, setMounted] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isInTelegram, setIsInTelegram] = useState(false);
+  const [authRefreshTrigger, setAuthRefreshTrigger] = useState(0);
+
+  const refreshAuth = () => {
+    setAuthRefreshTrigger(prev => prev + 1);
+  };
 
   useEffect(() => {
     setMounted(true);
+
+    // Check if we're in Telegram WebApp
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      setIsInTelegram(true);
+    }
 
     // Simplified auth check - prioritize speed over comprehensive fallback
     const checkAuth = async () => {
@@ -78,6 +89,14 @@ export default function Header() {
 
     checkAuth();
     
+    // For Telegram users, refresh auth state more frequently to prevent stale state
+    let refreshInterval: NodeJS.Timeout | null = null;
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      refreshInterval = setInterval(() => {
+        checkAuth();
+      }, 10000); // Refresh every 10 seconds for Telegram users
+    }
+    
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user);
@@ -101,8 +120,11 @@ export default function Header() {
 
     return () => {
       listener?.subscription.unsubscribe();
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
     };
-  }, []);
+  }, [authRefreshTrigger]);
 
   // Debugging instrumentation: capture calls to location.replace/assign/reload across the app.
   useEffect(() => {
@@ -163,6 +185,33 @@ export default function Header() {
       window.location.href = "/";
     }
   };
+
+  // Listen for custom events that might indicate auth state changes
+  useEffect(() => {
+    const handleAuthRefresh = () => {
+      refreshAuth();
+    };
+
+    // Listen for custom auth refresh events
+    window.addEventListener('auth-refresh', handleAuthRefresh);
+
+    // Also listen for Telegram WebApp events that might indicate state changes
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      const webApp = window.Telegram.WebApp;
+      
+      // Listen for back button or other navigation events
+      const handleBackButton = () => {
+        setTimeout(() => refreshAuth(), 500);
+      };
+      
+      // Note: Telegram WebApp events are handled differently, 
+      // for now we'll rely on periodic refresh for Telegram users
+    }
+
+    return () => {
+      window.removeEventListener('auth-refresh', handleAuthRefresh);
+    };
+  }, []);
 
   return (
     <header className="w-full bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
