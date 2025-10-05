@@ -26,8 +26,10 @@ export async function GET(
       return NextResponse.json({ error: 'Escrow not found' }, { status: 404 })
     }
 
+    const escrowData = escrow as { seller_id: string | null; buyer_id: string | null }
+
     // Check if user can access this escrow
-    if (!canAccessEscrow(profile, { seller_id: escrow.seller_id || '', buyer_id: escrow.buyer_id })) {
+    if (!canAccessEscrow(profile, { seller_id: escrowData.seller_id || '', buyer_id: escrowData.buyer_id })) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -55,7 +57,7 @@ export async function GET(
     // Mark messages as read for current user (service client, server-side check already done)
     if (!isAdmin(profile)) {
       const updateObj: any = { is_read: true }
-      await serviceClient
+      await (serviceClient as any)
         .from('chat_messages')
         .update(updateObj)
         .eq('escrow_id', params.id)
@@ -107,8 +109,10 @@ export async function POST(
       return NextResponse.json({ error: 'Escrow not found' }, { status: 404 })
     }
 
+    const escrowData2 = escrow as { seller_id: string | null; buyer_id: string | null }
+
     // Check if user can access this escrow
-    if (!canAccessEscrow(profile, { seller_id: escrow.seller_id || '', buyer_id: escrow.buyer_id })) {
+    if (!canAccessEscrow(profile, { seller_id: escrowData2.seller_id || '', buyer_id: escrowData2.buyer_id })) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -144,8 +148,8 @@ export async function POST(
         error: 'Failed to send message',
         debug: {
           user_id: profile.id,
-          escrow_buyer_id: escrow.buyer_id,
-          escrow_seller_id: escrow.seller_id,
+          escrow_buyer_id: escrowData2.buyer_id,
+          escrow_seller_id: escrowData2.seller_id,
           insert_sender_id: profile.id,
           insertObj,
           insertError

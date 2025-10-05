@@ -65,20 +65,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Escrow not found' }, { status: 404 })
     }
 
+    const escrowData = escrow as { id: string; seller_id: string; status: string }
+
     // Verify user is the seller
-    if (escrow.seller_id !== user.id) {
+    if (escrowData.seller_id !== user.id) {
       return NextResponse.json({ error: 'Only the seller can cancel this escrow' }, { status: 403 })
     }
 
     // Check if escrow can be cancelled (only when status is 'waiting_payment')
-    if (escrow.status !== ESCROW_STATUS.WAITING_PAYMENT) {
+    if (escrowData.status !== ESCROW_STATUS.WAITING_PAYMENT) {
       return NextResponse.json({
         error: 'Escrow can only be cancelled before payment is confirmed'
       }, { status: 403 })
     }
 
     // Update escrow status to closed
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase as any)
       .from('escrows')
       .update({
         status: ESCROW_STATUS.CLOSED

@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         const userId = created.user?.id
         if (userId) {
           try {
-            await serviceClient.from('profiles').insert({ id: userId, email, full_name: name, role: 'seller' }).select()
+            await (serviceClient as any).from('profiles').insert({ id: userId, email, full_name: name, role: 'seller' }).select()
           } catch (e) {
             // non-fatal; log but continue
             console.warn('Failed to create profile via service role after admin.createUser:', e)

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     // User is authenticated, associate Telegram ID with their profile
     const serviceClient = createServiceRoleClient()
-    const { error: updateError } = await serviceClient
+    const { error: updateError } = await (serviceClient as any)
       .from('profiles')
       .update({
         telegram_id: telegramUser.id.toString(),

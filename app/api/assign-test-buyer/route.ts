@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No available escrow found' }, { status: 404 })
     }
 
+    const escrowData = escrow as { id: string; code: string; seller_id: string | null; buyer_id: string | null }
+
     // Get a buyer with telegram_id
     const buyerQuery = serviceClient
       .from('profiles')
@@ -24,8 +26,8 @@ export async function POST(request: NextRequest) {
       .not('telegram_id', 'is', null)
 
     // Don't assign seller as buyer (only if seller_id exists)
-    if (escrow.seller_id) {
-      buyerQuery.neq('id', escrow.seller_id)
+    if (escrowData.seller_id) {
+      buyerQuery.neq('id', escrowData.seller_id)
     }
 
     const { data: buyers, error: buyerError } = await buyerQuery.limit(5)
@@ -35,17 +37,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Pick the first available buyer
-    const buyer = buyers[0]
+    const buyer = buyers[0] as { id: string; full_name: string | null; telegram_id: string | null }
 
     // Assign buyer to escrow
-    const { error: updateError } = await serviceClient
+    const { error: updateError } = await (serviceClient as any)
       .from('escrows')
       .update({
         buyer_id: buyer.id,
         status: 'waiting_payment', // Reset to allow testing
         updated_at: new Date().toISOString()
       })
-      .eq('id', escrow.id)
+      .eq('id', escrowData.id)
 
     if (updateError) {
       return NextResponse.json({ error: 'Failed to assign buyer', details: updateError }, { status: 500 })
@@ -53,10 +55,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Assigned buyer "${buyer.full_name}" to escrow "${escrow.code}"`,
+      message: `Assigned buyer "${buyer.full_name}" to escrow "${escrowData.code}"`,
       escrow: {
-        id: escrow.id,
-        code: escrow.code,
+        id: escrowData.id,
+        code: escrowData.code,
         seller: 'Seller Test',
         buyer: buyer.full_name,
         buyer_telegram_id: buyer.telegram_id

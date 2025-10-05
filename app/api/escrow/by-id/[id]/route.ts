@@ -166,7 +166,7 @@ export async function GET(
           const signedResults = await Promise.all(signedPromises)
           // Replace receipts with signed-url-augmented versions
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          receiptsData = signedResults
+          receiptsData = signedResults as any
         } catch (e) {
           console.error('Error while creating signed URLs for receipts', e)
         }

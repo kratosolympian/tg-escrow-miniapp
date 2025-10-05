@@ -51,14 +51,15 @@ export default function HomePage() {
           }
 
           // User is already authenticated, get their profile and redirect
-          const { data: profile, error: profileError } = await supabase
+          const { data: profile, error: profileError } = await (supabase as any)
             .from('profiles')
             .select('role')
             .eq('id', user.id)
             .single()
           
           if (profile && !profileError) {
-            switch (profile.role) {
+            const userProfile = profile as { role: string }
+            switch (userProfile.role) {
               case 'admin':
               case 'super_admin':
                 router.push('/admin/dashboard')
@@ -146,7 +147,8 @@ export default function HomePage() {
             }
 
             // Redirect based on role
-            switch (profile.role) {
+            const userProfile = profile as { role: string }
+            switch (userProfile.role) {
               case 'admin':
               case 'super_admin':
                 router.push('/admin/dashboard')
