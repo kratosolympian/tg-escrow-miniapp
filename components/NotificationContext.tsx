@@ -54,11 +54,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         const data = await response.json()
         const dbNotifications = data.notifications || []
 
+        console.log(`Fetched ${dbNotifications.length} notifications`)
+
         // Convert DB notifications to popup format and show them
         dbNotifications.forEach((dbNotif: any) => {
           // Check if we already showed this notification in this session
           const notificationId = `db-${dbNotif.id}`
           if (!shownNotificationIds.has(notificationId)) {
+            console.log(`Showing new notification: ${dbNotif.title}`)
             const notificationData = {
               title: dbNotif.title,
               message: dbNotif.message,
@@ -70,6 +73,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             }
             showNotification(notificationData, notificationId)
             setShownNotificationIds(prev => new Set(prev).add(notificationId))
+          } else {
+            console.log(`Skipping already shown notification: ${dbNotif.title}`)
           }
         })
       }
@@ -91,8 +96,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           // Initial fetch
           await fetchNotifications()
 
-          // Poll for new notifications every 10 seconds
-          const interval = setInterval(fetchNotifications, 10000)
+          // Poll for new notifications every 30 seconds
+          const interval = setInterval(fetchNotifications, 30000)
           return () => clearInterval(interval)
         }
       } catch (error) {
