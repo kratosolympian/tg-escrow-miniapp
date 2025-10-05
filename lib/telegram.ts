@@ -181,12 +181,38 @@ Please check your escrow dashboard for details.`
       await sendEmailNotification(escrow.seller.email, emailSubject, emailHtml)
     }
 
+    // Create database notification for seller
+    if (escrow.seller?.id) {
+      await serviceClient.from('user_notifications').insert({
+        user_id: escrow.seller.id,
+        escrow_id: escrow.id,
+        title: 'Escrow Status Updated',
+        message: `Your escrow ${escrow.code} status changed to ${statusLabels[newStatus] || newStatus}`,
+        type: 'info',
+        action_text: 'Refresh',
+        escrow_code: escrow.code
+      })
+    }
+
     // Send to buyer
     if (escrow.buyer?.telegram_id) {
       await sendTelegramMessage(escrow.buyer.telegram_id, message, inlineKeyboard)
     }
     if (escrow.buyer?.email) {
       await sendEmailNotification(escrow.buyer.email, emailSubject, emailHtml)
+    }
+
+    // Create database notification for buyer
+    if (escrow.buyer?.id) {
+      await serviceClient.from('user_notifications').insert({
+        user_id: escrow.buyer.id,
+        escrow_id: escrow.id,
+        title: 'Escrow Status Updated',
+        message: `Your escrow ${escrow.code} status changed to ${statusLabels[newStatus] || newStatus}`,
+        type: 'info',
+        action_text: 'Refresh',
+        escrow_code: escrow.code
+      })
     }
 
     // Send to ALL admins with changer info
@@ -197,6 +223,17 @@ Please check your escrow dashboard for details.`
       if (admin.email) {
         await sendEmailNotification(admin.email, emailSubject, emailHtml)
       }
+
+      // Create database notification for admin
+      await serviceClient.from('user_notifications').insert({
+        user_id: admin.id,
+        escrow_id: escrow.id,
+        title: 'Escrow Status Updated',
+        message: `Escrow ${escrow.code} status changed to ${statusLabels[newStatus] || newStatus}`,
+        type: 'info',
+        action_text: 'Refresh',
+        escrow_code: escrow.code
+      })
     }
 
   } catch (error) {

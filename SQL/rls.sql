@@ -5,6 +5,7 @@ alter table admin_settings enable row level security;
 alter table status_logs enable row level security;
 alter table disputes enable row level security;
 alter table one_time_tokens enable row level security;
+alter table user_notifications enable row level security;
 
 create table if not exists admin_users (
   user_id uuid primary key references profiles(id)
@@ -112,3 +113,11 @@ drop policy if exists "service role all tokens" on one_time_tokens;
 create policy "service role all tokens" on one_time_tokens for all using (
   auth.role() = 'service_role'
 );
+
+-- User notifications RLS
+drop policy if exists "own notifications read" on user_notifications;
+create policy "own notifications read" on user_notifications for select using (auth.uid() = user_id);
+drop policy if exists "own notifications update" on user_notifications;
+create policy "own notifications update" on user_notifications for update using (auth.uid() = user_id);
+drop policy if exists "service role insert notifications" on user_notifications;
+create policy "service role insert notifications" on user_notifications for insert with check (auth.role() = 'service_role');

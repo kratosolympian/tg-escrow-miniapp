@@ -23,6 +23,9 @@ dependencies:
   form-data:
     specifier: ^4.0.4
     version: 4.0.4
+  lucide-react:
+    specifier: ^0.544.0
+    version: 0.544.0(react@18.3.1)
   next:
     specifier: ^14.2.32
     version: 14.2.32(react-dom@18.3.1)(react@18.3.1)
@@ -2442,6 +2445,14 @@ packages:
     resolution: {integrity: sha512-F9ODfyqML2coTIsQpSkRHnLSZMtkU8Q+mSfcaIyKwy58u+8k5nvAYeiNhsyMARvzNcXJ9QfWVrcPsC9e9rAxtg==}
     engines: {node: 20 || >=22}
     dev: true
+
+  /lucide-react@0.544.0(react@18.3.1):
+    resolution: {integrity: sha512-t5tS44bqd825zAW45UQxpG2CvcC4urOwn2TrwSH8u+MjeE+1NnWl6QqeQ/6NdjMqdOygyiT9p3Ev0p1NJykxjw==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    dependencies:
+      react: 18.3.1
+    dev: false
 
   /math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}

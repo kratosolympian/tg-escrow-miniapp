@@ -1,7 +1,34 @@
 -- Enable required extensions
 create extension if not exists pgcrypto;
 
--- Profiles mirror auth.users, hold telegram mapping + role + banking info
+-- Profiles mirror a-- Chat participants (to track who has access to chat)
+create table if not exists chat_participants (
+  id uuid primary key default gen_random_uuid(),
+  escrow_id uuid not null references escrows(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  last_read_at timestamp with time zone default now(),
+  created_at timestamp with time zone default now(),
+  unique(escrow_id, user_id)
+);
+
+-- User notifications for real-time status updates
+create table if not exists user_notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  escrow_id uuid not null references escrows(id) on delete cascade,
+  title text not null,
+  message text not null,
+  type text check (type in ('info', 'success', 'warning', 'error')) default 'info',
+  action_text text,
+  escrow_code text,
+  is_read boolean default false,
+  created_at timestamp with time zone default now()
+);
+
+-- Indexes for performance
+create index if not exists idx_user_notifications_user_id on user_notifications(user_id);
+create index if not exists idx_user_notifications_created_at on user_notifications(created_at desc);
+create index if not exists idx_user_notifications_unread on user_notifications(user_id, is_read) where is_read = false;, hold telegram mapping + role + banking info
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,

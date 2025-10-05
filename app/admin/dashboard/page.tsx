@@ -9,6 +9,7 @@ import { getStatusLabel, getStatusColor } from '@/lib/status'
 import StatusBadge from '@/components/StatusBadge'
 import AdminManagement from '@/components/AdminManagement'
 import { supabase } from '@/lib/supabaseClient'
+import { useNotifications } from '@/components/NotificationContext'
 
 interface Escrow {
   id: string
@@ -32,6 +33,21 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'transactions' | 'admin-management'>('transactions')
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
   const [user, setUser] = useState<any | null>(null)
+
+  // Notification system
+  const { refreshData } = useNotifications()
+
+  // Refresh function for notifications
+  const refreshEscrows = async () => {
+    await fetchEscrows()
+  }
+
+  // Set refresh function in notification context
+  useEffect(() => {
+    if (refreshData) {
+      refreshData.current = refreshEscrows
+    }
+  }, [refreshData])
 
   const fetchEscrows = React.useCallback(async () => {
     try {

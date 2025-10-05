@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthCard from '@/components/AuthCard'
 import { supabase } from '@/lib/supabaseClient'
+import { useNotifications } from '@/components/NotificationContext'
 
 export default function BuyerPage() {
   // Auth states
@@ -16,6 +17,21 @@ export default function BuyerPage() {
   const [user, setUser] = useState<any | null>(null)
   const [activeEscrows, setActiveEscrows] = useState<Array<any>>([])
   const [blockedJoinInfo, setBlockedJoinInfo] = useState<any | null>(null)
+
+  // Notification system
+  const { refreshData } = useNotifications()
+
+  // Refresh function for notifications
+  const refreshEscrows = async () => {
+    await fetchActiveEscrows()
+  }
+
+  // Set refresh function in notification context
+  useEffect(() => {
+    if (refreshData) {
+      refreshData.current = refreshEscrows
+    }
+  }, [refreshData])
 
   // Check authentication on load
   useEffect(() => {

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthCard from '@/components/AuthCard'
 import { formatNaira } from '@/lib/utils'
+import { useNotifications } from '@/components/NotificationContext'
 
 interface CreateEscrowForm {
   description: string
@@ -47,6 +48,21 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
   const [user, setUser] = useState<any>(null);
   
   const router = useRouter()
+
+  // Notification system
+  const { refreshData } = useNotifications()
+
+  // Refresh function for notifications
+  const refreshEscrows = async () => {
+    await fetchActiveEscrows()
+  }
+
+  // Set refresh function in notification context
+  useEffect(() => {
+    if (refreshData) {
+      refreshData.current = refreshEscrows
+    }
+  }, [refreshData])
 
   const [activeEscrows, setActiveEscrows] = useState<Array<any>>([])
   const [blockedCreationInfo, setBlockedCreationInfo] = useState<any | null>(null)
