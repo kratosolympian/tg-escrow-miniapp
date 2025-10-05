@@ -40,6 +40,7 @@ interface NotificationProviderProps {
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const [notifications, setNotifications] = useState<NotificationData[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [shownNotificationIds, setShownNotificationIds] = useState<Set<string>>(new Set())
   const refreshData = React.useRef<(() => Promise<void>) | null>(null)
 
   // Fetch notifications from API
@@ -55,9 +56,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
         // Convert DB notifications to popup format and show them
         dbNotifications.forEach((dbNotif: any) => {
-          // Check if we already have this notification displayed
-          const existingNotification = notifications.find(n => n.id === `db-${dbNotif.id}`)
-          if (!existingNotification) {
+          // Check if we already showed this notification in this session
+          const notificationId = `db-${dbNotif.id}`
+          if (!shownNotificationIds.has(notificationId)) {
             const notificationData = {
               title: dbNotif.title,
               message: dbNotif.message,
@@ -67,7 +68,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
               onAction: refreshData.current || (() => {}),
               autoHide: false, // Don't auto-hide DB notifications
             }
-            showNotification(notificationData, `db-${dbNotif.id}`)
+            showNotification(notificationData, notificationId)
+            setShownNotificationIds(prev => new Set(prev).add(notificationId))
           }
         })
       }
