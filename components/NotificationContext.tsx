@@ -62,13 +62,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           const notificationId = `db-${dbNotif.id}`
           if (!shownNotificationIds.has(notificationId)) {
             console.log(`Showing new notification: ${dbNotif.title}`)
+            console.log(`Refresh function available:`, !!refreshData.current)
             const notificationData = {
               title: dbNotif.title,
               message: dbNotif.message,
               type: dbNotif.type || 'info',
               escrowCode: dbNotif.escrow_code,
               actionText: dbNotif.action_text || 'Refresh',
-              onAction: refreshData.current || (() => {}),
+              onAction: refreshData.current || (() => { console.log('No refresh function available') }),
               autoHide: false, // Don't auto-hide DB notifications
             }
             showNotification(notificationData, notificationId)

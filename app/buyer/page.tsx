@@ -23,7 +23,9 @@ export default function BuyerPage() {
 
   // Refresh function for notifications
   const refreshEscrows = async () => {
+    console.log('Buyer page: refreshEscrows called')
     await fetchActiveEscrows()
+    console.log('Buyer page: refreshEscrows completed')
   }
 
   // Set refresh function in notification context
@@ -93,6 +95,7 @@ export default function BuyerPage() {
 
   const fetchActiveEscrows = async () => {
     try {
+      console.log('Buyer page: fetchActiveEscrows started')
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const res = await fetch('/api/escrow/my-active', {
@@ -101,10 +104,14 @@ export default function BuyerPage() {
       })
       if (res.ok) {
         const j = await res.json()
+        console.log('Buyer page: fetched escrows:', j.buyer?.length || 0)
         setActiveEscrows(j.buyer || [])
+        console.log('Buyer page: activeEscrows state updated')
+      } else {
+        console.log('Buyer page: fetch failed with status:', res.status)
       }
     } catch (e) {
-      // ignore
+      console.log('Buyer page: fetch error:', e)
     }
   }
 

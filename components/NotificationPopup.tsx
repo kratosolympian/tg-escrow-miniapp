@@ -58,8 +58,14 @@ export default function NotificationPopup() {
               )}
               {notification.actionText && notification.onAction && (
                 <button
-                  onClick={() => {
-                    notification.onAction?.()
+                  onClick={async () => {
+                    console.log('Notification action clicked:', notification.title)
+                    try {
+                      await notification.onAction?.()
+                      console.log('Notification action completed')
+                    } catch (error) {
+                      console.error('Notification action failed:', error)
+                    }
                     hideNotification(notification.id)
                   }}
                   className="inline-flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
