@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     // Mark notifications as read
     const { error } = await supabase
       .from('user_notifications')
-      .update({ read: true })
+      .update({ is_read: true })
       .in('id', notificationIds)
       .eq('user_id', profile.id)
 
