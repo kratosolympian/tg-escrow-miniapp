@@ -28,7 +28,9 @@ create table if not exists user_notifications (
 -- Indexes for performance
 create index if not exists idx_user_notifications_user_id on user_notifications(user_id);
 create index if not exists idx_user_notifications_created_at on user_notifications(created_at desc);
-create index if not exists idx_user_notifications_unread on user_notifications(user_id, is_read) where is_read = false;, hold telegram mapping + role + banking info
+create index if not exists idx_user_notifications_unread on user_notifications(user_id, read) where read = false;
+
+-- Profiles table - hold telegram mapping + role + banking info
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
