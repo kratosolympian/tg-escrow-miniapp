@@ -58,9 +58,13 @@ export default function NotificationPopup() {
               )}
               {notification.actionText && (
                 <button
-                  onClick={() => {
-                    // Full page refresh
-                    window.location.reload()
+                  onClick={async () => {
+                    // Mark notification as read first, then refresh
+                    await hideNotification(notification.id)
+                    // Small delay to ensure the API call starts before page reload
+                    setTimeout(() => {
+                      window.location.reload()
+                    }, 100)
                   }}
                   className="inline-flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
                 >
