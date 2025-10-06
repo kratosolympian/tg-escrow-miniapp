@@ -59,12 +59,10 @@ export default function NotificationPopup() {
               {notification.actionText && notification.onAction && (
                 <button
                   onClick={async () => {
-                    console.log('Notification action clicked:', notification.title)
                     try {
                       await notification.onAction?.()
-                      console.log('Notification action completed')
                     } catch (error) {
-                      console.error('Notification action failed:', error)
+                      // Ignore errors
                     }
                     hideNotification(notification.id)
                   }}

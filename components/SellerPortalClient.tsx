@@ -64,8 +64,35 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
     }
   }, [refreshData])
 
+  // Real-time subscription for escrow updates
+  useEffect(() => {
+    if (!isAuthenticated || !user) return
+
+    const channel = supabase
+      .channel('escrow-updates-seller')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows',
+          filter: `seller_id=eq.${user.id}`
+        },
+        (payload) => {
+          // Escrow was updated, refresh the data
+          fetchActiveEscrows()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isAuthenticated, user])
+
   const [activeEscrows, setActiveEscrows] = useState<Array<any>>([])
   const [blockedCreationInfo, setBlockedCreationInfo] = useState<any | null>(null)
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null)
 
   const fetchOnlineAdmins = async () => {
     try {
@@ -96,6 +123,7 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
         const j = await res.json();
         const sellerEscrows = j.seller || [];
         setActiveEscrows(sellerEscrows);
+        setLastRefreshTime(new Date()); // Update refresh timestamp
       }
     } catch (e) {
       console.error('Error fetching active escrows', e);
@@ -531,6 +559,11 @@ export default function SellerPortalClient({ initialAuthState }: SellerPortalCli
                 Create New Transaction
               </button>
             </div>
+            {lastRefreshTime && (
+              <div className="text-xs text-green-600 mb-2">
+                🔄 Last updated: {lastRefreshTime.toLocaleTimeString()}
+              </div>
+            )}
             <div className="space-y-4">
               {activeEscrows.map((escrow: any) => {
                 const price = typeof escrow.price === 'number' && !isNaN(escrow.price) ? escrow.price : 0

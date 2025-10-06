@@ -49,6 +49,31 @@ export default function AdminDashboard() {
     }
   }, [refreshData])
 
+  // Real-time subscription for all escrow updates (admins see all)
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel('escrow-updates-admin')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows'
+        },
+        (payload) => {
+          // Any escrow was updated, refresh the data
+          fetchEscrows()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user])
+
   const fetchEscrows = React.useCallback(async () => {
     try {
       const params = new URLSearchParams()

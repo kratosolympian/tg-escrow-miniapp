@@ -54,22 +54,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         const data = await response.json()
         const dbNotifications = data.notifications || []
 
-        console.log(`Fetched ${dbNotifications.length} notifications`)
-
         // Convert DB notifications to popup format and show them
         dbNotifications.forEach((dbNotif: any) => {
           // Check if we already showed this notification in this session
           const notificationId = `db-${dbNotif.id}`
           if (!shownNotificationIds.has(notificationId)) {
-            console.log(`Showing new notification: ${dbNotif.title}`)
-            console.log(`Refresh function available:`, !!refreshData.current)
             const notificationData = {
               title: dbNotif.title,
               message: dbNotif.message,
               type: dbNotif.type || 'info',
               escrowCode: dbNotif.escrow_code,
               actionText: dbNotif.action_text || 'Refresh',
-              onAction: refreshData.current || (() => { console.log('No refresh function available') }),
+              onAction: refreshData.current || (() => {}),
               autoHide: false, // Don't auto-hide DB notifications
             }
             showNotification(notificationData, notificationId)

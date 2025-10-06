@@ -17,27 +17,48 @@ export default function BuyerPage() {
   const [user, setUser] = useState<any | null>(null)
   const [activeEscrows, setActiveEscrows] = useState<Array<any>>([])
   const [blockedJoinInfo, setBlockedJoinInfo] = useState<any | null>(null)
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null)
 
   // Notification system
   const { refreshData } = useNotifications()
 
   // Refresh function for notifications
   const refreshEscrows = async () => {
-    console.log('Buyer page: refreshEscrows called')
     await fetchActiveEscrows()
-    console.log('Buyer page: refreshEscrows completed')
   }
 
   // Set refresh function in notification context
   useEffect(() => {
-    console.log('Buyer page: Setting refresh function, refreshData exists:', !!refreshData)
     if (refreshData) {
       refreshData.current = refreshEscrows
-      console.log('Buyer page: Refresh function set successfully')
-    } else {
-      console.log('Buyer page: refreshData is null/undefined')
     }
   }, [refreshData])
+
+  // Real-time subscription for escrow updates
+  useEffect(() => {
+    if (!isAuthenticated || !user) return
+
+    const channel = supabase
+      .channel('escrow-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrows',
+          filter: `buyer_id=eq.${user.id}`
+        },
+        (payload) => {
+          // Escrow was updated, refresh the data
+          fetchActiveEscrows()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isAuthenticated, user])
 
   // Check authentication on load
   useEffect(() => {
@@ -99,7 +120,6 @@ export default function BuyerPage() {
 
   const fetchActiveEscrows = async () => {
     try {
-      console.log('Buyer page: fetchActiveEscrows started')
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const res = await fetch('/api/escrow/my-active', {
@@ -108,14 +128,11 @@ export default function BuyerPage() {
       })
       if (res.ok) {
         const j = await res.json()
-        console.log('Buyer page: fetched escrows:', j.buyer?.length || 0)
         setActiveEscrows(j.buyer || [])
-        console.log('Buyer page: activeEscrows state updated')
-      } else {
-        console.log('Buyer page: fetch failed with status:', res.status)
+        setLastRefreshTime(new Date()) // Update refresh timestamp
       }
     } catch (e) {
-      console.log('Buyer page: fetch error:', e)
+      // ignore
     }
   }
 
@@ -368,6 +385,11 @@ export default function BuyerPage() {
           <div className="card mt-6">
             <div className="p-4">
               <h3 className="font-semibold mb-3">Your Transactions</h3>
+              {lastRefreshTime && (
+                <div className="text-xs text-green-600 mb-2">
+                  🔄 Last updated: {lastRefreshTime.toLocaleTimeString()}
+                </div>
+              )}
               {activeEscrows && activeEscrows.length > 0 ? (
                 <div className="space-y-3">
                   {activeEscrows.map(e => (
