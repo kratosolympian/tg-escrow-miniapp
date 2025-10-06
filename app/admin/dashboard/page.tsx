@@ -67,6 +67,18 @@ export default function AdminDashboard() {
           fetchEscrows()
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'escrows'
+        },
+        (payload) => {
+          // New escrow was created, refresh the data
+          fetchEscrows()
+        }
+      )
       .subscribe()
 
     return () => {

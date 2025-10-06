@@ -45,12 +45,29 @@ export default function BuyerPage() {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'escrows',
-          filter: `buyer_id=eq.${user.id}`
+          table: 'escrows'
         },
         (payload) => {
-          // Escrow was updated, refresh the data
-          fetchActiveEscrows()
+          // Check if this escrow belongs to the current user
+          if (payload.new && (payload.new.seller_id === user.id || payload.new.buyer_id === user.id)) {
+            // Escrow was updated and belongs to this user, refresh the data
+            fetchActiveEscrows()
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'escrows'
+        },
+        (payload) => {
+          // Check if this new escrow belongs to the current user
+          if (payload.new && (payload.new.seller_id === user.id || payload.new.buyer_id === user.id)) {
+            // New escrow was created for this user, refresh the data
+            fetchActiveEscrows()
+          }
         }
       )
       .subscribe()

@@ -56,15 +56,11 @@ export default function NotificationPopup() {
                   Escrow: {notification.escrowCode}
                 </p>
               )}
-              {notification.actionText && notification.onAction && (
+              {notification.actionText && (
                 <button
-                  onClick={async () => {
-                    try {
-                      await notification.onAction?.()
-                    } catch (error) {
-                      // Ignore errors
-                    }
-                    hideNotification(notification.id)
+                  onClick={() => {
+                    // Full page refresh
+                    window.location.reload()
                   }}
                   className="inline-flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
                 >
