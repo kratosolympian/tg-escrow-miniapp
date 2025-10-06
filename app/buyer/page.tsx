@@ -30,8 +30,12 @@ export default function BuyerPage() {
 
   // Set refresh function in notification context
   useEffect(() => {
+    console.log('Buyer page: Setting refresh function, refreshData exists:', !!refreshData)
     if (refreshData) {
       refreshData.current = refreshEscrows
+      console.log('Buyer page: Refresh function set successfully')
+    } else {
+      console.log('Buyer page: refreshData is null/undefined')
     }
   }, [refreshData])
 

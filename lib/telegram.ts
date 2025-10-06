@@ -71,12 +71,11 @@ export async function sendEscrowStatusNotification(
       return
     }
 
-    // Get ALL admins' telegram IDs and emails
+    // Get ALL admins with their IDs
     const { data: allAdmins } = await serviceClient
       .from('profiles')
-      .select('telegram_id, full_name, email')
+      .select('id, telegram_id, full_name, email')
       .in('role', ['admin', 'super_admin'])
-      .not('telegram_id', 'is', null)
 
     const adminRecipients = allAdmins || []
 
