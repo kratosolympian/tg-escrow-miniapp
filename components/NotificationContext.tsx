@@ -114,7 +114,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       ...notification
     }
 
-    setNotifications(prev => [...prev, newNotification])
+    // Clear all existing notifications before showing the new one
+    setNotifications([newNotification])
 
     // Auto-hide if enabled
     if (newNotification.autoHide) {
