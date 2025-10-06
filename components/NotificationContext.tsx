@@ -54,26 +54,46 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         const data = await response.json()
         const dbNotifications = data.notifications || []
 
-        // Convert DB notifications to popup format and show them
-        dbNotifications.forEach((dbNotif: any) => {
-          // Check if we already showed this notification in this session
-          const notificationId = `db-${dbNotif.id}`
-          if (!shownNotificationIds.has(notificationId)) {
+        if (dbNotifications.length > 0) {
+          // Sort notifications by creation date (most recent first)
+          const sortedNotifications = dbNotifications.sort((a: any, b: any) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+
+          // Show only the most recent notification as a popup
+          const latestNotification = sortedNotifications[0]
+          const latestNotificationId = `db-${latestNotification.id}`
+          
+          if (!shownNotificationIds.has(latestNotificationId)) {
             const notificationData = {
-              title: dbNotif.title,
-              message: dbNotif.message,
-              type: dbNotif.type || 'info',
-              escrowCode: dbNotif.escrow_code,
-              actionText: dbNotif.action_text || 'Refresh',
+              title: latestNotification.title,
+              message: latestNotification.message,
+              type: latestNotification.type || 'info',
+              escrowCode: latestNotification.escrow_code,
+              actionText: latestNotification.action_text || 'Refresh',
               onAction: refreshData.current || (() => {}),
               autoHide: false, // Don't auto-hide DB notifications
             }
-            showNotification(notificationData, notificationId)
-            setShownNotificationIds(prev => new Set(prev).add(notificationId))
-          } else {
-            console.log(`Skipping already shown notification: ${dbNotif.title}`)
+            showNotification(notificationData, latestNotificationId)
+            setShownNotificationIds(prev => new Set(prev).add(latestNotificationId))
           }
-        })
+
+          // Mark all other unread notifications as read automatically
+          if (sortedNotifications.length > 1) {
+            const otherNotificationIds = sortedNotifications.slice(1).map((notif: any) => notif.id)
+            try {
+              await fetch('/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ notificationIds: otherNotificationIds })
+              })
+              console.log(`Marked ${otherNotificationIds.length} older notifications as read`)
+            } catch (error) {
+              console.error('Error marking older notifications as read:', error)
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching notifications:', error)
