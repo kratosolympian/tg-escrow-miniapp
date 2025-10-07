@@ -364,34 +364,6 @@ export default function Header() {
                   Admin
                 </Link>
               )}
-              {/* Role Switcher - only show for buyer/seller roles */}
-              {(currentRole === "buyer" || currentRole === "seller") && (
-                <div className="flex items-center space-x-2 ml-4 pl-4 border-l border-gray-300">
-                  <span className="text-sm text-gray-600">Role:</span>
-                  <div className="flex bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => switchRole("buyer")}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                        currentRole === "buyer"
-                          ? "bg-blue-500 text-white"
-                          : "text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      Buyer
-                    </button>
-                    <button
-                      onClick={() => switchRole("seller")}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                        currentRole === "seller"
-                          ? "bg-green-500 text-white"
-                          : "text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      Seller
-                    </button>
-                  </div>
-                </div>
-              )}
               <Link
                 href="/settings/profile"
                 className="hover:text-blue-700 font-medium text-sm md:text-base"
