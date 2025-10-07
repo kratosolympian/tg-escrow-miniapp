@@ -120,48 +120,57 @@ export async function GET(request: NextRequest) {
       ESCROW_STATUS.CLOSED,
     ];
 
-    // Fetch seller historical escrows with pagination
-    const { data: sellerData, error: sellerErr, count: sellerCount } = await serviceClient
+    // Fetch all historical escrows where user is either seller or buyer
+    const { data: allData, error: allErr, count: totalCount } = await serviceClient
       .from("escrows")
       .select("id, code, status, seller_id, buyer_id, description, price, admin_fee, created_at, updated_at", { count: 'exact' })
-      .eq("seller_id", userId)
+      .or(`seller_id.eq.${userId},buyer_id.eq.${userId}`)
       .in("status", historicalStatuses)
-      .order("updated_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+      .order("updated_at", { ascending: false });
 
-    if (sellerErr) {
-      console.error("Error fetching seller historical escrows:", sellerErr);
+    if (allErr) {
+      console.error("Error fetching historical escrows:", allErr);
       return NextResponse.json(
-        { error: "Failed to fetch seller historical escrows" },
+        { error: "Failed to fetch historical escrows" },
         { status: 500 },
       );
     }
 
-    // Fetch buyer historical escrows with pagination
-    const { data: buyerData, error: buyerErr, count: buyerCount } = await serviceClient
-      .from("escrows")
-      .select("id, code, status, seller_id, buyer_id, description, price, admin_fee, created_at, updated_at", { count: 'exact' })
-      .eq("buyer_id", userId)
-      .in("status", historicalStatuses)
-      .order("updated_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+    // Separate into seller and buyer arrays
+    const allEscrows = allData || [];
+    const sellerEscrows = allEscrows.filter(e => e.seller_id === userId);
+    const buyerEscrows = allEscrows.filter(e => e.buyer_id === userId);
 
-    if (buyerErr) {
-      console.error("Error fetching buyer historical escrows:", buyerErr);
-      return NextResponse.json(
-        { error: "Failed to fetch buyer historical escrows" },
-        { status: 500 },
-      );
+    // Apply pagination to the combined results
+    const startIndex = offset;
+    const endIndex = offset + limit;
+    const paginatedSeller = sellerEscrows.slice(startIndex, endIndex);
+    const paginatedBuyer = buyerEscrows.slice(startIndex, endIndex);
+
+    // If we don't have enough from one type, take from the other
+    const combinedResults: any[] = [];
+    let sellerIndex = 0;
+    let buyerIndex = 0;
+
+    while (combinedResults.length < limit && (sellerIndex < sellerEscrows.length || buyerIndex < buyerEscrows.length)) {
+      // Alternate between seller and buyer escrows for fair distribution
+      if (sellerIndex < sellerEscrows.length && (buyerIndex >= buyerEscrows.length || sellerIndex <= buyerIndex)) {
+        combinedResults.push(sellerEscrows[sellerIndex++]);
+      } else if (buyerIndex < buyerEscrows.length) {
+        combinedResults.push(buyerEscrows[buyerIndex++]);
+      }
     }
 
-    const totalSeller = sellerCount || 0;
-    const totalBuyer = buyerCount || 0;
-    const total = totalSeller + totalBuyer;
+    // Separate back into seller and buyer arrays for the response
+    const responseSeller = combinedResults.filter(e => e.seller_id === userId);
+    const responseBuyer = combinedResults.filter(e => e.buyer_id === userId);
+
+    const total = totalCount || 0;
     const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({
-      seller: sellerData || [],
-      buyer: buyerData || [],
+      seller: responseSeller || [],
+      buyer: responseBuyer || [],
       pagination: {
         page,
         limit,

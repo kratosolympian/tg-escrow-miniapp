@@ -569,24 +569,24 @@ export default function BuyerPage() {
         {isAuthenticated && (
           <div className="card mt-6">
             <div className="p-4">
-              <div className="flex justify-between items-center mb-3">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 gap-2">
                 <h3 className="font-semibold">Transaction History</h3>
                 {historyPagination.totalPages > 1 && (
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center justify-center sm:justify-end space-x-2">
                     <button
                       onClick={() => fetchHistoricalEscrows(historyPagination.page - 1)}
                       disabled={!historyPagination.hasPrevPage}
-                      className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded transition-colors text-sm"
+                      className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px]"
                     >
                       Previous
                     </button>
-                    <span className="text-sm text-gray-600">
-                      Page {historyPagination.page} of {historyPagination.totalPages}
+                    <span className="text-sm text-gray-600 px-2">
+                      {historyPagination.page} / {historyPagination.totalPages}
                     </span>
                     <button
                       onClick={() => fetchHistoricalEscrows(historyPagination.page + 1)}
                       disabled={!historyPagination.hasNextPage}
-                      className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded transition-colors text-sm"
+                      className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px]"
                     >
                       Next
                     </button>

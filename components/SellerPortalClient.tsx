@@ -825,7 +825,7 @@ export default function SellerPortalClient({
                       alt="Product preview"
                       width={320}
                       height={240}
-                      className="max-w-xs rounded-lg shadow-md"
+                      className="w-full max-w-xs h-auto rounded-lg shadow-md"
                     />
                   </div>
                 )}
@@ -928,26 +928,26 @@ export default function SellerPortalClient({
 
         {/* Transaction History */}
         <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
             <h2 className="text-xl font-semibold text-green-800">
               Transaction History
             </h2>
             {historyPagination.totalPages > 1 && (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-center sm:justify-end space-x-2">
                 <button
                   onClick={() => fetchHistoricalEscrows(historyPagination.page - 1)}
                   disabled={!historyPagination.hasPrevPage}
-                  className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded transition-colors"
+                  className="px-3 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px]"
                 >
                   Previous
                 </button>
-                <span className="text-sm text-gray-600">
-                  Page {historyPagination.page} of {historyPagination.totalPages}
+                <span className="text-sm text-gray-600 px-2">
+                  {historyPagination.page} / {historyPagination.totalPages}
                 </span>
                 <button
                   onClick={() => fetchHistoricalEscrows(historyPagination.page + 1)}
                   disabled={!historyPagination.hasNextPage}
-                  className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded transition-colors"
+                  className="px-3 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px]"
                 >
                   Next
                 </button>

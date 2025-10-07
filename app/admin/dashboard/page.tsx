@@ -142,6 +142,34 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleAdminAction = async (escrowId: string, action: string) => {
+    if (!confirm(`Are you sure you want to ${action.replace('-', ' ')} this escrow?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ escrowId }),
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        alert(`Successfully ${action.replace('-', ' ')} escrow`);
+        fetchEscrows(); // Refresh the list
+      } else {
+        const error = await response.json();
+        alert(`Failed to ${action}: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error(`Error performing ${action}:`, error);
+      alert(`Failed to ${action}: Network error`);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       // Clear client session
@@ -223,7 +251,7 @@ export default function AdminDashboard() {
             </nav>
             <Link
               href="/admin/escrow"
-              className="ml-6 inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow transition-colors text-base"
+              className="ml-6 inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow transition-colors text-base whitespace-nowrap"
             >
               <span role="img" aria-label="Escrow Management" className="mr-2">
                 🗂️
@@ -372,12 +400,61 @@ export default function AdminDashboard() {
                           <div>B: @{escrow.buyer?.telegram_id || "None"}</div>
                         </td>
                         <td className="py-3 px-4">
-                          <Link
-                            href={`/admin/escrow/${escrow.id}`}
-                            className="text-blue-600 hover:text-blue-800 text-sm"
-                          >
-                            View Details
-                          </Link>
+                          <div className="flex flex-col gap-1">
+                            <Link
+                              href={`/admin/escrow/${escrow.id}`}
+                              className="text-blue-600 hover:text-blue-800 text-sm"
+                            >
+                              View Details
+                            </Link>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {escrow.status === 'waiting_admin' && (
+                                <button
+                                  onClick={() => handleAdminAction(escrow.id, 'confirm-payment')}
+                                  className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
+                                  title="Confirm Payment"
+                                >
+                                  ✅ Confirm
+                                </button>
+                              )}
+                              {escrow.status === 'payment_confirmed' && (
+                                <button
+                                  onClick={() => handleAdminAction(escrow.id, 'release-funds')}
+                                  className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                                  title="Release Funds"
+                                >
+                                  💰 Release
+                                </button>
+                              )}
+                              {(escrow.status === 'waiting_admin' || escrow.status === 'payment_confirmed') && (
+                                <button
+                                  onClick={() => handleAdminAction(escrow.id, 'refund')}
+                                  className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200"
+                                  title="Refund to Buyer"
+                                >
+                                  ↩️ Refund
+                                </button>
+                              )}
+                              {escrow.status !== 'on_hold' && escrow.status !== 'completed' && escrow.status !== 'refunded' && (
+                                <button
+                                  onClick={() => handleAdminAction(escrow.id, 'put-on-hold')}
+                                  className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded hover:bg-yellow-200"
+                                  title="Put on Hold"
+                                >
+                                  ⏸️ Hold
+                                </button>
+                              )}
+                              {escrow.status === 'on_hold' && (
+                                <button
+                                  onClick={() => handleAdminAction(escrow.id, 'take-off-hold')}
+                                  className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded hover:bg-purple-200"
+                                  title="Take Off Hold"
+                                >
+                                  ▶️ Resume
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     ))}
