@@ -103,6 +103,7 @@ export default function ProfileSettings() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resettingTelegram, setResettingTelegram] = useState(false);
 
   const router = useRouter();
   const supabase = createBrowserClient(
@@ -180,6 +181,38 @@ export default function ProfileSettings() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
+  };
+
+  const handleResetTelegram = async () => {
+    if (!confirm("Are you sure you want to reset your Telegram connection? You'll need to reconnect to receive notifications again.")) {
+      return;
+    }
+
+    setResettingTelegram(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/profile/reset-telegram", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess("Telegram connection has been reset. Please reconnect with your Telegram account to receive notifications.");
+      } else {
+        setError(data.error || "Failed to reset Telegram connection");
+      }
+    } catch (error) {
+      console.error("Reset Telegram error:", error);
+      setError("An error occurred while resetting Telegram connection");
+    } finally {
+      setResettingTelegram(false);
+    }
   };
 
   if (loading) {
@@ -381,6 +414,27 @@ export default function ProfileSettings() {
             onClose={() => setSuccess("")}
           />
         )}
+
+        {/* Telegram Settings */}
+        <div className="card mt-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Telegram Notifications
+          </h2>
+          <p className="text-gray-600 mb-4">
+            Reset your Telegram connection if you&apos;re not receiving notifications on your current Telegram account.
+          </p>
+          <button
+            onClick={handleResetTelegram}
+            disabled={resettingTelegram}
+            className="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+          >
+            {resettingTelegram ? "Resetting..." : "Reset Telegram Connection"}
+          </button>
+          <p className="text-sm text-gray-500 mt-2">
+            After resetting, reconnect with your Telegram account to receive notifications.
+          </p>
+        </div>
+
         {/* Security Notice */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
           <div className="flex">

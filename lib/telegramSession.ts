@@ -84,6 +84,13 @@ export function getTelegramSession(userId: string): TelegramSession | null {
   return null;
 }
 
+export function getTelegramIdForUser(userId: string): string | null {
+  const session = getTelegramSession(userId);
+  const telegramId = session?.telegramId || null;
+  console.log(`[TelegramSession] Getting telegramId for user ${userId}: ${telegramId}`);
+  return telegramId;
+}
+
 export function clearTelegramSession(userId: string): void {
   const initialCount = telegramSessions.size;
   const keysToDelete: string[] = [];
@@ -96,9 +103,14 @@ export function clearTelegramSession(userId: string): void {
   console.log(`[TelegramSession] Cleared ${keysToDelete.length} sessions for user ${userId} (${initialCount} -> ${telegramSessions.size})`);
 }
 
-export function getTelegramIdForUser(userId: string): string | null {
-  const session = getTelegramSession(userId);
-  const telegramId = session?.telegramId || null;
-  console.log(`[TelegramSession] Getting telegramId for user ${userId}: ${telegramId}`);
-  return telegramId;
+export function resetUserTelegramData(userId: string): void {
+  console.log(`[TelegramSession] Resetting all Telegram data for user ${userId}`);
+  // Clear all sessions for this user
+  clearTelegramSession(userId);
+  console.log(`[TelegramSession] All sessions cleared for user ${userId}`);
+}
+
+// Export the sessions map for debugging (only in development)
+export function getAllSessions(): Map<string, TelegramSession> {
+  return telegramSessions;
 }
