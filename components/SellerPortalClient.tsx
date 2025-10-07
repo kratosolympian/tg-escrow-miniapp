@@ -169,14 +169,11 @@ export default function SellerPortalClient({
 
   const fetchCurrentServiceFee = async () => {
     try {
-      const response = await fetch("/api/admin/update-admin-settings", {
-        credentials: "include",
-      });
+      const response = await fetch("/api/service-fee");
       if (response.ok) {
         const data = await response.json();
-        const settings = data?.data;
-        if (settings?.service_fee) {
-          setCurrentServiceFee(settings.service_fee);
+        if (data?.service_fee !== undefined) {
+          setCurrentServiceFee(data.service_fee);
         }
       }
     } catch (e) {
