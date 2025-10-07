@@ -185,8 +185,8 @@ Please check your escrow dashboard for details.`;
       </div>
     `;
 
-    // Send to seller - use ONLY session-based Telegram ID (legacy field deprecated)
-    const sellerTelegramId = getTelegramIdForUser(escrow.seller_id);
+    // Send to seller - prefer session-based Telegram ID, fallback to profile
+    const sellerTelegramId = getTelegramIdForUser(escrow.seller_id) || escrow.seller?.telegram_id;
     if (sellerTelegramId) {
       await sendTelegramMessage(
         sellerTelegramId,
@@ -211,11 +211,12 @@ Please check your escrow dashboard for details.`;
       });
     }
 
-    // Send to buyer - use ONLY session-based Telegram ID (legacy field deprecated)
+    // Send to buyer - prefer session-based Telegram ID, fallback to profile
     const buyerTelegramId = escrow.buyer_id ? getTelegramIdForUser(escrow.buyer_id) : null;
-    if (buyerTelegramId) {
+    const buyerTelegramIdFinal = buyerTelegramId || escrow.buyer?.telegram_id;
+    if (buyerTelegramIdFinal) {
       await sendTelegramMessage(
-        buyerTelegramId,
+        buyerTelegramIdFinal,
         message,
         inlineKeyboard,
       );
@@ -319,9 +320,9 @@ export async function sendChatMessageNotification(
       recipientName = escrow.seller?.full_name || "Seller";
     }
 
-    // Use ONLY session-based Telegram ID (legacy field deprecated)
+    // Use session-based Telegram ID first, fallback to profile telegram_id
     if (recipientUserId) {
-      recipientTelegramId = getTelegramIdForUser(recipientUserId);
+      recipientTelegramId = getTelegramIdForUser(recipientUserId) || escrow.buyer?.telegram_id || escrow.seller?.telegram_id;
     }
 
     if (!recipientTelegramId) {

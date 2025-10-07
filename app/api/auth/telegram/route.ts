@@ -91,7 +91,8 @@ export async function POST(request: NextRequest) {
             id: userId,
             email: `telegram_${telegramUser.id}@telegram.local`,
             full_name: telegramUser.first_name || "Telegram User",
-            // No permanent telegram_id or role - these are session-based now
+            telegram_id: telegramUser.id.toString(), // Store telegram_id for notifications
+            // No permanent role - roles are session-based now
           });
 
         if (profileError) {
@@ -124,11 +125,25 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      // User is already authenticated - just associate Telegram ID for this session
+      // User is already authenticated - associate Telegram ID for this session and update profile
       userId = currentUser.id;
       console.log("Associating Telegram ID with existing user:", userId);
 
-      // Store Telegram session for notifications
+      // Update the user's profile with the new telegram_id (replaces any old one)
+      const { error: updateError } = await serviceClient
+        .from("profiles")
+        .update({
+          telegram_id: telegramUser.id.toString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        console.warn("Failed to update profile with telegram_id:", updateError);
+        // Don't fail the request for this
+      }
+
+      // Store Telegram session for notifications (takes precedence over profile)
       storeTelegramSession(userId, telegramUser.id.toString(), telegramUser.username);
     }
 
