@@ -24,7 +24,7 @@ export async function getProfile(
       .eq("id", user.id)
       .single();
 
-    // If profile doesn't exist, create it
+    // If profile doesn't exist, create it with no default role (session-based now)
     if (error && error.code === "PGRST116") {
       const { data: newProfile, error: createError } = await (supabase as any)
         .from("profiles")
@@ -32,7 +32,7 @@ export async function getProfile(
           id: user.id,
           email: user.email || "",
           full_name: user.user_metadata?.full_name || "",
-          role: "seller",
+          // No default role - roles are session-based now
         })
         .select()
         .single();

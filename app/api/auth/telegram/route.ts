@@ -6,6 +6,7 @@ import {
   createServiceRoleClient,
 } from "@/lib/supabaseServer";
 import { verifyTelegramInitData } from "@/lib/telegram";
+import { storeTelegramSession } from "@/lib/telegramSession";
 import { z } from "zod";
 
 const requestSchema = z.object({
@@ -44,52 +45,100 @@ export async function POST(request: NextRequest) {
     if (process.env.DEBUG)
       console.log("Telegram user verified: id=", telegramUser.id);
 
-    // Check if user is already authenticated via email/password
     const supabase = createServerClientWithCookies();
+    const serviceClient = createServiceRoleClient();
+
+    // Check if user is already authenticated via email/password
     const {
       data: { user: currentUser },
       error: getUserError,
     } = await supabase.auth.getUser();
 
+    let userId: string;
+    let isNewUser = false;
+
     if (getUserError || !currentUser) {
-      return NextResponse.json(
-        {
-          error:
-            "Please log in with email and password first before connecting Telegram",
-          code: "NOT_AUTHENTICATED",
-        },
-        { status: 401 },
-      );
+      // User is not authenticated - create a new anonymous account for pure Telegram users
+      console.log("Creating new anonymous account for Telegram user");
+
+      try {
+        // Create anonymous user account
+        const { data: newUser, error: createError } = await serviceClient.auth.admin.createUser({
+          email: `telegram_${telegramUser.id}@telegram.local`, // Temporary email for auth system
+          password: crypto.randomUUID(), // Random password, user won't use it
+          user_metadata: {
+            full_name: telegramUser.first_name || "Telegram User",
+            telegram_id: telegramUser.id.toString(),
+            is_telegram_only: true,
+          },
+        } as any);
+
+        if (createError || !newUser.user) {
+          console.error("Failed to create anonymous user:", createError);
+          return NextResponse.json(
+            { error: "Failed to create account" },
+            { status: 500 },
+          );
+        }
+
+        userId = newUser.user.id;
+        isNewUser = true;
+
+        // Create profile for the new user
+        const { error: profileError } = await (serviceClient as any)
+          .from("profiles")
+          .insert({
+            id: userId,
+            email: `telegram_${telegramUser.id}@telegram.local`,
+            full_name: telegramUser.first_name || "Telegram User",
+            // No permanent telegram_id or role - these are session-based now
+          });
+
+        if (profileError) {
+          console.error("Error creating profile:", profileError);
+          // Don't fail the whole request for profile creation issues
+        }
+
+        // Sign in the user to establish session
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: `telegram_${telegramUser.id}@telegram.local`,
+          password: newUser.user.user_metadata?.password || "",
+        });
+
+        if (signInError) {
+          console.error("Error signing in new user:", signInError);
+          return NextResponse.json(
+            { error: "Failed to establish session" },
+            { status: 500 },
+          );
+        }
+
+        // Store Telegram session for notifications
+        storeTelegramSession(userId, telegramUser.id.toString(), telegramUser.username);
+
+      } catch (error) {
+        console.error("Error creating anonymous account:", error);
+        return NextResponse.json(
+          { error: "Failed to create account" },
+          { status: 500 },
+        );
+      }
+    } else {
+      // User is already authenticated - just associate Telegram ID for this session
+      userId = currentUser.id;
+      console.log("Associating Telegram ID with existing user:", userId);
+
+      // Store Telegram session for notifications
+      storeTelegramSession(userId, telegramUser.id.toString(), telegramUser.username);
     }
 
-    // User is authenticated, associate Telegram ID with their profile
-    const serviceClient = createServiceRoleClient();
-    const { error: updateError } = await (serviceClient as any)
-      .from("profiles")
-      .update({
-        telegram_id: telegramUser.id.toString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", currentUser.id);
-
-    if (updateError) {
-      console.error("Error updating profile with Telegram ID:", updateError);
-      return NextResponse.json(
-        {
-          error: "Failed to associate Telegram account",
-          details: updateError.message,
-        },
-        { status: 500 },
-      );
-    }
-
-    console.log(
-      "Successfully associated Telegram ID with user profile:",
-      currentUser.id,
-    );
+    // Store Telegram association in response for client-side session management
     return NextResponse.json({
       ok: true,
-      message: "Telegram account connected successfully",
+      message: isNewUser ? "Account created successfully" : "Telegram account connected successfully",
+      telegramId: telegramUser.id.toString(),
+      telegramUsername: telegramUser.username,
+      isNewUser,
     });
   } catch (error) {
     console.error("Telegram auth error:", error);

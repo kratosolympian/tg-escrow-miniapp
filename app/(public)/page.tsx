@@ -112,62 +112,63 @@ export default function HomePage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setIsAuthenticated(true);
 
-        // Get current user and their profile to determine role-based redirection
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-        if (user && !error) {
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single();
-
-          if (profile && !profileError) {
-            // Check for stored deep link or current deep link parameters
-            const storedDeepLink = sessionStorage.getItem("telegram_deep_link");
-            const urlParams = new URLSearchParams(window.location.search);
-            const currentStartapp = urlParams.get("startapp");
-            const deepLink = storedDeepLink || currentStartapp;
-
-            if (deepLink) {
-              // Clear stored deep link
-              sessionStorage.removeItem("telegram_deep_link");
-
-              // Handle deep links: escrow_CODE or chat_CODE
-              if (deepLink.startsWith("escrow_")) {
-                const code = deepLink.replace("escrow_", "");
-                // Redirect to escrow page
-                router.push(`/buyer/escrow/${code}`);
-                return;
-              } else if (deepLink.startsWith("chat_")) {
-                const code = deepLink.replace("chat_", "");
-                // For chat, we need to find the escrow by code first
-                // This will be handled by the escrow page itself
-                router.push(`/buyer/escrow/${code}`);
-                return;
-              }
-            }
-
-            // Redirect based on role
-            const userProfile = profile as { role: string };
-            switch (userProfile.role) {
-              case "admin":
-              case "super_admin":
-                router.push("/admin/dashboard");
-                break;
-              case "seller":
-                router.push("/seller");
-                break;
-              case "buyer":
-              default:
-                router.push("/buyer");
-                break;
-            }
+        // Store Telegram data in session for this session only
+        if (data.telegramId) {
+          sessionStorage.setItem("telegram_id", data.telegramId);
+          if (data.telegramUsername) {
+            sessionStorage.setItem("telegram_username", data.telegramUsername);
           }
+        }
+
+        // For new users, default to buyer role, for existing users, use their current session role
+        let targetRole: string;
+        if (data.isNewUser) {
+          targetRole = "buyer"; // Default for new Telegram-only users
+        } else {
+          // Check if user has a session role preference, otherwise default to buyer
+          const sessionRole = sessionStorage.getItem("user_role");
+          targetRole = sessionRole || "buyer";
+        }
+
+        // Store role in session
+        sessionStorage.setItem("user_role", targetRole);
+
+        // Handle deep links if present
+        const storedDeepLink = sessionStorage.getItem("telegram_deep_link");
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentStartapp = urlParams.get("startapp");
+        const deepLink = storedDeepLink || currentStartapp;
+
+        if (deepLink) {
+          sessionStorage.removeItem("telegram_deep_link");
+
+          if (deepLink.startsWith("escrow_")) {
+            const code = deepLink.replace("escrow_", "");
+            router.push(`/buyer/escrow/${code}`);
+            return;
+          } else if (deepLink.startsWith("chat_")) {
+            const code = deepLink.replace("chat_", "");
+            router.push(`/buyer/escrow/${code}`);
+            return;
+          }
+        }
+
+        // Redirect based on role - but allow flexibility
+        switch (targetRole) {
+          case "admin":
+          case "super_admin":
+            router.push("/admin/dashboard");
+            break;
+          case "seller":
+            router.push("/seller");
+            break;
+          case "buyer":
+          default:
+            router.push("/buyer");
+            break;
         }
       } else {
         console.error("Authentication failed");

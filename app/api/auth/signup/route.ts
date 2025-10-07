@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
           try {
             await (serviceClient as any)
               .from("profiles")
-              .insert({ id: userId, email, full_name: name, role: "seller" })
+              .insert({ id: userId, email, full_name: name })
               .select();
           } catch (e) {
             // non-fatal; log but continue

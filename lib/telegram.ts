@@ -1,4 +1,4 @@
-// Sends a Telegram message to a user by telegram_id using the bot token from env
+import { getTelegramIdForUser } from "./telegramSession";
 export async function sendTelegramMessage(
   telegramId: string,
   message: string,
@@ -185,10 +185,11 @@ Please check your escrow dashboard for details.`;
       </div>
     `;
 
-    // Send to seller
-    if (escrow.seller?.telegram_id) {
+    // Send to seller - try session-based Telegram ID first, fallback to legacy
+    const sellerTelegramId = getTelegramIdForUser(escrow.seller_id) || escrow.seller?.telegram_id;
+    if (sellerTelegramId) {
       await sendTelegramMessage(
-        escrow.seller.telegram_id,
+        sellerTelegramId,
         message,
         inlineKeyboard,
       );
@@ -210,10 +211,12 @@ Please check your escrow dashboard for details.`;
       });
     }
 
-    // Send to buyer
-    if (escrow.buyer?.telegram_id) {
+    // Send to buyer - try session-based Telegram ID first, fallback to legacy
+    const buyerTelegramId = escrow.buyer_id ? getTelegramIdForUser(escrow.buyer_id) : null;
+    const buyerTelegramIdFinal = buyerTelegramId || escrow.buyer?.telegram_id;
+    if (buyerTelegramIdFinal) {
       await sendTelegramMessage(
-        escrow.buyer.telegram_id,
+        buyerTelegramIdFinal,
         message,
         inlineKeyboard,
       );
@@ -305,15 +308,21 @@ export async function sendChatMessageNotification(
     // Determine recipient
     let recipientTelegramId = null;
     let recipientName = "";
+    let recipientUserId = null;
 
     if (escrow.seller?.id === senderId) {
       // Seller sent message, notify buyer
-      recipientTelegramId = escrow.buyer?.telegram_id;
+      recipientUserId = escrow.buyer?.id;
       recipientName = escrow.buyer?.full_name || "Buyer";
     } else if (escrow.buyer?.id === senderId) {
       // Buyer sent message, notify seller
-      recipientTelegramId = escrow.seller?.telegram_id;
+      recipientUserId = escrow.seller?.id;
       recipientName = escrow.seller?.full_name || "Seller";
+    }
+
+    // Try session-based Telegram ID first, fallback to legacy
+    if (recipientUserId) {
+      recipientTelegramId = getTelegramIdForUser(recipientUserId) || escrow.buyer?.telegram_id || escrow.seller?.telegram_id;
     }
 
     if (!recipientTelegramId) {

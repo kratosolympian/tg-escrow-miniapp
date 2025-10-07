@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 export default function Header() {
   const [user, setUser] = useState<any | null>(null);
@@ -12,10 +13,27 @@ export default function Header() {
   const [authChecked, setAuthChecked] = useState(false);
   const [isInTelegram, setIsInTelegram] = useState(false);
   const [authRefreshTrigger, setAuthRefreshTrigger] = useState(0);
+  const [currentRole, setCurrentRole] = useState<string>("buyer");
+
+  const router = useRouter();
 
   const refreshAuth = () => {
     console.log("[Header] Manual auth refresh triggered");
     setAuthRefreshTrigger((prev) => prev + 1);
+  };
+
+  const switchRole = (newRole: string) => {
+    setCurrentRole(newRole);
+    sessionStorage.setItem("user_role", newRole);
+
+    // Navigate to appropriate page based on new role
+    if (newRole === "seller") {
+      router.push("/seller");
+    } else if (newRole === "buyer") {
+      router.push("/buyer");
+    } else if (newRole === "admin" || newRole === "super_admin") {
+      router.push("/admin/dashboard");
+    }
   };
 
   // Debug userProfile changes
@@ -47,6 +65,12 @@ export default function Header() {
           if (userData.user) {
             setUser(userData.user);
             setUserProfile(userData.profile || { role: userData.role });
+
+            // Get session-based role, fallback to profile role
+            const sessionRole = sessionStorage.getItem("user_role");
+            const effectiveRole = sessionRole || userData.profile?.role || "buyer";
+            setCurrentRole(effectiveRole);
+
             setAuthChecked(true);
             return;
           }
@@ -83,12 +107,18 @@ export default function Header() {
             ])) as any;
             console.log("[Header] Profile data fetched:", profileData);
             setUserProfile(profileData);
+
+            // Get session-based role, fallback to profile role
+            const sessionRole = sessionStorage.getItem("user_role");
+            const effectiveRole = sessionRole || profileData?.role || "buyer";
+            setCurrentRole(effectiveRole);
           } catch (profileError) {
             console.warn(
               "[Header] Profile fetch failed, using default role. Error:",
               profileError,
             );
             setUserProfile({ role: "buyer" }); // Default fallback
+            setCurrentRole("buyer");
           }
 
           setAuthChecked(true);
@@ -309,7 +339,7 @@ export default function Header() {
           {user && userProfile && (
             <>
               {console.log("[Header] Rendering with userProfile:", userProfile)}
-              {userProfile.role === "buyer" && (
+              {currentRole === "buyer" && (
                 <Link
                   href="/buyer"
                   className="hover:text-blue-700 font-medium text-sm md:text-base"
@@ -317,7 +347,7 @@ export default function Header() {
                   Buyer Portal
                 </Link>
               )}
-              {userProfile.role === "seller" && (
+              {currentRole === "seller" && (
                 <Link
                   href="/seller"
                   className="hover:text-blue-700 font-medium text-sm md:text-base"
@@ -325,14 +355,42 @@ export default function Header() {
                   Seller Portal
                 </Link>
               )}
-              {(userProfile.role === "admin" ||
-                userProfile.role === "super_admin") && (
+              {(currentRole === "admin" ||
+                currentRole === "super_admin") && (
                 <Link
                   href="/admin/dashboard"
                   className="hover:text-blue-700 font-medium text-sm md:text-base"
                 >
                   Admin
                 </Link>
+              )}
+              {/* Role Switcher - only show for buyer/seller roles */}
+              {(currentRole === "buyer" || currentRole === "seller") && (
+                <div className="flex items-center space-x-2 ml-4 pl-4 border-l border-gray-300">
+                  <span className="text-sm text-gray-600">Role:</span>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => switchRole("buyer")}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                        currentRole === "buyer"
+                          ? "bg-blue-500 text-white"
+                          : "text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      Buyer
+                    </button>
+                    <button
+                      onClick={() => switchRole("seller")}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                        currentRole === "seller"
+                          ? "bg-green-500 text-white"
+                          : "text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      Seller
+                    </button>
+                  </div>
+                </div>
               )}
               <Link
                 href="/settings/profile"
