@@ -6,6 +6,7 @@ import Link from "next/link";
 import AuthCard from "@/components/AuthCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useNotifications } from "@/components/NotificationContext";
+import { formatNaira } from "@/lib/utils";
 
 export default function BuyerPage() {
   // Auth states
@@ -558,6 +559,99 @@ export default function BuyerPage() {
                   <p className="text-sm text-gray-500 mt-1">
                     Enter a transaction code above to join one
                   </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Transaction History */}
+        {isAuthenticated && (
+          <div className="card mt-6">
+            <div className="p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold">Transaction History</h3>
+                {historyPagination.totalPages > 1 && (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => fetchHistoricalEscrows(historyPagination.page - 1)}
+                      disabled={!historyPagination.hasPrevPage}
+                      className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded transition-colors text-sm"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      Page {historyPagination.page} of {historyPagination.totalPages}
+                    </span>
+                    <button
+                      onClick={() => fetchHistoricalEscrows(historyPagination.page + 1)}
+                      disabled={!historyPagination.hasNextPage}
+                      className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded transition-colors text-sm"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {historicalEscrows.length > 0 ? (
+                <div className="space-y-3">
+                  {historicalEscrows.map((escrow: any) => {
+                    const price =
+                      typeof escrow.price === "number" && !isNaN(escrow.price)
+                        ? escrow.price
+                        : 0;
+                    const isBuyer = escrow.buyer_id === user?.id;
+                    return (
+                      <div
+                        key={escrow.id}
+                        className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="font-mono font-bold text-lg text-gray-900">
+                              {escrow.code}
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">
+                              {escrow.description}
+                            </div>
+                            <div className="text-sm font-medium text-gray-900 mt-1">
+                              {formatNaira(price)}
+                            </div>
+                            {escrow.admin_fee && (
+                              <div className="text-sm text-gray-600 mt-1">
+                                Service Fee: {formatNaira(escrow.admin_fee)}
+                              </div>
+                            )}
+                            <div className="text-sm text-gray-500 mt-1">
+                              Status:{" "}
+                              <span className={`capitalize ${
+                                escrow.status === 'completed' ? 'text-green-600' :
+                                escrow.status === 'refunded' ? 'text-red-600' :
+                                'text-gray-600'
+                              }`}>
+                                {escrow.status.replace("_", " ")}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {isBuyer ? 'Purchased' : 'Sold'} • {new Date(escrow.updated_at || escrow.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <Link
+                            href={`/buyer/escrow/${escrow.code}`}
+                            className="btn-secondary ml-4"
+                          >
+                            View Details
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-3">📭</div>
+                  <p className="text-gray-600">No completed transactions yet</p>
                 </div>
               )}
             </div>
