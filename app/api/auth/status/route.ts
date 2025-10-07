@@ -1,28 +1,30 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies } from '@/lib/supabaseServer'
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClientWithCookies } from "@/lib/supabaseServer";
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
-    
-    const { data: { user }, error } = await supabase.auth.getUser()
-    
+    const supabase = createServerClientWithCookies();
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
     if (error || !user) {
-      return NextResponse.json({ authenticated: false }, { status: 401 })
+      return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       authenticated: true,
       user: {
         id: user.id,
-        email: user.email
-      }
-    })
-
+        email: user.email,
+      },
+    });
   } catch (error) {
-    console.error('Auth status error:', error)
-    return NextResponse.json({ authenticated: false }, { status: 401 })
+    console.error("Auth status error:", error);
+    return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 }

@@ -1,182 +1,217 @@
-'use client'
+"use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
 
 interface NotificationData {
-  id: string
-  title: string
-  message: string
-  type: 'info' | 'success' | 'warning' | 'error'
-  escrowId?: string
-  escrowCode?: string
-  actionText?: string
-  onAction?: () => void
-  autoHide?: boolean
-  duration?: number
+  id: string;
+  title: string;
+  message: string;
+  type: "info" | "success" | "warning" | "error";
+  escrowId?: string;
+  escrowCode?: string;
+  actionText?: string;
+  onAction?: () => void;
+  autoHide?: boolean;
+  duration?: number;
 }
 
 interface NotificationContextType {
-  notifications: NotificationData[]
-  showNotification: (notification: Omit<NotificationData, 'id'>) => void
-  hideNotification: (id: string) => void
-  clearAll: () => void
-  refreshData: React.MutableRefObject<(() => Promise<void>) | null>
+  notifications: NotificationData[];
+  showNotification: (notification: Omit<NotificationData, "id">) => void;
+  hideNotification: (id: string) => void;
+  clearAll: () => void;
+  refreshData: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
+const NotificationContext = createContext<NotificationContextType | undefined>(
+  undefined,
+);
 
 export function useNotifications() {
-  const context = useContext(NotificationContext)
+  const context = useContext(NotificationContext);
   if (!context) {
-    throw new Error('useNotifications must be used within a NotificationProvider')
+    throw new Error(
+      "useNotifications must be used within a NotificationProvider",
+    );
   }
-  return context
+  return context;
 }
 
 interface NotificationProviderProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export function NotificationProvider({ children }: NotificationProviderProps) {
-  const [notifications, setNotifications] = useState<NotificationData[]>([])
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [shownNotificationIds, setShownNotificationIds] = useState<Set<string>>(new Set())
-  const refreshData = React.useRef<(() => Promise<void>) | null>(null)
+  const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [shownNotificationIds, setShownNotificationIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const refreshData = React.useRef<(() => Promise<void>) | null>(null);
 
   // Fetch notifications from API
   const fetchNotifications = async () => {
     try {
-      const response = await fetch('/api/notifications?unread_only=true&limit=10', {
-        credentials: 'include',
-      })
+      const response = await fetch(
+        "/api/notifications?unread_only=true&limit=10",
+        {
+          credentials: "include",
+        },
+      );
 
       if (response.ok) {
-        const data = await response.json()
-        const dbNotifications = data.notifications || []
+        const data = await response.json();
+        const dbNotifications = data.notifications || [];
 
         if (dbNotifications.length > 0) {
           // Sort notifications by creation date (most recent first)
-          const sortedNotifications = dbNotifications.sort((a: any, b: any) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          )
+          const sortedNotifications = dbNotifications.sort(
+            (a: any, b: any) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
 
           // Show only the most recent notification as a popup
-          const latestNotification = sortedNotifications[0]
-          const latestNotificationId = `db-${latestNotification.id}`
-          
+          const latestNotification = sortedNotifications[0];
+          const latestNotificationId = `db-${latestNotification.id}`;
+
           if (!shownNotificationIds.has(latestNotificationId)) {
             const notificationData = {
               title: latestNotification.title,
               message: latestNotification.message,
-              type: latestNotification.type || 'info',
+              type: latestNotification.type || "info",
               escrowCode: latestNotification.escrow_code,
-              actionText: latestNotification.action_text || 'Refresh',
+              actionText: latestNotification.action_text || "Refresh",
               onAction: refreshData.current || (() => {}),
               autoHide: false, // Don't auto-hide DB notifications
-            }
-            showNotification(notificationData, latestNotificationId)
-            setShownNotificationIds(prev => new Set(prev).add(latestNotificationId))
+            };
+            showNotification(notificationData, latestNotificationId);
+            setShownNotificationIds((prev) =>
+              new Set(prev).add(latestNotificationId),
+            );
           }
 
           // Mark all other unread notifications as read automatically
           if (sortedNotifications.length > 1) {
-            const otherNotificationIds = sortedNotifications.slice(1).map((notif: any) => notif.id)
+            const otherNotificationIds = sortedNotifications
+              .slice(1)
+              .map((notif: any) => notif.id);
             try {
-              await fetch('/api/notifications', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ notificationIds: otherNotificationIds })
-              })
-              console.log(`Marked ${otherNotificationIds.length} older notifications as read`)
+              await fetch("/api/notifications", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ notificationIds: otherNotificationIds }),
+              });
+              console.log(
+                `Marked ${otherNotificationIds.length} older notifications as read`,
+              );
             } catch (error) {
-              console.error('Error marking older notifications as read:', error)
+              console.error(
+                "Error marking older notifications as read:",
+                error,
+              );
             }
           }
         }
       }
     } catch (error) {
-      console.error('Error fetching notifications:', error)
+      console.error("Error fetching notifications:", error);
     }
-  }
+  };
 
   // Check authentication and start polling
   useEffect(() => {
     const checkAuthAndStartPolling = async () => {
       try {
         // Check if user is authenticated
-        const response = await fetch('/api/auth/me', { credentials: 'include' })
-        const isAuth = response.ok
-        setIsAuthenticated(isAuth)
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
+        const isAuth = response.ok;
+        setIsAuthenticated(isAuth);
 
         if (isAuth) {
           // Initial fetch
-          await fetchNotifications()
+          await fetchNotifications();
 
           // Poll for new notifications every 30 seconds
-          const interval = setInterval(fetchNotifications, 30000)
-          return () => clearInterval(interval)
+          const interval = setInterval(fetchNotifications, 30000);
+          return () => clearInterval(interval);
         }
       } catch (error) {
-        console.error('Auth check error:', error)
+        console.error("Auth check error:", error);
       }
-    }
+    };
 
-    checkAuthAndStartPolling()
-  }, [])
+    checkAuthAndStartPolling();
+  }, []);
 
-  const showNotification = (notification: Omit<NotificationData, 'id'>, customId?: string) => {
-    const id = customId || (Date.now().toString() + Math.random().toString(36).substr(2, 9))
+  const showNotification = (
+    notification: Omit<NotificationData, "id">,
+    customId?: string,
+  ) => {
+    const id =
+      customId ||
+      Date.now().toString() + Math.random().toString(36).substr(2, 9);
     const newNotification: NotificationData = {
       id,
       autoHide: true,
       duration: 5000,
-      ...notification
-    }
+      ...notification,
+    };
 
     // Clear all existing notifications before showing the new one
-    setNotifications([newNotification])
+    setNotifications([newNotification]);
 
     // Auto-hide if enabled
     if (newNotification.autoHide) {
       setTimeout(() => {
-        hideNotification(id)
-      }, newNotification.duration)
+        hideNotification(id);
+      }, newNotification.duration);
     }
-  }
+  };
 
   const hideNotification = async (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id))
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
 
     // If it's a DB notification, mark it as read
-    if (id.startsWith('db-')) {
+    if (id.startsWith("db-")) {
       try {
-        const dbId = id.replace('db-', '')
-        await fetch('/api/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ notificationIds: [dbId] })
-        })
+        const dbId = id.replace("db-", "");
+        await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ notificationIds: [dbId] }),
+        });
       } catch (error) {
-        console.error('Error marking notification as read:', error)
+        console.error("Error marking notification as read:", error);
       }
     }
-  }
+  };
 
   const clearAll = () => {
-    setNotifications([])
-  }
+    setNotifications([]);
+  };
 
   return (
-    <NotificationContext.Provider value={{
-      notifications,
-      showNotification,
-      hideNotification,
-      clearAll,
-      refreshData
-    }}>
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        showNotification,
+        hideNotification,
+        clearAll,
+        refreshData,
+      }}
+    >
       {children}
     </NotificationContext.Provider>
-  )
+  );
 }

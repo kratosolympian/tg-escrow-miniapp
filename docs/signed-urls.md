@@ -24,4 +24,3 @@ Next steps (optional)
 
 - Normalize the `signed_url` field across all escrow APIs and update client UI to prefer it when present.
 - Add an integration test that asserts `signed_url` exists for newly uploaded receipts.
-

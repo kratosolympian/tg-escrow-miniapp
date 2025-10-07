@@ -1,50 +1,68 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
-import { requireAuth, canAccessEscrow } from '@/lib/rbac'
-import { z } from 'zod'
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Profile } from '@/lib/types';
+import { NextRequest, NextResponse } from "next/server";
+import {
+  createServerClientWithCookies,
+  createServiceRoleClient,
+} from "@/lib/supabaseServer";
+import { requireAuth, canAccessEscrow } from "@/lib/rbac";
+import { z } from "zod";
+import { SupabaseClient } from "@supabase/supabase-js";
+import { Profile } from "@/lib/types";
 
 const signUrlSchema = z.object({
   path: z.string().min(1),
-  bucket: z.enum(['product-images', 'receipts'])
-})
+  bucket: z.enum(["product-images", "receipts"]),
+});
 
 // Helper to return JSON and optionally append _debug info when DEBUG is enabled
-function makeJson(payload: any, request?: NextRequest, serverUser?: any, status?: number) {
+function makeJson(
+  payload: any,
+  request?: NextRequest,
+  serverUser?: any,
+  status?: number,
+) {
   try {
     if (process.env.DEBUG) {
-      payload._debug = payload._debug || {}
+      payload._debug = payload._debug || {};
       try {
-        payload._debug.cookie = request ? request.headers.get('cookie') || null : null
+        payload._debug.cookie = request
+          ? request.headers.get("cookie") || null
+          : null;
       } catch (e) {}
       try {
-        payload._debug.serverUser = serverUser ? (serverUser.id || serverUser) : null
+        payload._debug.serverUser = serverUser
+          ? serverUser.id || serverUser
+          : null;
       } catch (e) {}
       try {
         // Surface any debug escrow id resolved earlier in the request lifecycle
         // (some handlers may attach request.__debugEscrowId)
         // @ts-ignore
-        const debugEscrowId = request && (request as any).__debugEscrowId
-        if (debugEscrowId) payload._debug.escrowId = debugEscrowId
+        const debugEscrowId = request && (request as any).__debugEscrowId;
+        if (debugEscrowId) payload._debug.escrowId = debugEscrowId;
       } catch (e) {}
-      payload._debug.ts = Date.now()
+      payload._debug.ts = Date.now();
     }
   } catch (e) {}
-  return typeof status === 'number' ? NextResponse.json(payload, { status }) : NextResponse.json(payload)
+  return typeof status === "number"
+    ? NextResponse.json(payload, { status })
+    : NextResponse.json(payload);
 }
 
 // Extract shared logic for signed URL generation
-async function generateSignedUrl(serviceClient: SupabaseClient, bucket: string, path: string): Promise<string> {
+async function generateSignedUrl(
+  serviceClient: SupabaseClient,
+  bucket: string,
+  path: string,
+): Promise<string> {
   const { data, error } = await serviceClient.storage
     .from(bucket)
     .createSignedUrl(path, 900); // 15 minutes
 
   if (error) {
-    console.error('Error creating signed URL:', error);
-    throw new Error('Failed to create signed URL');
+    console.error("Error creating signed URL:", error);
+    throw new Error("Failed to create signed URL");
   }
 
   return data.signedUrl;
@@ -54,16 +72,16 @@ async function generateSignedUrl(serviceClient: SupabaseClient, bucket: string, 
 async function buyerHandler(
   request: NextRequest,
   profile: Profile,
-  serviceClient: SupabaseClient
+  serviceClient: SupabaseClient,
 ): Promise<NextResponse> {
   const body = await request.json();
   const { path, bucket } = signUrlSchema.parse(body);
 
   // Buyers can access receipts and product images (for escrows they are part of)
-  if (bucket === 'receipts') {
-    const pathParts = path.split('/');
+  if (bucket === "receipts") {
+    const pathParts = path.split("/");
     if (pathParts.length < 2) {
-      return makeJson({ error: 'Invalid path format' }, request, profile, 400);
+      return makeJson({ error: "Invalid path format" }, request, profile, 400);
     }
 
     // Accept either an escrow UUID or the escrow code in the path. Try id lookup
@@ -75,9 +93,9 @@ async function buyerHandler(
     // Try lookup by id first
     try {
       const { data } = await serviceClient
-        .from('escrows')
-        .select('id, buyer_id')
-        .eq('id', escrowIdOrCode)
+        .from("escrows")
+        .select("id, buyer_id")
+        .eq("id", escrowIdOrCode)
         .maybeSingle();
       if (data) escrow = data;
     } catch (e) {}
@@ -86,9 +104,9 @@ async function buyerHandler(
     if (!escrow) {
       try {
         const { data } = await serviceClient
-          .from('escrows')
-          .select('id, buyer_id')
-          .eq('code', escrowIdOrCode)
+          .from("escrows")
+          .select("id, buyer_id")
+          .eq("code", escrowIdOrCode)
           .maybeSingle();
         if (data) escrow = data;
       } catch (e) {}
@@ -98,45 +116,45 @@ async function buyerHandler(
     if (process.env.DEBUG && escrow && escrow.id) {
       try {
         // @ts-ignore
-        request['__debugEscrowId'] = escrow.id
+        request["__debugEscrowId"] = escrow.id;
       } catch (e) {}
     }
 
     if (!escrow || escrow.buyer_id !== profile.id) {
-      return makeJson({ error: 'Access denied' }, request, profile, 403);
+      return makeJson({ error: "Access denied" }, request, profile, 403);
     }
-  } else if (bucket === 'product-images') {
+  } else if (bucket === "product-images") {
     // Buyers can access product images for escrows they are part of
-    const pathParts = path.split('/');
+    const pathParts = path.split("/");
     if (pathParts.length < 3) {
-      return makeJson({ error: 'Invalid path format' }, request, profile, 400);
+      return makeJson({ error: "Invalid path format" }, request, profile, 400);
     }
 
     // Buyers cannot access temp images
-    if (pathParts[0] === 'temp') {
-      return makeJson({ error: 'Access denied' }, request, profile, 403);
+    if (pathParts[0] === "temp") {
+      return makeJson({ error: "Access denied" }, request, profile, 403);
     }
 
     // Handle permanent images: products/{escrowId}/{fileName}
-    if (pathParts[0] === 'products') {
+    if (pathParts[0] === "products") {
       const escrowId = pathParts[1];
 
       // Check if buyer is part of this escrow
       const { data: escrow } = await serviceClient
-        .from('escrows')
-        .select('id, buyer_id, seller_id')
-        .eq('id', escrowId)
-        .eq('buyer_id', profile.id)
+        .from("escrows")
+        .select("id, buyer_id, seller_id")
+        .eq("id", escrowId)
+        .eq("buyer_id", profile.id)
         .single();
 
       if (!escrow) {
-        return makeJson({ error: 'Access denied' }, request, profile, 403);
+        return makeJson({ error: "Access denied" }, request, profile, 403);
       }
     } else {
-      return makeJson({ error: 'Invalid path format' }, request, profile, 403);
+      return makeJson({ error: "Invalid path format" }, request, profile, 403);
     }
   } else {
-    return makeJson({ error: 'Access denied' }, request, profile, 403);
+    return makeJson({ error: "Access denied" }, request, profile, 403);
   }
 
   const signedUrl = await generateSignedUrl(serviceClient, bucket, path);
@@ -147,43 +165,43 @@ async function buyerHandler(
 async function sellerHandler(
   request: NextRequest,
   profile: Profile,
-  serviceClient: SupabaseClient
+  serviceClient: SupabaseClient,
 ): Promise<NextResponse> {
   const body = await request.json();
   const { path, bucket } = signUrlSchema.parse(body);
 
-  if (bucket !== 'product-images') {
-    return makeJson({ error: 'Access denied' }, request, profile, 403);
+  if (bucket !== "product-images") {
+    return makeJson({ error: "Access denied" }, request, profile, 403);
   }
 
-  const pathParts = path.split('/');
+  const pathParts = path.split("/");
   if (pathParts.length < 3) {
-    return makeJson({ error: 'Invalid path format' }, request, profile, 403);
+    return makeJson({ error: "Invalid path format" }, request, profile, 403);
   }
 
   // Handle temp images: temp/{userId}/{fileName}
-  if (pathParts[0] === 'temp') {
+  if (pathParts[0] === "temp") {
     if (pathParts[1] !== profile.id) {
-      return makeJson({ error: 'Access denied' }, request, profile, 403);
+      return makeJson({ error: "Access denied" }, request, profile, 403);
     }
   }
   // Handle permanent images: products/{escrowId}/{fileName}
-  else if (pathParts[0] === 'products') {
+  else if (pathParts[0] === "products") {
     const escrowId = pathParts[1];
 
     // Check if seller owns this escrow
     const { data: escrow } = await serviceClient
-      .from('escrows')
-      .select('id, seller_id')
-      .eq('id', escrowId)
-      .eq('seller_id', profile.id)
+      .from("escrows")
+      .select("id, seller_id")
+      .eq("id", escrowId)
+      .eq("seller_id", profile.id)
       .single();
 
     if (!escrow) {
-      return makeJson({ error: 'Access denied' }, request, profile, 403);
+      return makeJson({ error: "Access denied" }, request, profile, 403);
     }
   } else {
-    return makeJson({ error: 'Invalid path format' }, request, profile, 403);
+    return makeJson({ error: "Invalid path format" }, request, profile, 403);
   }
 
   const signedUrl = await generateSignedUrl(serviceClient, bucket, path);
@@ -196,24 +214,29 @@ export async function POST(request: NextRequest) {
     const serviceClient = createServiceRoleClient();
     const profile = await requireAuth(supabase);
 
-    if (profile.role === 'buyer') {
+    if (profile.role === "buyer") {
       return buyerHandler(request, profile, serviceClient);
-    } else if (profile.role === 'seller') {
+    } else if (profile.role === "seller") {
       return sellerHandler(request, profile, serviceClient);
     } else {
-      return makeJson({ error: 'Role not supported' }, request, profile, 403);
+      return makeJson({ error: "Role not supported" }, request, profile, 403);
     }
   } catch (error) {
     // Handle common expected errors more gracefully
     if (error instanceof z.ZodError) {
-      return makeJson({ error: 'Invalid input data' }, request, null, 400)
+      return makeJson({ error: "Invalid input data" }, request, null, 400);
     }
     // Authentication failures are expected for anonymous requests; return 401 instead of 500
-    if (error instanceof Error && error.message === 'Authentication required') {
-      return makeJson({ error: 'Authentication required' }, request, null, 401)
+    if (error instanceof Error && error.message === "Authentication required") {
+      return makeJson({ error: "Authentication required" }, request, null, 401);
     }
 
-    console.error('Sign URL error:', error)
-    return makeJson({ error: 'Failed to create signed URL' }, request, null, 500)
+    console.error("Sign URL error:", error);
+    return makeJson(
+      { error: "Failed to create signed URL" },
+      request,
+      null,
+      500,
+    );
   }
 }

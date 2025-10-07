@@ -1,155 +1,161 @@
+"use client";
+import React from "react";
 
-'use client'
-import React from 'react'
-
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { formatNaira } from '@/lib/utils'
-import { getStatusLabel, getStatusColor } from '@/lib/status'
-import StatusBadge from '@/components/StatusBadge'
-import AdminManagement from '@/components/AdminManagement'
-import { supabase } from '@/lib/supabaseClient'
-import { useNotifications } from '@/components/NotificationContext'
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { formatNaira } from "@/lib/utils";
+import { getStatusLabel, getStatusColor } from "@/lib/status";
+import StatusBadge from "@/components/StatusBadge";
+import AdminManagement from "@/components/AdminManagement";
+import { supabase } from "@/lib/supabaseClient";
+import { useNotifications } from "@/components/NotificationContext";
 
 interface Escrow {
-  id: string
-  code: string
-  description: string
-  price: number
-  admin_fee: number
-  status: string
-  created_at: string
-  seller?: { telegram_id: string }
-  buyer?: { telegram_id: string }
-  receipts?: Array<{ id: string }>
+  id: string;
+  code: string;
+  description: string;
+  price: number;
+  admin_fee: number;
+  status: string;
+  created_at: string;
+  seller?: { telegram_id: string };
+  buyer?: { telegram_id: string };
+  receipts?: Array<{ id: string }>;
 }
 
 export default function AdminDashboard() {
-
-  const [escrows, setEscrows] = useState<Escrow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<string>('')
-  const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<'transactions' | 'admin-management'>('transactions')
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
-  const [user, setUser] = useState<any | null>(null)
+  const [escrows, setEscrows] = useState<Escrow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<
+    "transactions" | "admin-management"
+  >("transactions");
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [user, setUser] = useState<any | null>(null);
 
   // Notification system
-  const { refreshData } = useNotifications()
+  const { refreshData } = useNotifications();
 
   // Refresh function for notifications
   const refreshEscrows = async () => {
-    await fetchEscrows()
-  }
+    await fetchEscrows();
+  };
 
   // Set refresh function in notification context
   useEffect(() => {
     if (refreshData) {
-      refreshData.current = refreshEscrows
+      refreshData.current = refreshEscrows;
     }
-  }, [refreshData])
+  }, [refreshData]);
 
   // Real-time subscription for all escrow updates (admins see all)
   useEffect(() => {
-    if (!user) return
+    if (!user) return;
 
     const channel = supabase
-      .channel('escrow-updates-admin')
+      .channel("escrow-updates-admin")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'escrows'
+          event: "UPDATE",
+          schema: "public",
+          table: "escrows",
         },
         (payload) => {
           // Any escrow was updated, refresh the data
-          fetchEscrows()
-        }
+          fetchEscrows();
+        },
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'escrows'
+          event: "INSERT",
+          schema: "public",
+          table: "escrows",
         },
         (payload) => {
           // New escrow was created, refresh the data
-          fetchEscrows()
-        }
+          fetchEscrows();
+        },
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [user])
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const fetchEscrows = React.useCallback(async () => {
     try {
-      const params = new URLSearchParams()
-      if (filter) params.append('status', filter)
-      if (search) params.append('q', search)
-      params.append('limit', '50')
+      const params = new URLSearchParams();
+      if (filter) params.append("status", filter);
+      if (search) params.append("q", search);
+      params.append("limit", "50");
 
-  const response = await fetch(`/api/admin/escrows?${params}`, { credentials: 'include' })
+      const response = await fetch(`/api/admin/escrows?${params}`, {
+        credentials: "include",
+      });
       if (response.ok) {
-        const data = await response.json()
-        setEscrows(data.escrows)
+        const data = await response.json();
+        setEscrows(data.escrows);
       }
     } catch (error) {
-      console.error('Error fetching escrows:', error)
+      console.error("Error fetching escrows:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [filter, search])
+  }, [filter, search]);
 
   useEffect(() => {
-    fetchEscrows()
-    detectCurrentUser()
-    ;(async () => {
+    fetchEscrows();
+    detectCurrentUser();
+    (async () => {
       try {
-        const { supabase } = await import('@/lib/supabaseClient')
-        const { data } = await supabase.auth.getUser()
-          setUser(data?.user ?? null)
-          // Also fetch user profile to ensure auth state is refreshed
-        const response = await fetch('/api/auth/me', { credentials: 'include' })
+        const { supabase } = await import("@/lib/supabaseClient");
+        const { data } = await supabase.auth.getUser();
+        setUser(data?.user ?? null);
+        // Also fetch user profile to ensure auth state is refreshed
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
         if (response.ok) {
-          const userData = await response.json()
+          const userData = await response.json();
           // This helps ensure the Header component detects the user
         }
       } catch (e) {
-        console.error('Failed to get user on mount', e)
+        console.error("Failed to get user on mount", e);
       }
-    })()
+    })();
     // No-op in production: avoid client-side debug logs
-  }, [filter, search, fetchEscrows])
+  }, [filter, search, fetchEscrows]);
 
   const detectCurrentUser = async () => {
     try {
-  // Get current user email from Supabase client and expose to child components
-  const { supabase } = await import('@/lib/supabaseClient')
-  const { data } = await supabase.auth.getUser()
-  const email = data?.user?.email ?? null
-  setCurrentUserEmail(email)
+      // Get current user email from Supabase client and expose to child components
+      const { supabase } = await import("@/lib/supabaseClient");
+      const { data } = await supabase.auth.getUser();
+      const email = data?.user?.email ?? null;
+      setCurrentUserEmail(email);
     } catch (error) {
-      console.error('Error detecting current user:', error)
+      console.error("Error detecting current user:", error);
     }
-  }
-
+  };
 
   const handleLogout = async () => {
     try {
       // Clear client session
-      await supabase.auth.signOut()
+      await supabase.auth.signOut();
       // Call server-side logout for cookie/session cleanup
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-      window.location.href = '/'
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      window.location.href = "/";
     } catch (error) {
-      console.error('Logout error:', error)
+      console.error("Logout error:", error);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -159,7 +165,7 @@ export default function AdminDashboard() {
           <p>Loading dashboard...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -175,7 +181,9 @@ export default function AdminDashboard() {
             {/* Logout button removed; now in header only */}
             {/* Debug: show detected current user email */}
             {currentUserEmail && (
-              <div className="text-sm text-gray-500 ml-2">{currentUserEmail}</div>
+              <div className="text-sm text-gray-500 ml-2">
+                {currentUserEmail}
+              </div>
             )}
           </div>
         </div>
@@ -187,37 +195,45 @@ export default function AdminDashboard() {
           <div className="border-b border-gray-200 flex items-center justify-between">
             <nav className="-mb-px flex space-x-8">
               <button
-                onClick={() => setActiveTab('transactions')}
+                onClick={() => setActiveTab("transactions")}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'transactions'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  activeTab === "transactions"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
-                <span role="img" aria-label="Transactions">📊</span> Transactions
+                <span role="img" aria-label="Transactions">
+                  📊
+                </span>{" "}
+                Transactions
               </button>
               <button
-                onClick={() => setActiveTab('admin-management')}
+                onClick={() => setActiveTab("admin-management")}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'admin-management'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  activeTab === "admin-management"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
-                <span role="img" aria-label="Admin Management">👑</span> Admin Management
+                <span role="img" aria-label="Admin Management">
+                  👑
+                </span>{" "}
+                Admin Management
               </button>
             </nav>
             <Link
               href="/admin/escrow"
               className="ml-6 inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow transition-colors text-base"
             >
-              <span role="img" aria-label="Escrow Management" className="mr-2">🗂️</span>
+              <span role="img" aria-label="Escrow Management" className="mr-2">
+                🗂️
+              </span>
               Escrow Management
             </Link>
           </div>
         </div>
 
-        {activeTab === 'transactions' && (
+        {activeTab === "transactions" && (
           <>
             {/* Filters */}
             <div className="card mb-6">
@@ -249,25 +265,39 @@ export default function AdminDashboard() {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
               <div className="card text-center">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Total Transactions</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Total Transactions
+                </h3>
                 <p className="text-2xl font-bold">{escrows.length}</p>
               </div>
               <div className="card text-center">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Pending Review</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Pending Review
+                </h3>
                 <p className="text-2xl font-bold text-yellow-600">
-                  {escrows.filter(e => e.status === 'waiting_admin').length}
+                  {escrows.filter((e) => e.status === "waiting_admin").length}
                 </p>
               </div>
               <div className="card text-center">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Completed</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Completed
+                </h3>
                 <p className="text-2xl font-bold text-green-600">
-                  {escrows.filter(e => e.status === 'completed' || e.status === 'closed').length}
+                  {
+                    escrows.filter(
+                      (e) => e.status === "completed" || e.status === "closed",
+                    ).length
+                  }
                 </p>
               </div>
               <div className="card text-center">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Total Volume</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Total Volume
+                </h3>
                 <p className="text-2xl font-bold text-blue-600">
-                  {formatNaira(escrows.reduce((sum, e) => sum + e.price + e.admin_fee, 0))}
+                  {formatNaira(
+                    escrows.reduce((sum, e) => sum + e.price + e.admin_fee, 0),
+                  )}
                 </p>
               </div>
             </div>
@@ -278,43 +308,71 @@ export default function AdminDashboard() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-semibold">Code</th>
-                      <th className="text-left py-3 px-4 font-semibold">Description</th>
-                      <th className="text-left py-3 px-4 font-semibold">Amount</th>
-                      <th className="text-left py-3 px-4 font-semibold">Status</th>
-                      <th className="text-left py-3 px-4 font-semibold">Parties</th>
-                      <th className="text-left py-3 px-4 font-semibold">Actions</th>
+                      <th className="text-left py-3 px-4 font-semibold">
+                        Code
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold">
+                        Description
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold">
+                        Amount
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold">
+                        Status
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold">
+                        Parties
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {escrows.map((escrow) => (
-                      <tr key={escrow.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr
+                        key={escrow.id}
+                        className="border-b border-gray-100 hover:bg-gray-50"
+                      >
                         <td className="py-3 px-4">
-                          <span className="font-mono text-sm">{escrow.code}</span>
+                          <span className="font-mono text-sm">
+                            {escrow.code}
+                          </span>
                           {escrow.receipts && escrow.receipts.length > 0 && (
                             <span className="ml-2 text-blue-600">📄</span>
                           )}
                         </td>
                         <td className="py-3 px-4">
-                          <div className="max-w-xs truncate" title={escrow.description}>
+                          <div
+                            className="max-w-xs truncate"
+                            title={escrow.description}
+                          >
                             {escrow.description}
                           </div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="text-sm">
-                            <div>{formatNaira(escrow.price + escrow.admin_fee)}</div>
-                            <div className="text-gray-500">({formatNaira(escrow.price)} + {formatNaira(escrow.admin_fee)})</div>
+                            <div>
+                              {formatNaira(escrow.price + escrow.admin_fee)}
+                            </div>
+                            <div className="text-gray-500">
+                              ({formatNaira(escrow.price)} +{" "}
+                              {formatNaira(escrow.admin_fee)})
+                            </div>
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <StatusBadge status={escrow.status as any} size="sm" />
+                          <StatusBadge
+                            status={escrow.status as any}
+                            size="sm"
+                          />
                         </td>
                         <td className="py-3 px-4 text-sm">
-                          <div>S: @{escrow.seller?.telegram_id || 'N/A'}</div>
-                          <div>B: @{escrow.buyer?.telegram_id || 'None'}</div>
+                          <div>S: @{escrow.seller?.telegram_id || "N/A"}</div>
+                          <div>B: @{escrow.buyer?.telegram_id || "None"}</div>
                         </td>
                         <td className="py-3 px-4">
-                          <Link 
+                          <Link
                             href={`/admin/escrow/${escrow.id}`}
                             className="text-blue-600 hover:text-blue-800 text-sm"
                           >
@@ -336,8 +394,8 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {activeTab === 'admin-management' && (
-            <AdminManagement 
+        {activeTab === "admin-management" && (
+          <AdminManagement
             currentUserEmail={currentUserEmail || undefined}
             onAdminUpdate={() => {
               // Refresh or update any parent state if needed
@@ -346,5 +404,5 @@ export default function AdminDashboard() {
         )}
       </div>
     </div>
-  )
+  );
 }

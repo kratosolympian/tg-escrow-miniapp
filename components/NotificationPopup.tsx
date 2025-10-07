@@ -1,39 +1,46 @@
-'use client'
+"use client";
 
-import React from 'react'
-import { X, RefreshCw, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react'
-import { useNotifications } from './NotificationContext'
+import React from "react";
+import {
+  X,
+  RefreshCw,
+  CheckCircle,
+  AlertCircle,
+  Info,
+  AlertTriangle,
+} from "lucide-react";
+import { useNotifications } from "./NotificationContext";
 
 export default function NotificationPopup() {
-  const { notifications, hideNotification } = useNotifications()
+  const { notifications, hideNotification } = useNotifications();
 
-  if (notifications.length === 0) return null
+  if (notifications.length === 0) return null;
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'success':
-        return <CheckCircle className="w-5 h-5 text-green-500" />
-      case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-500" />
-      case 'warning':
-        return <AlertTriangle className="w-5 h-5 text-yellow-500" />
+      case "success":
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case "error":
+        return <AlertCircle className="w-5 h-5 text-red-500" />;
+      case "warning":
+        return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
       default:
-        return <Info className="w-5 h-5 text-blue-500" />
+        return <Info className="w-5 h-5 text-blue-500" />;
     }
-  }
+  };
 
   const getBgColor = (type: string) => {
     switch (type) {
-      case 'success':
-        return 'bg-green-50 border-green-200'
-      case 'error':
-        return 'bg-red-50 border-red-200'
-      case 'warning':
-        return 'bg-yellow-50 border-yellow-200'
+      case "success":
+        return "bg-green-50 border-green-200";
+      case "error":
+        return "bg-red-50 border-red-200";
+      case "warning":
+        return "bg-yellow-50 border-yellow-200";
       default:
-        return 'bg-blue-50 border-blue-200'
+        return "bg-blue-50 border-blue-200";
     }
-  }
+  };
 
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
@@ -60,11 +67,11 @@ export default function NotificationPopup() {
                 <button
                   onClick={async () => {
                     // Mark notification as read first, then refresh
-                    await hideNotification(notification.id)
+                    await hideNotification(notification.id);
                     // Small delay to ensure the API call starts before page reload
                     setTimeout(() => {
-                      window.location.reload()
-                    }, 100)
+                      window.location.reload();
+                    }, 100);
                   }}
                   className="inline-flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
                 >
@@ -83,5 +90,5 @@ export default function NotificationPopup() {
         </div>
       ))}
     </div>
-  )
+  );
 }

@@ -1,12 +1,15 @@
 // @ts-nocheck
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies, createServiceRoleClient, getSessionSafe } from '@/lib/supabaseServer'
-import { ESCROW_STATUS, canTransition, EscrowStatus } from '@/lib/status'
-import { z } from 'zod'
-import { sendEscrowStatusNotification } from '@/lib/telegram'
-
+import { NextRequest, NextResponse } from "next/server";
+import {
+  createServerClientWithCookies,
+  createServiceRoleClient,
+  getSessionSafe,
+} from "@/lib/supabaseServer";
+import { ESCROW_STATUS, canTransition, EscrowStatus } from "@/lib/status";
+import { z } from "zod";
+import { sendEscrowStatusNotification } from "@/lib/telegram";
 
 /**
  * POST /api/escrow/join
@@ -33,96 +36,119 @@ import { sendEscrowStatusNotification } from '@/lib/telegram'
  *   500: { error: string } (update or server error)
  */
 const joinEscrowSchema = z.object({
-  code: z.string().min(1)
-})
+  code: z.string().min(1),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
-    const serviceClient = createServiceRoleClient()
+    const supabase = createServerClientWithCookies();
+    const serviceClient = createServiceRoleClient();
 
     // Check for test mode (development only)
-    const { searchParams } = new URL(request.url)
-    const testMode = searchParams.get('test') === 'true' && process.env.NODE_ENV === 'development'
+    const { searchParams } = new URL(request.url);
+    const testMode =
+      searchParams.get("test") === "true" &&
+      process.env.NODE_ENV === "development";
 
-  // Attempt to get authenticated user from cookies in a safe way that
-  // won't throw on stale refresh tokens. getSessionSafe will clear known
-  // auth cookies if an error is encountered so the browser stops sending
-  // a bad refresh token in subsequent requests.
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+    // Attempt to get authenticated user from cookies in a safe way that
+    // won't throw on stale refresh tokens. getSessionSafe will clear known
+    // auth cookies if an error is encountered so the browser stops sending
+    // a bad refresh token in subsequent requests.
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-  // If no user in cookies, allow one-time token authentication (used after API signup)
-  let authenticatedUser = user
+    // If no user in cookies, allow one-time token authentication (used after API signup)
+    let authenticatedUser = user;
     if (!authenticatedUser) {
-      const bodyPeek = await request.clone().json().catch(() => ({}))
+      const bodyPeek = await request
+        .clone()
+        .json()
+        .catch(() => ({}));
       // Prefer token in body, but also accept header forms for more robust clients
-      let token = (bodyPeek && bodyPeek.__one_time_token) || null
+      let token = (bodyPeek && bodyPeek.__one_time_token) || null;
       if (!token) {
-        const headerToken = request.headers.get('x-one-time-token') || null
-        if (headerToken) token = headerToken
+        const headerToken = request.headers.get("x-one-time-token") || null;
+        if (headerToken) token = headerToken;
       }
       if (!token) {
-        const authHeader = request.headers.get('authorization') || ''
-        if (authHeader.toLowerCase().startsWith('bearer ')) {
-          token = authHeader.slice(7).trim()
+        const authHeader = request.headers.get("authorization") || "";
+        if (authHeader.toLowerCase().startsWith("bearer ")) {
+          token = authHeader.slice(7).trim();
         }
       }
-  // Do not log full body or token values; only log presence for audit
-  // minimal log: token presence
-  if (token) console.info('Join route: one-time token present')
+      // Do not log full body or token values; only log presence for audit
+      // minimal log: token presence
+      if (token) console.info("Join route: one-time token present");
 
       if (token) {
         try {
-          const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth')
+          const { verifyAndConsumeSignedToken } = await import(
+            "@/lib/signedAuth"
+          );
           // Attempt one-time token verification
-          const userId = await verifyAndConsumeSignedToken(token)
+          const userId = await verifyAndConsumeSignedToken(token);
           if (userId) {
             // Generate an access token for the user to establish a session
-            let accessToken = null
-            let refreshToken = null
+            let accessToken = null;
+            let refreshToken = null;
             try {
-              const { data: tokenData, error: tokenError } = await serviceClient.auth.admin.generateAccessToken(userId)
+              const { data: tokenData, error: tokenError } =
+                await serviceClient.auth.admin.generateAccessToken(userId);
               if (tokenError) {
-                console.warn('Failed to generate access token for user:', userId, tokenError)
+                console.warn(
+                  "Failed to generate access token for user:",
+                  userId,
+                  tokenError,
+                );
               } else if (tokenData?.access_token) {
-                accessToken = tokenData.access_token
-                refreshToken = tokenData.refresh_token
+                accessToken = tokenData.access_token;
+                refreshToken = tokenData.refresh_token;
               }
             } catch (e) {
-              console.warn('Exception generating access token:', e)
+              console.warn("Exception generating access token:", e);
             }
             // attach a lightweight user object for downstream logic
-            authenticatedUser = { id: userId, accessToken, refreshToken }
+            authenticatedUser = { id: userId, accessToken, refreshToken };
           } else {
-            console.warn('Join route: one-time token present but not valid/expired')
-            return NextResponse.json({ error: 'Invalid or expired one-time token' }, { status: 401 })
+            console.warn(
+              "Join route: one-time token present but not valid/expired",
+            );
+            return NextResponse.json(
+              { error: "Invalid or expired one-time token" },
+              { status: 401 },
+            );
           }
         } catch (e) {
-          console.warn('Error importing/verifying one-time token')
+          console.warn("Error importing/verifying one-time token");
         }
       }
     }
 
     // Test mode fallback (development only)
     if (!authenticatedUser && testMode) {
-      authenticatedUser = { id: 'test-user-id' }
+      authenticatedUser = { id: "test-user-id" };
     }
 
     if (!authenticatedUser) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
     }
-    
-    const body = await request.json()
-    const { code } = joinEscrowSchema.parse(body)
+
+    const body = await request.json();
+    const { code } = joinEscrowSchema.parse(body);
 
     // Test mode response (development only)
     if (testMode) {
       return NextResponse.json({
         ok: true,
-        escrowId: 'test-escrow-id',
+        escrowId: "test-escrow-id",
         test_mode: true,
-        message: 'Test mode enabled - escrow join bypassed'
-      })
+        message: "Test mode enabled - escrow join bypassed",
+      });
     }
 
     // Find escrow by code using service client
@@ -130,68 +156,98 @@ export async function POST(request: NextRequest) {
     // with different casing are still found. Using ILIKE matches case-insensitively
     // without depending on a specific normalization strategy.
     const { data: escrow, error: findError } = await serviceClient
-      .from('escrows')
-      .select('*')
-      .ilike('code', code)
+      .from("escrows")
+      .select("*")
+      .ilike("code", code)
       .limit(1)
-      .maybeSingle()
+      .maybeSingle();
 
     if (findError || !escrow) {
-      console.error('Escrow find error:', findError)
-      const payload: any = { error: 'Transaction code not found' }
-      if (process.env.DEBUG === '1' || process.env.DEBUG) payload._debug = { found: false, code: code }
-      return NextResponse.json(payload, { status: 404 })
+      console.error("Escrow find error:", findError);
+      const payload: any = { error: "Transaction code not found" };
+      if (process.env.DEBUG === "1" || process.env.DEBUG)
+        payload._debug = { found: false, code: code };
+      return NextResponse.json(payload, { status: 404 });
     }
 
     // Check if already joined
     if ((escrow as any).buyer_id) {
-      const payload: any = { error: (escrow as any).buyer_id === authenticatedUser.id ? 'You have already joined this transaction' : 'This transaction already has a buyer' }
-      if (process.env.DEBUG === '1' || process.env.DEBUG) payload._debug = { buyer_id: (escrow as any).buyer_id }
+      const payload: any = {
+        error:
+          (escrow as any).buyer_id === authenticatedUser.id
+            ? "You have already joined this transaction"
+            : "This transaction already has a buyer",
+      };
+      if (process.env.DEBUG === "1" || process.env.DEBUG)
+        payload._debug = { buyer_id: (escrow as any).buyer_id };
       if ((escrow as any).buyer_id === authenticatedUser.id) {
-        return NextResponse.json(payload, { status: 400 })
+        return NextResponse.json(payload, { status: 400 });
       } else {
-        return NextResponse.json(payload, { status: 400 })
+        return NextResponse.json(payload, { status: 400 });
       }
     }
 
     // Check if seller is trying to join their own escrow
-  if ((escrow as any).seller_id === authenticatedUser.id) {
-      return NextResponse.json({ error: 'You cannot join your own transaction as a buyer' }, { status: 400 })
+    if ((escrow as any).seller_id === authenticatedUser.id) {
+      return NextResponse.json(
+        { error: "You cannot join your own transaction as a buyer" },
+        { status: 400 },
+      );
     }
 
     // Check status transition. Allow no-op when status already equals desired status
-    const currentStatus = (escrow as any).status
-    if (currentStatus !== ESCROW_STATUS.WAITING_PAYMENT && !canTransition(currentStatus as EscrowStatus, ESCROW_STATUS.WAITING_PAYMENT)) {
-      return NextResponse.json({ error: 'Cannot join transaction in current status' }, { status: 400 })
+    const currentStatus = (escrow as any).status;
+    if (
+      currentStatus !== ESCROW_STATUS.WAITING_PAYMENT &&
+      !canTransition(
+        currentStatus as EscrowStatus,
+        ESCROW_STATUS.WAITING_PAYMENT,
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Cannot join transaction in current status" },
+        { status: 400 },
+      );
     }
 
-      // Enforce buyer active escrow limit (max 5 active escrows for testing)
-      try {
-        const now = new Date().toISOString()
-        const { data: buyerActiveCount, error: buyerCountErr } = await serviceClient
-          .from('escrows')
-          .select('id', { count: 'exact' })
-          .eq('buyer_id', authenticatedUser.id)
-          .in('status', [
+    // Enforce buyer active escrow limit (max 5 active escrows for testing)
+    try {
+      const now = new Date().toISOString();
+      const { data: buyerActiveCount, error: buyerCountErr } =
+        await serviceClient
+          .from("escrows")
+          .select("id", { count: "exact" })
+          .eq("buyer_id", authenticatedUser.id)
+          .in("status", [
             ESCROW_STATUS.CREATED,
             ESCROW_STATUS.WAITING_PAYMENT,
             ESCROW_STATUS.WAITING_ADMIN,
             ESCROW_STATUS.PAYMENT_CONFIRMED,
             ESCROW_STATUS.IN_PROGRESS,
-            ESCROW_STATUS.ON_HOLD
+            ESCROW_STATUS.ON_HOLD,
           ])
-          .or(`expires_at.is.null,expires_at.gt.${now}`)
-        if (buyerCountErr) {
-          console.error('Error counting buyer active escrows:', buyerCountErr)
-        } else {
-          const count = (buyerActiveCount && (buyerActiveCount as any).length) ? (buyerActiveCount as any).length : 0
-          if (count >= 3) { // Business rule: buyers can only have up to 3 active escrows
-            return NextResponse.json({ error: 'You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.' }, { status: 400 })
-          }
+          .or(`expires_at.is.null,expires_at.gt.${now}`);
+      if (buyerCountErr) {
+        console.error("Error counting buyer active escrows:", buyerCountErr);
+      } else {
+        const count =
+          buyerActiveCount && (buyerActiveCount as any).length
+            ? (buyerActiveCount as any).length
+            : 0;
+        if (count >= 3) {
+          // Business rule: buyers can only have up to 3 active escrows
+          return NextResponse.json(
+            {
+              error:
+                "You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.",
+            },
+            { status: 400 },
+          );
         }
-      } catch (e) {
-        console.error('Exception counting buyer active escrows:', e)
       }
+    } catch (e) {
+      console.error("Exception counting buyer active escrows:", e);
+    }
 
     // Update escrow with buyer and new status using service client.
     // Match by code (case-insensitive) so updates succeed even if the fetched
@@ -199,84 +255,121 @@ export async function POST(request: NextRequest) {
     // or test fixtures). Use `ilike` to keep behavior consistent with the lookup.
     // @ts-ignore
     const { error: updateError } = await serviceClient
-      .from('escrows')
+      .from("escrows")
       .update({
         buyer_id: authenticatedUser.id,
         status: ESCROW_STATUS.WAITING_PAYMENT,
-        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutes from now
       })
-      .ilike('code', code)
+      .ilike("code", code);
 
     if (updateError) {
       // Check if this is the specific database constraint error
-      if (updateError.code === 'P0001' && updateError.message?.includes('Buyer already has an active escrow')) {
-        return NextResponse.json({
-          error: 'You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.',
-          existingEscrowId: '9b68f1e0-a885-425b-abf7-a2dc25c52a8f'
-        }, { status: 400 })
+      if (
+        updateError.code === "P0001" &&
+        updateError.message?.includes("Buyer already has an active escrow")
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.",
+            existingEscrowId: "9b68f1e0-a885-425b-abf7-a2dc25c52a8f",
+          },
+          { status: 400 },
+        );
       }
 
       // Log the update error for debugging. Avoid logging tokens/PII.
-      console.error('Error updating escrow (first attempt):', updateError)
+      console.error("Error updating escrow (first attempt):", updateError);
 
       // Fallback: try to fetch the escrow id again and update by id. This
       // can succeed if the initial fetched object lacked an `id` or if
       // there was a transient error with the ilike update.
       try {
-        const refetch = await serviceClient.from('escrows').select('id, code').ilike('code', code).limit(1).maybeSingle()
+        const refetch = await serviceClient
+          .from("escrows")
+          .select("id, code")
+          .ilike("code", code)
+          .limit(1)
+          .maybeSingle();
         if (refetch.error || !refetch.data) {
-            console.error('Refetch after update error failed', refetch.error)
-          } else {
-          const escrowId = refetch.data.id
-            const retry = await serviceClient.from('escrows').update({ buyer_id: authenticatedUser.id, status: ESCROW_STATUS.WAITING_PAYMENT, expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() }).eq('id', escrowId)
-            if (retry.error) {
-              // Check if this is the specific database constraint error
-              if (retry.error.code === 'P0001' && retry.error.message?.includes('Buyer already has an active escrow')) {
-                return NextResponse.json({ 
-                  error: 'You already have an active escrow. For testing purposes, please complete or cancel your existing escrow first.',
-                  existingEscrowId: '9b68f1e0-a885-425b-abf7-a2dc25c52a8f'
-                }, { status: 400 })
-              }
-              console.error('Retry update by id failed', retry.error)
-            } else {
-              // Retry update succeeded
+          console.error("Refetch after update error failed", refetch.error);
+        } else {
+          const escrowId = refetch.data.id;
+          const retry = await serviceClient
+            .from("escrows")
+            .update({
+              buyer_id: authenticatedUser.id,
+              status: ESCROW_STATUS.WAITING_PAYMENT,
+              expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            })
+            .eq("id", escrowId);
+          if (retry.error) {
+            // Check if this is the specific database constraint error
+            if (
+              retry.error.code === "P0001" &&
+              retry.error.message?.includes(
+                "Buyer already has an active escrow",
+              )
+            ) {
+              return NextResponse.json(
+                {
+                  error:
+                    "You already have an active escrow. For testing purposes, please complete or cancel your existing escrow first.",
+                  existingEscrowId: "9b68f1e0-a885-425b-abf7-a2dc25c52a8f",
+                },
+                { status: 400 },
+              );
             }
+            console.error("Retry update by id failed", retry.error);
+          } else {
+            // Retry update succeeded
+          }
         }
       } catch (re) {
-        console.error('Exception during fallback update attempt', re)
+        console.error("Exception during fallback update attempt", re);
       }
 
-      const payload: any = { error: 'Failed to join transaction' }
-      if (process.env.DEBUG === '1' || process.env.DEBUG) payload._debug = { message: (updateError && updateError.message) || String(updateError), details: (updateError && updateError.details) || null }
-      return NextResponse.json(payload, { status: 500 })
+      const payload: any = { error: "Failed to join transaction" };
+      if (process.env.DEBUG === "1" || process.env.DEBUG)
+        payload._debug = {
+          message: (updateError && updateError.message) || String(updateError),
+          details: (updateError && updateError.details) || null,
+        };
+      return NextResponse.json(payload, { status: 500 });
     }
 
     // Refetch the escrow to obtain a reliable id for logging/response.
-    let finalEscrowId = (escrow as any).id
+    let finalEscrowId = (escrow as any).id;
     try {
-      const finalLookup = await serviceClient.from('escrows').select('id, code, status').ilike('code', code).limit(1).maybeSingle()
+      const finalLookup = await serviceClient
+        .from("escrows")
+        .select("id, code, status")
+        .ilike("code", code)
+        .limit(1)
+        .maybeSingle();
       if (!finalLookup.error && finalLookup.data) {
-        finalEscrowId = finalLookup.data.id
+        finalEscrowId = finalLookup.data.id;
       } else if (finalLookup.error) {
-        console.error('Final escrow lookup error:', finalLookup.error)
+        console.error("Final escrow lookup error:", finalLookup.error);
       }
     } catch (e) {
-      console.error('Exception during final escrow lookup:', e)
+      console.error("Exception during final escrow lookup:", e);
     }
 
     // Log status change using service client (use finalEscrowId)
     try {
       // @ts-ignore
       const { error: logError } = await serviceClient
-        .from('status_logs')
+        .from("status_logs")
         .insert({
           escrow_id: finalEscrowId,
           status: ESCROW_STATUS.WAITING_PAYMENT,
-          changed_by: authenticatedUser.id
-        })
-      if (logError) console.error('Error logging status:', logError)
+          changed_by: authenticatedUser.id,
+        });
+      if (logError) console.error("Error logging status:", logError);
     } catch (e) {
-      console.error('Exception when inserting status log:', e)
+      console.error("Exception when inserting status log:", e);
     }
 
     // Send notification about buyer joining escrow
@@ -286,30 +379,44 @@ export async function POST(request: NextRequest) {
         (escrow as any).status, // old status
         ESCROW_STATUS.WAITING_PAYMENT, // new status
         serviceClient,
-        process.env.TELEGRAM_MINIAPP_URL
+        process.env.TELEGRAM_MINIAPP_URL,
       );
     } catch (notificationError) {
-      console.error('Error sending escrow join notification:', notificationError);
+      console.error(
+        "Error sending escrow join notification:",
+        notificationError,
+      );
       // Don't fail the join if notification fails
     }
 
-    const payload: any = { ok: true, escrowId: finalEscrowId }
-    if (process.env.DEBUG === '1' || process.env.DEBUG) payload._debug = { joinedBy: authenticatedUser.id }
-    
-    // If we generated an access token, set session cookies
-    let response = NextResponse.json(payload)
-    if (authenticatedUser.accessToken) {
-      const { setAuthCookies } = await import('@/lib/cookies')
-      setAuthCookies(response, authenticatedUser.accessToken, authenticatedUser.refreshToken, 3600)
-    }
-    
-    return response
+    const payload: any = { ok: true, escrowId: finalEscrowId };
+    if (process.env.DEBUG === "1" || process.env.DEBUG)
+      payload._debug = { joinedBy: authenticatedUser.id };
 
-  } catch (error) {
-    console.error('Join escrow error:', error)
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
+    // If we generated an access token, set session cookies
+    let response = NextResponse.json(payload);
+    if (authenticatedUser.accessToken) {
+      const { setAuthCookies } = await import("@/lib/cookies");
+      setAuthCookies(
+        response,
+        authenticatedUser.accessToken,
+        authenticatedUser.refreshToken,
+        3600,
+      );
     }
-    return NextResponse.json({ error: 'Failed to join transaction' }, { status: 500 })
+
+    return response;
+  } catch (error) {
+    console.error("Join escrow error:", error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Invalid input data" },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(
+      { error: "Failed to join transaction" },
+      { status: 500 },
+    );
   }
 }

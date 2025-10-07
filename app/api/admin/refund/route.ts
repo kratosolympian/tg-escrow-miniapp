@@ -1,75 +1,100 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientWithCookies, createServiceRoleClient } from '@/lib/supabaseServer'
-import { requireRole } from '@/lib/rbac'
-import { ESCROW_STATUS } from '@/lib/status'
-import { z } from 'zod'
-import { sendEscrowStatusNotification } from '@/lib/telegram'
+import { NextRequest, NextResponse } from "next/server";
+import {
+  createServerClientWithCookies,
+  createServiceRoleClient,
+} from "@/lib/supabaseServer";
+import { requireRole } from "@/lib/rbac";
+import { ESCROW_STATUS } from "@/lib/status";
+import { z } from "zod";
+import { sendEscrowStatusNotification } from "@/lib/telegram";
 
 const refundSchema = z.object({
-  escrowId: z.string().uuid()
-})
+  escrowId: z.string().uuid(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerClientWithCookies()
-    const serviceClient = createServiceRoleClient()
-    
+    const supabase = createServerClientWithCookies();
+    const serviceClient = createServiceRoleClient();
+
     // Require admin role
-    const profile = await requireRole(supabase, 'admin')
-    
-    const body = await request.json()
-    const { escrowId } = refundSchema.parse(body)
+    const profile = await requireRole(supabase, "admin");
+
+    const body = await request.json();
+    const { escrowId } = refundSchema.parse(body);
 
     // Get escrow using service client
     const { data: escrow, error: escrowError } = await (serviceClient as any)
-      .from('escrows')
-      .select('*')
-      .eq('id', escrowId)
-      .single()
+      .from("escrows")
+      .select("*")
+      .eq("id", escrowId)
+      .single();
 
     if (escrowError || !escrow) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: "Transaction not found" },
+        { status: 404 },
+      );
     }
 
     // Check if escrow is already refunded or closed
-    if (escrow.status === ESCROW_STATUS.REFUNDED || escrow.status === ESCROW_STATUS.CLOSED) {
-      return NextResponse.json({ 
-        error: 'Transaction is already completed or refunded' 
-      }, { status: 400 })
+    if (
+      escrow.status === ESCROW_STATUS.REFUNDED ||
+      escrow.status === ESCROW_STATUS.CLOSED
+    ) {
+      return NextResponse.json(
+        {
+          error: "Transaction is already completed or refunded",
+        },
+        { status: 400 },
+      );
     }
 
     // Update escrow status using service client
     const { error: updateError } = await (serviceClient as any)
-      .from('escrows')
+      .from("escrows")
       .update({ status: ESCROW_STATUS.REFUNDED })
-      .eq('id', escrow.id)
+      .eq("id", escrow.id);
 
     if (updateError) {
-      console.error('Error updating escrow:', updateError)
-      return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
+      console.error("Error updating escrow:", updateError);
+      return NextResponse.json(
+        { error: "Failed to update transaction" },
+        { status: 500 },
+      );
     }
 
     // Send Telegram notifications
-    await sendEscrowStatusNotification(escrow.id, escrow.status, ESCROW_STATUS.REFUNDED, serviceClient, process.env.TELEGRAM_MINIAPP_URL, profile.id)
+    await sendEscrowStatusNotification(
+      escrow.id,
+      escrow.status,
+      ESCROW_STATUS.REFUNDED,
+      serviceClient,
+      process.env.TELEGRAM_MINIAPP_URL,
+      profile.id,
+    );
 
     // Log status change
-    await (supabase as any)
-      .from('status_logs')
-      .insert({
-        escrow_id: escrow.id,
-        status: ESCROW_STATUS.REFUNDED,
-        changed_by: profile.id
-      })
+    await (supabase as any).from("status_logs").insert({
+      escrow_id: escrow.id,
+      status: ESCROW_STATUS.REFUNDED,
+      changed_by: profile.id,
+    });
 
-    return NextResponse.json({ ok: true })
-
+    return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('Refund error:', error)
+    console.error("Refund error:", error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input data' }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid input data" },
+        { status: 400 },
+      );
     }
-    return NextResponse.json({ error: 'Failed to process refund' }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to process refund" },
+      { status: 500 },
+    );
   }
 }

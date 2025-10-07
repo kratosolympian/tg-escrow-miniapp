@@ -1,12 +1,19 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from 'next/server.js'
-import { createServerClientWithAuthHeader, createServiceRoleClient } from '@/lib/supabaseServer'
-import { shortCode, generateUUID, getFileExtension, isValidImageType } from '@/lib/utils'
-import { ESCROW_STATUS } from '@/lib/status'
-import { z } from 'zod'
-import { sendEscrowStatusNotification } from '@/lib/telegram'
-
+import { NextRequest, NextResponse } from "next/server.js";
+import {
+  createServerClientWithAuthHeader,
+  createServiceRoleClient,
+} from "@/lib/supabaseServer";
+import {
+  shortCode,
+  generateUUID,
+  getFileExtension,
+  isValidImageType,
+} from "@/lib/utils";
+import { ESCROW_STATUS } from "@/lib/status";
+import { z } from "zod";
+import { sendEscrowStatusNotification } from "@/lib/telegram";
 
 /**
  * POST /api/escrow/create
@@ -31,8 +38,8 @@ import { sendEscrowStatusNotification } from '@/lib/telegram'
  */
 const createEscrowSchema = z.object({
   description: z.string().min(1).max(1000),
-  price: z.number().positive().max(1000000)
-})
+  price: z.number().positive().max(1000000),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,71 +47,75 @@ export async function POST(request: NextRequest) {
     try {
       const formData = await request.formData();
       parsedBody = {
-        description: formData.get('description')?.toString() || '',
-        price: parseFloat(formData.get('price')?.toString() || '0'),
-        assigned_admin_id: formData.get('assigned_admin_id')?.toString(),
-        productImagePath: formData.get('productImagePath')?.toString(),
-        image: formData.get('image') as File | null,
+        description: formData.get("description")?.toString() || "",
+        price: parseFloat(formData.get("price")?.toString() || "0"),
+        assigned_admin_id: formData.get("assigned_admin_id")?.toString(),
+        productImagePath: formData.get("productImagePath")?.toString(),
+        image: formData.get("image") as File | null,
       };
-
     } catch (error) {
-      console.error('Failed to parse FormData body:', error);
-      return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
+      console.error("Failed to parse FormData body:", error);
+      return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
     }
 
     const supabase = createServerClientWithAuthHeader(request);
     const serviceClient = createServiceRoleClient();
 
     // Check for test mode (development only)
-    const { searchParams } = new URL(request.url)
-    const testMode = searchParams.get('test') === 'true' && process.env.NODE_ENV === 'development'
+    const { searchParams } = new URL(request.url);
+    const testMode =
+      searchParams.get("test") === "true" &&
+      process.env.NODE_ENV === "development";
 
     // Log authentication attempt
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
     let authenticatedUser = user;
 
     if (!authenticatedUser && !testMode) {
-
-      let token = parsedBody?.__one_time_token || request.headers.get('x-one-time-token') || null;
+      let token =
+        parsedBody?.__one_time_token ||
+        request.headers.get("x-one-time-token") ||
+        null;
       if (!token) {
-        const authHeader = request.headers.get('authorization') || '';
-        if (authHeader.toLowerCase().startsWith('bearer ')) {
+        const authHeader = request.headers.get("authorization") || "";
+        if (authHeader.toLowerCase().startsWith("bearer ")) {
           token = authHeader.slice(7).trim();
         }
       }
 
-
-
-
       if (token) {
         try {
-          const { verifyAndConsumeSignedToken } = await import('@/lib/signedAuth');
+          const { verifyAndConsumeSignedToken } = await import(
+            "@/lib/signedAuth"
+          );
 
           const userId = await verifyAndConsumeSignedToken(token);
 
           if (userId) {
-            const { data: userData, error: userFetchError } = await serviceClient
-              .from('profiles')
-              .select('id, email, full_name')
-              .eq('id', userId)
-              .single();
-
+            const { data: userData, error: userFetchError } =
+              await serviceClient
+                .from("profiles")
+                .select("id, email, full_name")
+                .eq("id", userId)
+                .single();
 
             // Adjust authenticatedUser assignment to match the expected User type
             authenticatedUser = {
               id: userId,
-              email: userData?.email || 'test@example.com',
+              email: userData?.email || "test@example.com",
               app_metadata: {},
               user_metadata: {},
-              aud: 'authenticated',
+              aud: "authenticated",
               created_at: new Date().toISOString(),
             };
           }
         } catch (e) {
-          console.warn('One-time token verification failed:', e);
+          console.warn("One-time token verification failed:", e);
         }
       }
     }
@@ -112,90 +123,131 @@ export async function POST(request: NextRequest) {
     // Test mode fallback (development only)
     if (!authenticatedUser && testMode) {
       authenticatedUser = {
-        id: 'test-user-id',
-        email: 'test@example.com',
+        id: "test-user-id",
+        email: "test@example.com",
         app_metadata: {},
         user_metadata: {},
-        aud: 'authenticated',
+        aud: "authenticated",
         created_at: new Date().toISOString(),
       };
     }
 
     if (!authenticatedUser) {
-      console.error('Authentication failed:', { userError, authenticatedUser });
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      console.error("Authentication failed:", { userError, authenticatedUser });
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
     }
 
     // Validate input data
     const validationResult = createEscrowSchema.safeParse({
       description: parsedBody.description,
-      price: parsedBody.price
+      price: parsedBody.price,
     });
 
     if (!validationResult.success) {
-      console.error('Validation failed:', validationResult.error);
-      return NextResponse.json({ 
-        error: 'Invalid input data', 
-        details: validationResult.error.issues 
-      }, { status: 400 });
+      console.error("Validation failed:", validationResult.error);
+      return NextResponse.json(
+        {
+          error: "Invalid input data",
+          details: validationResult.error.issues,
+        },
+        { status: 400 },
+      );
     }
 
-    const { description: validDescription, price: validPrice } = validationResult.data;
+    const { description: validDescription, price: validPrice } =
+      validationResult.data;
 
     // Test mode response (development only)
     if (testMode) {
       return NextResponse.json({
         ok: true,
-        code: 'TEST123',
-        escrowId: 'test-escrow-id',
+        code: "TEST123",
+        escrowId: "test-escrow-id",
         test_mode: true,
-        message: 'Test mode enabled - escrow creation bypassed'
-      })
+        message: "Test mode enabled - escrow creation bypassed",
+      });
     }
 
     // Ensure profile exists
 
     const { data: existingProfile } = await serviceClient
-      .from('profiles')
-      .select('id')
-      .eq('id', authenticatedUser.id)
+      .from("profiles")
+      .select("id")
+      .eq("id", authenticatedUser.id)
       .single();
 
     if (!existingProfile) {
-
       const { error: profileError } = await serviceClient
-        .from('profiles')
+        .from("profiles")
         .insert({
           id: authenticatedUser.id,
-          email: authenticatedUser.email || 'unknown@example.com',
-          full_name: authenticatedUser.user_metadata?.full_name || '',
-          role: 'seller',
+          email: authenticatedUser.email || "unknown@example.com",
+          full_name: authenticatedUser.user_metadata?.full_name || "",
+          role: "seller",
         });
       if (profileError) {
-        console.error('Failed to create profile:', profileError);
-        return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
+        console.error("Failed to create profile:", profileError);
+        return NextResponse.json(
+          { error: "Failed to create profile" },
+          { status: 500 },
+        );
       }
     }
 
     // Check if seller already has an active escrow
 
     const { data: activeEscrows, error: activeError } = await serviceClient
-      .from('escrows')
-      .select('id, code, description, price, status, created_at')
-      .eq('seller_id', authenticatedUser.id)
-      .not('status', 'in', `(${ESCROW_STATUS.COMPLETED},${ESCROW_STATUS.REFUNDED},${ESCROW_STATUS.CLOSED})`);
+      .from("escrows")
+      .select("id, code, description, price, status, created_at")
+      .eq("seller_id", authenticatedUser.id)
+      .not(
+        "status",
+        "in",
+        `(${ESCROW_STATUS.COMPLETED},${ESCROW_STATUS.REFUNDED},${ESCROW_STATUS.CLOSED})`,
+      );
 
     if (activeError) {
-      console.error('Error checking active escrows:', activeError);
-      return NextResponse.json({ error: 'Failed to check active escrows' }, { status: 500 });
+      console.error("Error checking active escrows:", activeError);
+      return NextResponse.json(
+        { error: "Failed to check active escrows" },
+        { status: 500 },
+      );
     }
 
     if (activeEscrows && activeEscrows.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have an ongoing transaction. Please complete or cancel it before creating a new one.",
+          activeEscrow: activeEscrows[0],
+        },
+        { status: 409 },
+      );
+    }
 
-      return NextResponse.json({
-        error: 'You already have an ongoing transaction. Please complete or cancel it before creating a new one.',
-        activeEscrow: activeEscrows[0]
-      }, { status: 409 });
+    // Get current service fee from admin settings
+    let currentServiceFee = 300; // Default fallback
+    try {
+      const { data: adminSettings, error: settingsError } = await serviceClient
+        .from("admin_settings")
+        .select("service_fee")
+        .order("id", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (
+        !settingsError &&
+        adminSettings &&
+        (adminSettings as any).service_fee
+      ) {
+        currentServiceFee = (adminSettings as any).service_fee;
+      }
+    } catch (error) {
+      // If service_fee column doesn't exist yet, use default
+      console.log("Using default service fee (column may not exist yet):", 300);
     }
 
     // Prepare insert data
@@ -204,7 +256,7 @@ export async function POST(request: NextRequest) {
       seller_id: authenticatedUser.id,
       description: validDescription,
       price: validPrice,
-      admin_fee: 300,
+      admin_fee: currentServiceFee,
       status: ESCROW_STATUS.CREATED,
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
     };
@@ -216,7 +268,7 @@ export async function POST(request: NextRequest) {
     if (parsedBody.productImagePath) {
       try {
         const tempPath = parsedBody.productImagePath;
-        const fileName = tempPath.split('/').pop(); // Extract filename from temp path
+        const fileName = tempPath.split("/").pop(); // Extract filename from temp path
         const escrowId = generateUUID(); // Generate ID for permanent path
         const permanentPath = `products/${escrowId}/${fileName}`;
 
@@ -229,59 +281,66 @@ export async function POST(request: NextRequest) {
           try {
             // Add timeout for download operation
             const downloadPromise = serviceClient.storage
-              .from('product-images')
+              .from("product-images")
               .download(tempPath);
 
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Image download timeout')), 30000) // 30 second timeout
+            const timeoutPromise = new Promise(
+              (_, reject) =>
+                setTimeout(
+                  () => reject(new Error("Image download timeout")),
+                  30000,
+                ), // 30 second timeout
             );
 
-            const { data: fileData, error: downloadError } = await Promise.race([
-              downloadPromise,
-              timeoutPromise
-            ]) as any;
+            const { data: fileData, error: downloadError } =
+              (await Promise.race([downloadPromise, timeoutPromise])) as any;
 
             if (!downloadError && fileData) {
               // Upload to permanent location with timeout
               const uploadPromise = serviceClient.storage
-                .from('product-images')
+                .from("product-images")
                 .upload(permanentPath, fileData, { upsert: true });
 
               const uploadTimeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Image upload timeout')), 30000)
+                setTimeout(
+                  () => reject(new Error("Image upload timeout")),
+                  30000,
+                ),
               );
 
-              const { error: uploadError } = await Promise.race([
+              const { error: uploadError } = (await Promise.race([
                 uploadPromise,
-                uploadTimeoutPromise
-              ]) as any;
+                uploadTimeoutPromise,
+              ])) as any;
 
               if (!uploadError) {
                 console.log(`Successfully moved image for escrow ${escrowId}`);
                 // Clean up temp file
                 try {
                   await serviceClient.storage
-                    .from('product-images')
+                    .from("product-images")
                     .remove([tempPath]);
                   console.log(`Cleaned up temp file: ${tempPath}`);
                 } catch (cleanupError) {
-                  console.warn('Failed to cleanup temp file:', cleanupError);
+                  console.warn("Failed to cleanup temp file:", cleanupError);
                 }
               } else {
-                console.error('Error uploading permanent image:', uploadError);
+                console.error("Error uploading permanent image:", uploadError);
               }
             } else {
-              console.error('Error downloading temp image:', downloadError);
+              console.error("Error downloading temp image:", downloadError);
             }
           } catch (imageError) {
-            console.error('Error processing product image asynchronously:', imageError);
+            console.error(
+              "Error processing product image asynchronously:",
+              imageError,
+            );
           }
         })().catch((err) => {
-          console.error('Unhandled error in async image processing:', err);
+          console.error("Unhandled error in async image processing:", err);
         });
-
       } catch (imageError) {
-        console.error('Error setting up image processing:', imageError);
+        console.error("Error setting up image processing:", imageError);
         // Continue without image - don't fail the escrow creation
       }
     }
@@ -289,35 +348,46 @@ export async function POST(request: NextRequest) {
     // Insert escrow into database
 
     const { data: escrow, error: escrowError } = await serviceClient
-      .from('escrows')
+      .from("escrows")
       .insert(insertData)
       .select()
       .single();
 
-
-
     if (escrowError) {
-      console.error('Error creating escrow:', escrowError);
-      return NextResponse.json({ error: 'Failed to create escrow', details: escrowError.message }, { status: 500 });
+      console.error("Error creating escrow:", escrowError);
+      return NextResponse.json(
+        { error: "Failed to create escrow", details: escrowError.message },
+        { status: 500 },
+      );
     }
 
     // Send notification to admins about new escrow creation
     try {
       await sendEscrowStatusNotification(
         escrow.id,
-        'created', // old status (doesn't exist yet)
+        "created", // old status (doesn't exist yet)
         escrow.status,
         serviceClient,
-        process.env.TELEGRAM_MINIAPP_URL
+        process.env.TELEGRAM_MINIAPP_URL,
       );
     } catch (notificationError) {
-      console.error('Error sending escrow creation notification:', notificationError);
+      console.error(
+        "Error sending escrow creation notification:",
+        notificationError,
+      );
       // Don't fail the escrow creation if notification fails
     }
 
-    return NextResponse.json({ ok: true, code: escrow.code, escrowId: escrow.id });
+    return NextResponse.json({
+      ok: true,
+      code: escrow.code,
+      escrowId: escrow.id,
+    });
   } catch (error) {
-    console.error('Unhandled error in POST /api/escrow/create:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Unhandled error in POST /api/escrow/create:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

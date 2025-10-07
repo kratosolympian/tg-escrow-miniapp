@@ -1,55 +1,63 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { supabase } from '../../../lib/supabaseClient'
-import AdminManagement from '@/components/AdminManagement'
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { supabase } from "../../../lib/supabaseClient";
+import AdminManagement from "@/components/AdminManagement";
 
 interface User {
-  id: string
-  email?: string
-  role?: string
+  id: string;
+  email?: string;
+  role?: string;
 }
 
 export default function AdminManagementPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchCurrentUser()
-  }, [])
+    fetchCurrentUser();
+  }, []);
 
   const fetchCurrentUser = async () => {
     try {
       // Get current user from Supabase client
-      const { supabase } = await import('@/lib/supabaseClient')
-      const { data } = await supabase.auth.getUser()
+      const { supabase } = await import("@/lib/supabaseClient");
+      const { data } = await supabase.auth.getUser();
       if (data?.user) {
-        setCurrentUser({ id: data.user.id, email: data.user.email ?? undefined })
-        
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email ?? undefined,
+        });
+
         // Also fetch user profile to ensure auth state is refreshed
-  const response = await fetch('/api/auth/me', { credentials: 'include' })
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
         if (response.ok) {
-          const userData = await response.json()
+          const userData = await response.json();
           // This helps ensure the Header component detects the user
         }
       }
     } catch (error) {
-      console.error('Error fetching current user:', error)
+      console.error("Error fetching current user:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-      window.location.href = '/'
+      await supabase.auth.signOut();
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      window.location.href = "/";
     } catch (error) {
-      console.error('Logout error:', error)
+      console.error("Logout error:", error);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -59,7 +67,7 @@ export default function AdminManagementPage() {
           <p>Loading admin management...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -68,10 +76,15 @@ export default function AdminManagementPage() {
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Link href="/admin/dashboard" className="text-blue-600 hover:text-blue-800">
+            <Link
+              href="/admin/dashboard"
+              className="text-blue-600 hover:text-blue-800"
+            >
               ← Back to Dashboard
             </Link>
-            <h1 className="text-2xl font-bold text-gray-900">Admin Management</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Admin Management
+            </h1>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/admin/settings" className="btn-secondary">
@@ -87,7 +100,7 @@ export default function AdminManagementPage() {
       </div>
 
       <div className="container mx-auto p-4 max-w-4xl">
-        <AdminManagement 
+        <AdminManagement
           currentUserEmail={currentUser?.email}
           onAdminUpdate={() => {
             // Refresh or update any parent state if needed
@@ -95,5 +108,5 @@ export default function AdminManagementPage() {
         />
       </div>
     </div>
-  )
+  );
 }

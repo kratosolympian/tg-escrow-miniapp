@@ -74,14 +74,14 @@ INSERT INTO public.admin_users (user_id) VALUES ('<admin-uuid>') ON CONFLICT DO 
 
 Verification commands
 
-1) Check the escrow row as service role (sanity check):
+1. Check the escrow row as service role (sanity check):
 
 ```powershell
 $svc = (Get-Content .\.env.local | Select-String '^SUPABASE_SERVICE_ROLE_KEY=').ToString().Split('=',2)[1].Trim()
 curl.exe -i -H "apikey: $svc" -H "Authorization: Bearer $svc" "https://<your-project>.supabase.co/rest/v1/escrows?select=seller_id,buyer_id&id=eq.<ESCROW_ID>"
 ```
 
-2) Check the same query as an authenticated user (include anon apikey + access token):
+2. Check the same query as an authenticated user (include anon apikey + access token):
 
 ```powershell
 curl.exe -i -H "apikey: $env:NEXT_PUBLIC_SUPABASE_ANON_KEY" -H "Authorization: Bearer <ACCESS_TOKEN>" "https://<your-project>.supabase.co/rest/v1/escrows?select=seller_id,buyer_id&id=eq.<ESCROW_ID>"
@@ -145,6 +145,7 @@ This will send both Telegram and email notifications to all eligible recipients 
 ## How It Works
 
 ### 1. Seller Flow
+
 1. Create escrow with product details and price
 2. Get unique transaction code
 3. Share code with buyer
@@ -152,6 +153,7 @@ This will send both Telegram and email notifications to all eligible recipients 
 5. Funds released after buyer confirmation
 
 ### 2. Buyer Flow
+
 1. Enter transaction code from seller
 2. Review product details and total (price + ₦300 fee)
 3. Make payment to provided bank account
@@ -159,6 +161,7 @@ This will send both Telegram and email notifications to all eligible recipients 
 5. Confirm receipt when product/service delivered
 
 ### 3. Admin Flow
+
 1. Review uploaded payment receipts
 2. Confirm legitimate payments
 3. Handle disputes and refunds
@@ -176,7 +179,7 @@ This will send both Telegram and email notifications to all eligible recipients 
 ## Status Flow
 
 ```
-Created → Waiting Payment → Waiting Admin → Payment Confirmed → 
+Created → Waiting Payment → Waiting Admin → Payment Confirmed →
 In Progress → Completed → Closed
               ↓
             Refunded (Admin action)
@@ -185,10 +188,12 @@ In Progress → Completed → Closed
 ## API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/telegram` - Telegram WebApp auth
 - `POST /api/auth/logout` - Logout
 
 ### Escrow Management
+
 - `POST /api/escrow/create` - Create new escrow
 - `POST /api/escrow/join` - Join escrow as buyer
 - `GET /api/escrow/by-code/[code]` - Get escrow by code
@@ -198,6 +203,7 @@ In Progress → Completed → Closed
 - `POST /api/escrow/confirm-received` - Confirm receipt (buyer)
 
 ### Admin
+
 - `GET /api/admin/escrows` - List all escrows
 - `POST /api/admin/confirm-payment` - Confirm payment
 - `POST /api/admin/release-funds` - Release funds
@@ -205,22 +211,26 @@ In Progress → Completed → Closed
 - `POST /api/admin/update-bank` - Update bank settings
 
 ### Utilities
+
 - `GET /api/settings/bank` - Get bank details
 - `POST /api/storage/sign-url` - Get signed URL for files
 
 ## Deployment
 
 ### Vercel
+
 1. Connect your GitHub repo to Vercel
 2. Add environment variables in Vercel dashboard
 3. Deploy
 
 ### Supabase
+
 1. Run SQL files in Supabase SQL editor
 2. Configure storage buckets
 3. Set up RLS policies
 
 ### Telegram Bot
+
 1. Create bot with @BotFather
 2. Set WebApp URL to your Vercel domain
 3. Configure bot settings
@@ -230,9 +240,11 @@ In Progress → Completed → Closed
 1. Deploy the application
 2. Create admin account via `/admin/login` using Supabase Auth
 3. Run SQL to promote user to admin:
+
 ```sql
 UPDATE profiles SET role = 'admin' WHERE id = 'your-user-id';
 ```
+
 4. Configure bank settings in admin dashboard
 
 ## License

@@ -1,15 +1,15 @@
-'use client'
+"use client";
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function AdminEscrowPage() {
-  const router = useRouter()
+  const router = useRouter();
 
   useEffect(() => {
     // Redirect to admin dashboard since there's no main escrow page
-    router.replace('/admin/dashboard')
-  }, [router])
+    router.replace("/admin/dashboard");
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -18,5 +18,5 @@ export default function AdminEscrowPage() {
         <p className="text-gray-600">Redirecting to Admin Dashboard...</p>
       </div>
     </div>
-  )
+  );
 }

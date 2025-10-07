@@ -88,6 +88,7 @@ create table if not exists admin_settings (
   bank_name text not null,
   account_number text not null,
   account_holder text not null,
+  service_fee numeric(12,2) not null default 300,
   updated_at timestamp with time zone default now()
 );
 

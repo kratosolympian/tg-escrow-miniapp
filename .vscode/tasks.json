@@ -1,10 +1,10 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Run dev server",
-			"type": "shell",
-			"command": "pnpm run dev"
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run dev server",
+      "type": "shell",
+      "command": "pnpm run dev"
+    }
+  ]
 }
