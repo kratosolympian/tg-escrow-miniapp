@@ -30,6 +30,8 @@ export default function BuyerPage() {
     hasNextPage: false,
     hasPrevPage: false,
   });
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [jumpToPage, setJumpToPage] = useState('');
   const [blockedJoinInfo, setBlockedJoinInfo] = useState<any | null>(null);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
 
@@ -184,6 +186,7 @@ export default function BuyerPage() {
 
   const fetchHistoricalEscrows = async (page: number = 1) => {
     try {
+      setHistoryLoading(true);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const res = await fetch(`/api/escrow/my-history?page=${page}&limit=5`, {
@@ -194,12 +197,31 @@ export default function BuyerPage() {
         const j = await res.json();
         const allHistorical = [...(j.seller || []), ...(j.buyer || [])];
         setHistoricalEscrows(allHistorical);
-        setHistoryPagination(j.pagination);
+        // Keep requested page in sync with server response
+        setHistoryPagination((prev) => ({ ...prev, ...(j.pagination || {}), page }));
       }
     } catch (e) {
       // ignore
+    } finally {
+      setHistoryLoading(false);
     }
   };
+
+    const goToHistoryPage = (requested: number) => {
+      const total = historyPagination.totalPages || 1;
+      const page = Math.max(1, Math.min(requested, total));
+      if (page === historyPagination.page) return;
+      fetchHistoricalEscrows(page);
+    };
+
+    const handlePageJump = () => {
+      const pageNum = parseInt(jumpToPage);
+      if (isNaN(pageNum) || pageNum < 1 || pageNum > (historyPagination.totalPages || 1)) {
+        return;
+      }
+      goToHistoryPage(pageNum);
+      setJumpToPage('');
+    };
 
   // Handle authentication
   const handleAuth = async (e: React.FormEvent) => {
@@ -572,23 +594,50 @@ export default function BuyerPage() {
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 gap-2">
                 <h3 className="font-semibold">Transaction History</h3>
                 {historyPagination.totalPages > 1 && (
-                  <div className="flex items-center justify-center sm:justify-end space-x-2">
+                  <div className="flex items-center justify-center sm:justify-end space-x-2 flex-wrap gap-2">
                     <button
-                      onClick={() => fetchHistoricalEscrows(historyPagination.page - 1)}
-                      disabled={!historyPagination.hasPrevPage}
-                      className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px]"
+                      onClick={() => goToHistoryPage(historyPagination.page - 1)}
+                      disabled={!historyPagination.hasPrevPage || historyLoading}
+                      className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px] flex items-center justify-center"
                     >
-                      Previous
+                      {historyLoading ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        'Previous'
+                      )}
                     </button>
                     <span className="text-sm text-gray-600 px-2">
                       {historyPagination.page} / {historyPagination.totalPages}
                     </span>
+                    <div className="flex items-center space-x-1">
+                      <input
+                        type="number"
+                        value={jumpToPage}
+                        onChange={(e) => setJumpToPage(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handlePageJump()}
+                        placeholder="Page"
+                        min="1"
+                        max={historyPagination.totalPages}
+                        className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <button
+                        onClick={handlePageJump}
+                        disabled={historyLoading || !jumpToPage.trim()}
+                        className="px-2 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded text-xs font-medium"
+                      >
+                        Go
+                      </button>
+                    </div>
                     <button
-                      onClick={() => fetchHistoricalEscrows(historyPagination.page + 1)}
-                      disabled={!historyPagination.hasNextPage}
-                      className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px]"
+                      onClick={() => goToHistoryPage(historyPagination.page + 1)}
+                      disabled={!historyPagination.hasNextPage || historyLoading}
+                      className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg transition-colors text-sm font-medium min-w-[80px] flex items-center justify-center"
                     >
-                      Next
+                      {historyLoading ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        'Next'
+                      )}
                     </button>
                   </div>
                 )}

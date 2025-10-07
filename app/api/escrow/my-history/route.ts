@@ -141,29 +141,17 @@ export async function GET(request: NextRequest) {
     const sellerEscrows = allEscrows.filter(e => e.seller_id === userId);
     const buyerEscrows = allEscrows.filter(e => e.buyer_id === userId);
 
+    // Combine all escrows for this user (both as seller and buyer)
+    const userEscrows = [...sellerEscrows, ...buyerEscrows];
+
     // Apply pagination to the combined results
     const startIndex = offset;
-    const endIndex = offset + limit;
-    const paginatedSeller = sellerEscrows.slice(startIndex, endIndex);
-    const paginatedBuyer = buyerEscrows.slice(startIndex, endIndex);
-
-    // If we don't have enough from one type, take from the other
-    const combinedResults: any[] = [];
-    let sellerIndex = 0;
-    let buyerIndex = 0;
-
-    while (combinedResults.length < limit && (sellerIndex < sellerEscrows.length || buyerIndex < buyerEscrows.length)) {
-      // Alternate between seller and buyer escrows for fair distribution
-      if (sellerIndex < sellerEscrows.length && (buyerIndex >= buyerEscrows.length || sellerIndex <= buyerIndex)) {
-        combinedResults.push(sellerEscrows[sellerIndex++]);
-      } else if (buyerIndex < buyerEscrows.length) {
-        combinedResults.push(buyerEscrows[buyerIndex++]);
-      }
-    }
+    const endIndex = Math.min(startIndex + limit, userEscrows.length);
+    const paginatedEscrows = userEscrows.slice(startIndex, endIndex);
 
     // Separate back into seller and buyer arrays for the response
-    const responseSeller = combinedResults.filter(e => e.seller_id === userId);
-    const responseBuyer = combinedResults.filter(e => e.buyer_id === userId);
+    const responseSeller = paginatedEscrows.filter(e => e.seller_id === userId);
+    const responseBuyer = paginatedEscrows.filter(e => e.buyer_id === userId);
 
     const total = totalCount || 0;
     const totalPages = Math.ceil(total / limit);
