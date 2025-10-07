@@ -717,7 +717,23 @@ export default function SellerPortalClient({
           </p>
         </div>
 
-        {/* Active Escrows */}
+        {/* Role Switcher */}
+        <div className="flex justify-center mb-8">
+          <div className="bg-white rounded-lg shadow-sm border p-1 flex">
+            <Link
+              href="/buyer"
+              className="px-4 py-2 rounded-md font-medium text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            >
+              🛒 Buyer
+            </Link>
+            <Link
+              href="/seller"
+              className="px-4 py-2 rounded-md font-medium text-sm bg-green-600 text-white"
+            >
+              🏪 Seller
+            </Link>
+          </div>
+        </div>
         {activeEscrows.length > 0 && !showCreateForm && (
           <div className="mb-8">
             <div className="flex justify-between items-center mb-4">

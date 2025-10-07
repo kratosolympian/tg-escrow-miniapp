@@ -4,22 +4,12 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
-import { useRouter } from "next/navigation";
 
 export default function Header() {
   const [user, setUser] = useState<any | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [mounted, setMounted] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-  const [isInTelegram, setIsInTelegram] = useState(false);
-  const [authRefreshTrigger, setAuthRefreshTrigger] = useState(0);
-
-  const router = useRouter();
-
-  const refreshAuth = () => {
-    console.log("[Header] Manual auth refresh triggered");
-    setAuthRefreshTrigger((prev) => prev + 1);
-  };
 
   // Debug userProfile changes
   useEffect(() => {
@@ -31,7 +21,7 @@ export default function Header() {
 
     // Check if we're in Telegram WebApp
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      setIsInTelegram(true);
+      // No longer setting isInTelegram state
     }
 
     // Simplified auth check - prioritize speed over comprehensive fallback
@@ -110,39 +100,6 @@ export default function Header() {
 
     checkAuth();
 
-    // For Telegram users, refresh auth state more frequently to prevent stale state
-    let refreshInterval: NodeJS.Timeout | null = null;
-    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      refreshInterval = setInterval(() => {
-        checkAuth();
-      }, 5000); // Refresh every 5 seconds for Telegram users (increased frequency)
-
-      // Also refresh when page becomes visible (user switches back to tab)
-      const handleVisibilityChange = () => {
-        if (!document.hidden) {
-          checkAuth();
-        }
-      };
-
-      // Refresh when window gains focus
-      const handleFocus = () => {
-        checkAuth();
-      };
-
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-      window.addEventListener("focus", handleFocus);
-
-      // Cleanup function
-      return () => {
-        if (refreshInterval) clearInterval(refreshInterval);
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange,
-        );
-        window.removeEventListener("focus", handleFocus);
-      };
-    }
-
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         console.log("[Header] Auth state change:", _event, session?.user?.id);
@@ -176,13 +133,8 @@ export default function Header() {
 
     return () => {
       listener?.subscription.unsubscribe();
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
     };
-  }, [authRefreshTrigger]);
-
-  // Debugging instrumentation: capture calls to location.replace/assign/reload across the app.
+  }, []);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const navLog = (kind: string, url?: string) => {
@@ -262,33 +214,6 @@ export default function Header() {
     }
   };
 
-  // Listen for custom events that might indicate auth state changes
-  useEffect(() => {
-    const handleAuthRefresh = () => {
-      refreshAuth();
-    };
-
-    // Listen for custom auth refresh events
-    window.addEventListener("auth-refresh", handleAuthRefresh);
-
-    // Also listen for Telegram WebApp events that might indicate state changes
-    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      const webApp = window.Telegram.WebApp;
-
-      // Listen for back button or other navigation events
-      const handleBackButton = () => {
-        setTimeout(() => refreshAuth(), 500);
-      };
-
-      // Note: Telegram WebApp events are handled differently,
-      // for now we'll rely on periodic refresh for Telegram users
-    }
-
-    return () => {
-      window.removeEventListener("auth-refresh", handleAuthRefresh);
-    };
-  }, []);
-
   return (
     <header className="w-full bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
       <div className="w-full max-w-5xl mx-auto flex items-center justify-between px-4 py-2">
@@ -308,49 +233,15 @@ export default function Header() {
           </span>
         </Link>
         <nav className="flex gap-2 md:gap-4 items-center flex-wrap">
-          {/* Show navigation immediately with optimistic defaults, update when auth completes */}
-          {user && userProfile && (
+          {/* Show navigation when logged in */}
+          {user && authChecked && (
             <>
-              {console.log("[Header] Rendering with userProfile:", userProfile)}
-              {userProfile?.role === "buyer" && (
-                <Link
-                  href="/buyer"
-                  className="hover:text-blue-700 font-medium text-sm md:text-base"
-                >
-                  Buyer Portal
-                </Link>
-              )}
-              {userProfile?.role === "seller" && (
-                <Link
-                  href="/seller"
-                  className="hover:text-blue-700 font-medium text-sm md:text-base"
-                >
-                  Seller Portal
-                </Link>
-              )}
-              {(userProfile?.role === "admin" ||
-                userProfile?.role === "super_admin") && (
-                <Link
-                  href="/admin/dashboard"
-                  className="hover:text-blue-700 font-medium text-sm md:text-base"
-                >
-                  Admin
-                </Link>
-              )}
               <Link
                 href="/settings/profile"
                 className="hover:text-blue-700 font-medium text-sm md:text-base"
               >
                 Profile
               </Link>
-              <button
-                onClick={refreshAuth}
-                className="ml-1 text-gray-500 hover:text-blue-700 text-sm"
-                title="Refresh authentication state"
-                style={{ minWidth: 24, fontSize: "12px" }}
-              >
-                ↻
-              </button>
               <button
                 onClick={handleLogout}
                 className="ml-2 btn-secondary text-sm font-semibold"
@@ -361,15 +252,9 @@ export default function Header() {
             </>
           )}
 
-          {/* Show all links when not logged in or still checking */}
+          {/* Show all links when not logged in */}
           {(!user || !authChecked) && (
             <>
-              {console.log(
-                "[Header] Showing unauthenticated nav, user:",
-                !!user,
-                "authChecked:",
-                authChecked,
-              )}
               <Link
                 href="/admin/dashboard"
                 className="hover:text-blue-700 font-medium text-sm md:text-base"

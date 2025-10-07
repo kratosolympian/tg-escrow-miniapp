@@ -413,10 +413,27 @@ export default function BuyerPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             🛒 Buyer Portal
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-4">
             Enter your transaction code to join an escrow
           </p>
-          {/* Remove in-content Logout button, rely on header only */}
+          
+          {/* Role Switcher */}
+          <div className="flex justify-center mb-6">
+            <div className="bg-white rounded-lg shadow-sm border p-1 flex">
+              <Link
+                href="/buyer"
+                className="px-4 py-2 rounded-md font-medium text-sm bg-blue-600 text-white"
+              >
+                🛒 Buyer
+              </Link>
+              <Link
+                href="/seller"
+                className="px-4 py-2 rounded-md font-medium text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+              >
+                🏪 Seller
+              </Link>
+            </div>
+          </div>
         </div>
 
         {blockedJoinInfo && (
