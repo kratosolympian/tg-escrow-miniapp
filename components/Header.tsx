@@ -13,27 +13,12 @@ export default function Header() {
   const [authChecked, setAuthChecked] = useState(false);
   const [isInTelegram, setIsInTelegram] = useState(false);
   const [authRefreshTrigger, setAuthRefreshTrigger] = useState(0);
-  const [currentRole, setCurrentRole] = useState<string>("buyer");
 
   const router = useRouter();
 
   const refreshAuth = () => {
     console.log("[Header] Manual auth refresh triggered");
     setAuthRefreshTrigger((prev) => prev + 1);
-  };
-
-  const switchRole = (newRole: string) => {
-    setCurrentRole(newRole);
-    sessionStorage.setItem("user_role", newRole);
-
-    // Navigate to appropriate page based on new role
-    if (newRole === "seller") {
-      router.push("/seller");
-    } else if (newRole === "buyer") {
-      router.push("/buyer");
-    } else if (newRole === "admin" || newRole === "super_admin") {
-      router.push("/admin/dashboard");
-    }
   };
 
   // Debug userProfile changes
@@ -65,12 +50,6 @@ export default function Header() {
           if (userData.user) {
             setUser(userData.user);
             setUserProfile(userData.profile || { role: userData.role });
-
-            // Get session-based role, fallback to profile role
-            const sessionRole = sessionStorage.getItem("user_role");
-            const effectiveRole = sessionRole || userData.profile?.role || "buyer";
-            setCurrentRole(effectiveRole);
-
             setAuthChecked(true);
             return;
           }
@@ -107,18 +86,12 @@ export default function Header() {
             ])) as any;
             console.log("[Header] Profile data fetched:", profileData);
             setUserProfile(profileData);
-
-            // Get session-based role, fallback to profile role
-            const sessionRole = sessionStorage.getItem("user_role");
-            const effectiveRole = sessionRole || profileData?.role || "buyer";
-            setCurrentRole(effectiveRole);
           } catch (profileError) {
             console.warn(
               "[Header] Profile fetch failed, using default role. Error:",
               profileError,
             );
             setUserProfile({ role: "buyer" }); // Default fallback
-            setCurrentRole("buyer");
           }
 
           setAuthChecked(true);
@@ -339,7 +312,7 @@ export default function Header() {
           {user && userProfile && (
             <>
               {console.log("[Header] Rendering with userProfile:", userProfile)}
-              {currentRole === "buyer" && (
+              {userProfile?.role === "buyer" && (
                 <Link
                   href="/buyer"
                   className="hover:text-blue-700 font-medium text-sm md:text-base"
@@ -347,7 +320,7 @@ export default function Header() {
                   Buyer Portal
                 </Link>
               )}
-              {currentRole === "seller" && (
+              {userProfile?.role === "seller" && (
                 <Link
                   href="/seller"
                   className="hover:text-blue-700 font-medium text-sm md:text-base"
@@ -355,8 +328,8 @@ export default function Header() {
                   Seller Portal
                 </Link>
               )}
-              {(currentRole === "admin" ||
-                currentRole === "super_admin") && (
+              {(userProfile?.role === "admin" ||
+                userProfile?.role === "super_admin") && (
                 <Link
                   href="/admin/dashboard"
                   className="hover:text-blue-700 font-medium text-sm md:text-base"
