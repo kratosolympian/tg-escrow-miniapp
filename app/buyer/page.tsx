@@ -20,6 +20,15 @@ export default function BuyerPage() {
   const [authLoading, setAuthLoading] = useState(false);
   const [user, setUser] = useState<any | null>(null);
   const [activeEscrows, setActiveEscrows] = useState<Array<any>>([]);
+  const [historicalEscrows, setHistoricalEscrows] = useState<Array<any>>([]);
+  const [historyPagination, setHistoryPagination] = useState({
+    page: 1,
+    limit: 5,
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
   const [blockedJoinInfo, setBlockedJoinInfo] = useState<any | null>(null);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
 
@@ -29,6 +38,7 @@ export default function BuyerPage() {
   // Refresh function for notifications
   const refreshEscrows = async () => {
     await fetchActiveEscrows();
+    await fetchHistoricalEscrows();
   };
 
   // Set refresh function in notification context
@@ -127,6 +137,7 @@ export default function BuyerPage() {
 
     checkAuth();
     fetchActiveEscrows();
+    fetchHistoricalEscrows();
 
     // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange(
@@ -137,6 +148,7 @@ export default function BuyerPage() {
           setUser(session.user);
           // Fetch active escrows when user authenticates
           fetchActiveEscrows();
+          fetchHistoricalEscrows();
         } else {
           setIsAuthenticated(false);
           setUser(null);
@@ -163,6 +175,25 @@ export default function BuyerPage() {
         const j = await res.json();
         setActiveEscrows(j.buyer || []);
         setLastRefreshTime(new Date()); // Update refresh timestamp
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const fetchHistoricalEscrows = async (page: number = 1) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(`/api/escrow/my-history?page=${page}&limit=5`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: "include",
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const allHistorical = [...(j.seller || []), ...(j.buyer || [])];
+        setHistoricalEscrows(allHistorical);
+        setHistoryPagination(j.pagination);
       }
     } catch (e) {
       // ignore

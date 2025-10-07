@@ -65,6 +65,7 @@ export default function SellerPortalClient({
   // Refresh function for notifications
   const refreshEscrows = async () => {
     await fetchActiveEscrows();
+    await fetchHistoricalEscrows();
   };
 
   // Set refresh function in notification context
@@ -126,6 +127,15 @@ export default function SellerPortalClient({
   }, [isAuthenticated, user]);
 
   const [activeEscrows, setActiveEscrows] = useState<Array<any>>([]);
+  const [historicalEscrows, setHistoricalEscrows] = useState<Array<any>>([]);
+  const [historyPagination, setHistoryPagination] = useState({
+    page: 1,
+    limit: 5,
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
   const [blockedCreationInfo, setBlockedCreationInfo] = useState<any | null>(
     null,
   );
@@ -164,6 +174,25 @@ export default function SellerPortalClient({
       }
     } catch (e) {
       console.error("Error fetching active escrows", e);
+    }
+  };
+
+  const fetchHistoricalEscrows = async (page: number = 1) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(`/api/escrow/my-history?page=${page}&limit=5`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: "include",
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const allHistorical = [...(j.seller || []), ...(j.buyer || [])];
+        setHistoricalEscrows(allHistorical);
+        setHistoryPagination(j.pagination);
+      }
+    } catch (e) {
+      console.error("Error fetching historical escrows", e);
     }
   };
 
@@ -268,6 +297,7 @@ export default function SellerPortalClient({
           setUser(session.user);
           setShowAuthForm(false);
           fetchActiveEscrows();
+          fetchHistoricalEscrows();
           fetchCurrentServiceFee();
         } else {
           setIsAuthenticated(false);
@@ -287,6 +317,7 @@ export default function SellerPortalClient({
   useEffect(() => {
     if (isAuthenticated) {
       fetchActiveEscrows();
+      fetchHistoricalEscrows();
     }
   }, [isAuthenticated]);
 
@@ -665,7 +696,7 @@ export default function SellerPortalClient({
         </div>
 
         {/* Active Escrows */}
-        {activeEscrows.length > 0 && !showCreateForm ? (
+        {activeEscrows.length > 0 && !showCreateForm && (
           <div className="mb-8">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-green-800">
@@ -729,19 +760,101 @@ export default function SellerPortalClient({
               })}
             </div>
           </div>
-        ) : (
-          /* Create Escrow Form */
-          <div className="bg-white rounded-2xl shadow-lg p-8 border border-green-100">
-            {activeEscrows.length > 0 && (
-              <div className="mb-4">
+        )}
+
+        {/* Transaction History */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-green-800">
+              Transaction History
+            </h2>
+            {historyPagination.totalPages > 1 && (
+              <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setShowCreateForm(false)}
-                  className="text-green-600 hover:text-green-800 font-medium"
+                  onClick={() => fetchHistoricalEscrows(historyPagination.page - 1)}
+                  disabled={!historyPagination.hasPrevPage}
+                  className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded transition-colors"
                 >
-                  ← Back to Active Transactions
+                  Previous
+                </button>
+                <span className="text-sm text-gray-600">
+                  Page {historyPagination.page} of {historyPagination.totalPages}
+                </span>
+                <button
+                  onClick={() => fetchHistoricalEscrows(historyPagination.page + 1)}
+                  disabled={!historyPagination.hasNextPage}
+                  className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded transition-colors"
+                >
+                  Next
                 </button>
               </div>
             )}
+          </div>
+
+          {historicalEscrows.length > 0 ? (
+            <div className="space-y-4">
+              {historicalEscrows.map((escrow: any) => {
+                const price =
+                  typeof escrow.price === "number" && !isNaN(escrow.price)
+                    ? escrow.price
+                    : 0;
+                const isSeller = escrow.seller_id === user?.id;
+                return (
+                  <div
+                    key={escrow.id}
+                    className="bg-white rounded-lg shadow-md p-6 border border-gray-100"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="font-semibold text-lg text-gray-800">
+                          Transaction #{escrow.code}
+                        </h3>
+                        <p className="text-gray-600 mt-1">
+                          {escrow.description}
+                        </p>
+                        <p className="text-gray-600 font-medium mt-2">
+                          {formatNaira(price)}
+                        </p>
+                        {escrow.admin_fee && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            Service Fee: {formatNaira(escrow.admin_fee)}
+                          </p>
+                        )}
+                        <p className="text-sm text-gray-500 mt-1">
+                          Status:{" "}
+                          <span className={`capitalize ${
+                            escrow.status === 'completed' ? 'text-green-600' :
+                            escrow.status === 'refunded' ? 'text-red-600' :
+                            'text-gray-600'
+                          }`}>
+                            {escrow.status.replace("_", " ")}
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {isSeller ? 'Sold' : 'Purchased'} • {new Date(escrow.updated_at || escrow.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/seller/escrow/${escrow.id}`}
+                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                      >
+                        View Details
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-md p-8 border border-gray-100 text-center">
+              <p className="text-gray-500">No completed transactions yet.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Create Escrow Form - only show if no active escrows or user clicked create */}
+        {((!showCreateForm && activeEscrows.length === 0) || showCreateForm) && (
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-green-100">
             <h2 className="text-2xl font-bold text-green-800 mb-6">
               Create New Transaction
             </h2>
