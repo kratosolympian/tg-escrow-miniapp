@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
