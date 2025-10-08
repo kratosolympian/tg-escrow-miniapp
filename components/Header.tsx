@@ -235,9 +235,20 @@ export default function Header() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center">
-                <Link href="/" className="text-xl font-bold text-blue-600">
-                  Escroway
-                </Link>
+                <div className="flex items-center space-x-2">
+                  <div style={{ width: 32, height: 32, position: "relative" }}>
+                    <Image
+                      src="/logo.png"
+                      alt="Escroway Logo"
+                      fill
+                      style={{ objectFit: "contain" }}
+                      sizes="32px"
+                    />
+                  </div>
+                  <Link href="/" className="text-xl font-bold text-blue-600">
+                    Escroway
+                  </Link>
+                </div>
               </div>
               <div className="flex items-center space-x-4">
                 <div className="animate-pulse bg-gray-200 h-8 w-20 rounded"></div>
@@ -250,9 +261,20 @@ export default function Header() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center">
-                <Link href="/" className="text-xl font-bold text-blue-600">
-                  Escroway
-                </Link>
+                <div className="flex items-center space-x-2">
+                  <div style={{ width: 32, height: 32, position: "relative" }}>
+                    <Image
+                      src="/logo.png"
+                      alt="Escroway Logo"
+                      fill
+                      style={{ objectFit: "contain" }}
+                      sizes="32px"
+                    />
+                  </div>
+                  <Link href="/" className="text-xl font-bold text-blue-600">
+                    Escroway
+                  </Link>
+                </div>
               </div>
               <div className="flex items-center space-x-4">
                 {user ? (
@@ -273,10 +295,10 @@ export default function Header() {
                   </>
                 ) : (
                   <Link
-                    href="/register"
+                    href="/admin/login"
                     className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
                   >
-                    Sign Up
+                    Staff
                   </Link>
                 )}
               </div>

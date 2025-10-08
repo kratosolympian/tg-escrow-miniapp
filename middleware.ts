@@ -27,20 +27,27 @@ export async function middleware(request: NextRequest) {
     '/admin/login'
   ];
 
-  // Define protected route patterns
+  // Define protected route patterns (only for authenticated users with wrong roles)
   const protectedRoutePatterns = [
     /^\/admin\/(?!login).*/,  // All admin routes except login
-    /^\/buyer.*/,             // All buyer routes
-    /^\/seller.*/,            // All seller routes
     /^\/settings.*/,          // All settings routes
     /^\/profile.*/,           // All profile routes
+  ];
+
+  // Define routes that require authentication but allow access for auth UI
+  const authRequiredPatterns = [
+    /^\/buyer.*/,             // All buyer routes
+    /^\/seller.*/,            // All seller routes
   ];
 
   // Check if current route is public
   const isPublicRoute = publicRoutes.includes(pathname);
 
-  // Check if current route is protected
+  // Check if current route is protected (requires specific role)
   const isProtectedRoute = protectedRoutePatterns.some(pattern => pattern.test(pathname));
+
+  // Check if current route requires authentication
+  const isAuthRequiredRoute = authRequiredPatterns.some(pattern => pattern.test(pathname));
 
   // If user is authenticated
   if (user) {
@@ -114,7 +121,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Allow access to public routes
+    // Allow access to public routes and auth-required routes (buyer/seller pages handle their own auth)
     return response;
   }
 }
