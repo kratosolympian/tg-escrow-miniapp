@@ -627,7 +627,7 @@ export default function AdminManagement({
                         </>
                       ) : (
                         <button
-                          onClick={() => handleEditTelegramId(u.id, u.profile?.telegram_id)}
+                          onClick={() => handleEditTelegramId(u.id, u.profile?.telegram_id ?? null)}
                           className="btn-secondary text-xs"
                         >
                           {u.profile?.telegram_id ? "Edit Telegram ID" : "Set Telegram ID"}
