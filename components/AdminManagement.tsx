@@ -10,7 +10,7 @@ interface AdminProfile {
   created_at: string;
   updated_at: string;
   is_super_admin: boolean;
-  profile?: { role?: string };
+  profile?: { role?: string; telegram_id?: string };
 }
 
 interface AdminManagementData {
@@ -51,6 +51,9 @@ export default function AdminManagement({
   const [userActionLoading, setUserActionLoading] = useState<string | null>(
     null,
   );
+  // Telegram ID management state
+  const [editingTelegramId, setEditingTelegramId] = useState<string | null>(null);
+  const [telegramIdValue, setTelegramIdValue] = useState("");
 
   // Escrow management state
   const [escrows, setEscrows] = useState<any[] | null>(null);
@@ -284,6 +287,42 @@ export default function AdminManagement({
       setSuccess(`User ${email || userId} deleted`);
       await fetchUsers();
       await fetchAdminData();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setUserActionLoading(null);
+    }
+  }
+
+  function handleEditTelegramId(userId: string, currentTelegramId: string | null) {
+    setEditingTelegramId(userId);
+    setTelegramIdValue(currentTelegramId || "");
+  }
+
+  function handleCancelTelegramEdit() {
+    setEditingTelegramId(null);
+    setTelegramIdValue("");
+  }
+
+  async function handleUpdateTelegramId(userId: string, email?: string) {
+    setUserActionLoading(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telegram_id: telegramIdValue.trim() || null,
+        }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update Telegram ID");
+      }
+      setSuccess(`Telegram ID updated for ${email || userId}`);
+      setEditingTelegramId(null);
+      setTelegramIdValue("");
+      await fetchUsers();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -525,27 +564,77 @@ export default function AdminManagement({
             {users.map((u) => (
               <div
                 key={u.id}
-                className="flex items-center justify-between border rounded-lg p-3"
+                className="border rounded-lg p-4 space-y-3"
               >
-                <div>
-                  <div className="font-semibold">{u.email || u.id}</div>
-                  <div className="text-sm text-gray-500">
-                    {u.profile?.role || "no profile"}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{u.email || u.id}</div>
+                    <div className="text-sm text-gray-500">
+                      Role: {u.profile?.role || "no profile"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleRemoveAdmin(u.email || "")}
+                      className="btn-secondary text-sm"
+                    >
+                      Toggle Admin
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(u.id, u.email)}
+                      className="btn-secondary text-red-600"
+                    >
+                      {userActionLoading === u.id ? "Deleting..." : "🗑️ Delete"}
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleRemoveAdmin(u.email || "")}
-                    className="btn-secondary text-sm"
-                  >
-                    Toggle Admin
-                  </button>
-                  <button
-                    onClick={() => handleDeleteUser(u.id, u.email)}
-                    className="btn-secondary text-red-600"
-                  >
-                    {userActionLoading === u.id ? "Deleting..." : "🗑️ Delete"}
-                  </button>
+
+                {/* Telegram ID Management */}
+                <div className="border-t pt-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm">
+                      <span className="font-medium">Telegram ID:</span>{" "}
+                      {editingTelegramId === u.id ? (
+                        <input
+                          type="text"
+                          value={telegramIdValue}
+                          onChange={(e) => setTelegramIdValue(e.target.value)}
+                          className="ml-2 px-2 py-1 border rounded text-sm w-48"
+                          placeholder="Enter Telegram ID or leave empty to clear"
+                        />
+                      ) : (
+                        <span className="text-gray-600">
+                          {u.profile?.telegram_id || "Not set"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {editingTelegramId === u.id ? (
+                        <>
+                          <button
+                            onClick={() => handleUpdateTelegramId(u.id, u.email)}
+                            disabled={userActionLoading === u.id}
+                            className="btn-primary text-xs"
+                          >
+                            {userActionLoading === u.id ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            onClick={handleCancelTelegramEdit}
+                            className="btn-secondary text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleEditTelegramId(u.id, u.profile?.telegram_id)}
+                          className="btn-secondary text-xs"
+                        >
+                          {u.profile?.telegram_id ? "Edit Telegram ID" : "Set Telegram ID"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}

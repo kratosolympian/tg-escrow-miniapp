@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     // fetch profiles for mapping
     const { data: profiles } = await (service as any)
       .from("profiles")
-      .select("id, email, full_name, role, created_at");
+      .select("id, email, full_name, role, telegram_id, created_at");
 
     const users = (authList.users || []).map((u: any) => ({
       id: u.id,

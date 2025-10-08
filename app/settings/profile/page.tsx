@@ -445,9 +445,6 @@ export default function ProfileSettings() {
           >
             {resettingTelegram ? "Resetting..." : "Reset Telegram Connection"}
           </button>
-          <p className="text-sm text-gray-500 mt-2">
-            After resetting, close this WebApp completely and reopen it from your new Telegram account to reconnect.
-          </p>
         </div>
 
         {/* Security Notice */}
