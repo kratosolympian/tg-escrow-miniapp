@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import React from "react";
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -32,7 +33,7 @@ export default function SellerPortalClient({
     price: "",
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | React.ReactElement>("");
   const [createdEscrow, setCreatedEscrow] = useState<CreatedEscrow | null>(
     null,
   );
@@ -43,7 +44,7 @@ export default function SellerPortalClient({
   );
   const [productImagePath, setProductImagePath] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [currentServiceFee, setCurrentServiceFee] = useState<number>(300);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
 
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -142,6 +143,7 @@ export default function SellerPortalClient({
   const [blockedCreationInfo, setBlockedCreationInfo] = useState<any | null>(
     null,
   );
+  const [currentServiceFee, setCurrentServiceFee] = useState<number>(0);
 
   const fetchOnlineAdmins = async () => {
     try {
@@ -247,13 +249,25 @@ export default function SellerPortalClient({
       if (res.ok) {
         const data = await res.json();
         const profile = data.profile ?? data;
-        const hasBank = !!(
+
+        // Check if all required banking fields are complete
+        const hasAllBankDetails = !!(
           profile &&
-          (profile.bank_name ||
-            profile.account_number ||
-            profile.account_holder_name)
+          profile.full_name?.trim() &&
+          profile.phone_number?.trim() &&
+          profile.bank_name?.trim() &&
+          profile.account_number?.trim() &&
+          profile.account_holder_name?.trim() &&
+          profile.account_number.length === 10 &&
+          /^\d{10}$/.test(profile.account_number)
         );
-        setHasBankDetails(hasBank);
+
+        setHasBankDetails(hasAllBankDetails);
+
+        // Store profile data for error messaging
+        if (profile) {
+          setUserProfile(profile);
+        }
       } else {
         setHasBankDetails(false);
       }
@@ -569,7 +583,29 @@ export default function SellerPortalClient({
     e.preventDefault();
     if (!form.description.trim() || !form.price.trim()) return;
     if (hasBankDetails === false) {
-      setError("Please complete your bank details before creating an escrow.");
+      // Determine which specific fields are missing
+      const missingFields: string[] = [];
+      if (!userProfile?.full_name?.trim()) missingFields.push("full name");
+      if (!userProfile?.phone_number?.trim()) missingFields.push("phone number");
+      if (!userProfile?.bank_name?.trim()) missingFields.push("bank name");
+      if (!userProfile?.account_number?.trim() || userProfile?.account_number?.length !== 10 || !/^\d{10}$/.test(userProfile?.account_number)) {
+        missingFields.push("valid 10-digit account number");
+      }
+      if (!userProfile?.account_holder_name?.trim()) missingFields.push("account holder name");
+
+      setError(
+        <div>
+          <p className="mb-2">
+            Please complete your profile before creating an escrow. Missing: {missingFields.join(", ")}.
+          </p>
+          <Link
+            href="/settings/profile"
+            className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition-colors"
+          >
+            Complete Profile →
+          </Link>
+        </div>
+      );
       return;
     }
 
@@ -818,7 +854,7 @@ export default function SellerPortalClient({
 
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600">{error}</p>
+                <div className="text-red-600">{error}</div>
               </div>
             )}
 

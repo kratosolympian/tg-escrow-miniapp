@@ -81,7 +81,7 @@ const nigerianBanks = [
 ];
 
 export default function ProfileSettings() {
-  const [error, setError] = useState("");
+  const [error, setError] = useState<React.ReactNode>("");
   const [success, setSuccess] = useState("");
   // Feedback auto-dismiss
   useEffect(() => {
@@ -137,7 +137,16 @@ export default function ProfileSettings() {
         });
       }
     } catch (error) {
-      setError("Failed to load profile");
+      setError(
+        <div>
+          <p className="mb-2">Unable to load profile information</p>
+          <ul className="text-sm text-gray-600 list-disc list-inside">
+            <li>Check your internet connection</li>
+            <li>Try refreshing the page</li>
+            <li>Contact support if the problem persists</li>
+          </ul>
+        </div>
+      );
     } finally {
       setLoading(false);
     }
@@ -212,11 +221,29 @@ export default function ProfileSettings() {
           window.location.reload();
         }, 2000);
       } else {
-        setError(data.error || "Failed to reset Telegram connection");
+        setError(
+          <div>
+            <p className="mb-2">Unable to reset Telegram connection</p>
+            <p className="text-sm text-gray-600">{data.error || "An unexpected error occurred"}</p>
+            <ul className="text-sm text-gray-600 mt-2 list-disc list-inside">
+              <li>Try again in a moment</li>
+              <li>Contact support if the problem persists</li>
+            </ul>
+          </div>
+        );
       }
     } catch (error) {
       console.error("Reset Telegram error:", error);
-      setError("An error occurred while resetting Telegram connection");
+      setError(
+        <div>
+          <p className="mb-2">Unable to reset Telegram connection</p>
+          <ul className="text-sm text-gray-600 list-disc list-inside">
+            <li>Check your internet connection</li>
+            <li>Try again in a moment</li>
+            <li>Contact support if the problem persists</li>
+          </ul>
+        </div>
+      );
     } finally {
       setResettingTelegram(false);
     }

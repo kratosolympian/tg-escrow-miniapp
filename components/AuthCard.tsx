@@ -7,7 +7,7 @@ type Props = {
   authMode: "login" | "signup";
   authForm: { email: string; password: string; name: string };
   authLoading: boolean;
-  error: string;
+  error: React.ReactNode;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
   setAuthMode: (m: "login" | "signup") => void;

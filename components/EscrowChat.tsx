@@ -115,7 +115,7 @@ export default React.memo(function EscrowChat({
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<React.ReactNode>("");
   const [senderCache, setSenderCache] = useState<
     Record<string, { full_name: string; role: string }>
   >({});
@@ -158,10 +158,28 @@ export default React.memo(function EscrowChat({
           populateMissingSenders(missing);
         }
       } else {
-        setError("Failed to load messages");
+        setError(
+          <div>
+            <p className="mb-2">Unable to load chat messages</p>
+            <ul className="text-sm text-gray-600 list-disc list-inside">
+              <li>Check your internet connection</li>
+              <li>Try refreshing the page</li>
+              <li>Contact support if the problem persists</li>
+            </ul>
+          </div>
+        );
       }
     } catch (err) {
-      setError("Failed to load messages");
+      setError(
+        <div>
+          <p className="mb-2">Unable to load chat messages</p>
+          <ul className="text-sm text-gray-600 list-disc list-inside">
+            <li>Check your internet connection</li>
+            <li>Try refreshing the page</li>
+            <li>Contact support if the problem persists</li>
+          </ul>
+        </div>
+      );
     } finally {
       (loadMessages as any)._inFlight = false;
       setLoading(false);
@@ -277,10 +295,28 @@ export default React.memo(function EscrowChat({
           });
         }
       } else {
-        setError(data.error || "Failed to send message");
+        setError(
+          <div>
+            <p className="mb-2">Unable to send message</p>
+            <ul className="text-sm text-gray-600 list-disc list-inside">
+              <li>Check your internet connection</li>
+              <li>Ensure your message is not empty</li>
+              <li>Try sending again in a moment</li>
+            </ul>
+          </div>
+        );
       }
     } catch (err) {
-      setError("Failed to send message");
+      setError(
+        <div>
+          <p className="mb-2">Unable to send message</p>
+          <ul className="text-sm text-gray-600 list-disc list-inside">
+            <li>Check your internet connection</li>
+            <li>Ensure your message is not empty</li>
+            <li>Try sending again in a moment</li>
+          </ul>
+        </div>
+      );
     } finally {
       setSending(false);
     }
@@ -452,8 +488,8 @@ export default React.memo(function EscrowChat({
         {!isAdmin && (
           <div className="border-t border-gray-200 p-4">
             {error && (
-              <div className="mb-3 bg-red-50 border border-red-200 rounded-md p-2">
-                <p className="text-red-700 text-sm">{error}</p>
+              <div className="mb-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">
+                <div className="mb-2">{error}</div>
               </div>
             )}
 

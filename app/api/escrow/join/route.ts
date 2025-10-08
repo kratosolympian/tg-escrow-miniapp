@@ -164,7 +164,16 @@ export async function POST(request: NextRequest) {
 
     if (findError || !escrow) {
       console.error("Escrow find error:", findError);
-      const payload: any = { error: "Transaction code not found" };
+      const payload: any = {
+        error: "Transaction not found",
+        type: "ESCROW_NOT_FOUND",
+        message: `No transaction found with code "${code}". Please check the code and try again.`,
+        suggestions: [
+          "Make sure the transaction code is correct",
+          "Check that the seller has shared the correct code with you",
+          "Transaction codes are case-insensitive"
+        ]
+      };
       if (process.env.DEBUG === "1" || process.env.DEBUG)
         payload._debug = { found: false, code: code };
       return NextResponse.json(payload, { status: 404 });
@@ -190,7 +199,16 @@ export async function POST(request: NextRequest) {
     // Check if seller is trying to join their own escrow
     if ((escrow as any).seller_id === authenticatedUser.id) {
       return NextResponse.json(
-        { error: "You cannot join your own transaction as a buyer" },
+        {
+          error: "Cannot join your own transaction",
+          type: "CANNOT_JOIN_OWN_ESCROW",
+          message: "You cannot join your own escrow transaction as a buyer. Share the transaction code with someone else to complete the transaction.",
+          escrowCode: (escrow as any).code,
+          actionRequired: {
+            text: "View your transaction",
+            url: `/seller/escrow/${(escrow as any).id}`,
+          },
+        },
         { status: 400 },
       );
     }
@@ -236,10 +254,33 @@ export async function POST(request: NextRequest) {
             : 0;
         if (count >= 3) {
           // Business rule: buyers can only have up to 3 active escrows
+          // Fetch the user's active escrows to include in the error response
+          const { data: activeEscrows } = await serviceClient
+            .from("escrows")
+            .select("id, code, description, price, status, created_at")
+            .eq("buyer_id", authenticatedUser.id)
+            .in("status", [
+              ESCROW_STATUS.CREATED,
+              ESCROW_STATUS.WAITING_PAYMENT,
+              ESCROW_STATUS.WAITING_ADMIN,
+              ESCROW_STATUS.PAYMENT_CONFIRMED,
+              ESCROW_STATUS.IN_PROGRESS,
+              ESCROW_STATUS.ON_HOLD,
+            ])
+            .or(`expires_at.is.null,expires_at.gt.${now}`)
+            .order("created_at", { ascending: false });
+
           return NextResponse.json(
             {
-              error:
-                "You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.",
+              error: "Maximum active transactions reached",
+              type: "MAX_ACTIVE_ESCROWS",
+              message: `You can only have up to 3 active transactions at once. You currently have ${count} active transaction${count > 1 ? 's' : ''}.`,
+              activeEscrows: activeEscrows || [],
+              maxAllowed: 3,
+              actionRequired: {
+                text: "View your active transactions",
+                url: "/buyer",
+              },
             },
             { status: 400 },
           );
@@ -269,11 +310,32 @@ export async function POST(request: NextRequest) {
         updateError.code === "P0001" &&
         updateError.message?.includes("Buyer already has an active escrow")
       ) {
+        // Fetch the user's active escrows to include in the error response
+        const { data: activeEscrows } = await serviceClient
+          .from("escrows")
+          .select("id, code, description, price, status, created_at")
+          .eq("buyer_id", authenticatedUser.id)
+          .in("status", [
+            ESCROW_STATUS.CREATED,
+            ESCROW_STATUS.WAITING_PAYMENT,
+            ESCROW_STATUS.WAITING_ADMIN,
+            ESCROW_STATUS.PAYMENT_CONFIRMED,
+            ESCROW_STATUS.IN_PROGRESS,
+            ESCROW_STATUS.ON_HOLD,
+          ])
+          .order("created_at", { ascending: false });
+
         return NextResponse.json(
           {
-            error:
-              "You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.",
-            existingEscrowId: "9b68f1e0-a885-425b-abf7-a2dc25c52a8f",
+            error: "Maximum active transactions reached",
+            type: "MAX_ACTIVE_ESCROWS",
+            message: "You have reached the maximum number of active transactions (3). Please complete or cancel an existing transaction before joining another.",
+            activeEscrows: activeEscrows || [],
+            maxAllowed: 3,
+            actionRequired: {
+              text: "View your active transactions",
+              url: "/buyer",
+            },
           },
           { status: 400 },
         );

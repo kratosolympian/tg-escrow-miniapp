@@ -134,12 +134,21 @@
     }
   },
   "recent_fixes": [
+    "Fixed Header component authentication race conditions causing logout button failures",
+    "Added loading state management to prevent UI interactions during auth checks",
+    "Implemented proper loading indicators for authentication operations",
+    "Fixed profile navigation loading loops after login",
+    "Enhanced logout function with proper error handling and loading states",
     "Fixed product image display issues for buyers",
     "Implemented automatic escrow expiration with server-side cleanup",
     "Added comprehensive debugging for image loading",
     "Configured TestSprite MCP for automated testing"
   ],
   "known_issues_to_test": [
+    "Header component authentication loading states and logout functionality",
+    "Profile navigation loading loops after login",
+    "Authentication state management race conditions",
+    "Loading indicators during auth operations",
     "Product image display in buyer escrow pages",
     "Automatic escrow expiration when payment timer expires",
     "Signed URL generation for secure file access",

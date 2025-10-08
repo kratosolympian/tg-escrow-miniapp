@@ -10,6 +10,7 @@ export default function Header() {
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [mounted, setMounted] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Debug userProfile changes
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function Header() {
     // Simplified auth check - prioritize speed over comprehensive fallback
     const checkAuth = async () => {
       console.log("[Header] Checking auth state...");
+      setIsLoading(true);
       try {
         // First, try the API endpoint (fastest for established sessions)
         const response = await fetch("/api/auth/me", {
@@ -41,6 +43,7 @@ export default function Header() {
             setUser(userData.user);
             setUserProfile(userData.profile || { role: userData.role });
             setAuthChecked(true);
+            setIsLoading(false);
             return;
           }
         }
@@ -85,6 +88,7 @@ export default function Header() {
           }
 
           setAuthChecked(true);
+          setIsLoading(false);
           return;
         }
       } catch (supabaseError) {
@@ -96,6 +100,7 @@ export default function Header() {
       setUser(null);
       setUserProfile(null);
       setAuthChecked(true);
+      setIsLoading(false);
     };
 
     checkAuth();
@@ -114,7 +119,8 @@ export default function Header() {
               .single();
             console.log("[Header] Auth change profile data:", profileData);
             setUserProfile(profileData);
-            setAuthChecked(true); // Ensure auth is marked as checked
+            setAuthChecked(true);
+            setIsLoading(false);
           } catch (profileError) {
             console.warn(
               "[Header] Failed to fetch user profile on auth change:",
@@ -122,11 +128,13 @@ export default function Header() {
             );
             setUserProfile({ role: "buyer" }); // Default fallback
             setAuthChecked(true);
+            setIsLoading(false);
           }
         } else {
           setUser(null);
           setUserProfile(null);
           setAuthChecked(true);
+          setIsLoading(false);
         }
       },
     );
@@ -191,26 +199,16 @@ export default function Header() {
     };
   }, []);
 
-  const handleLogout = async () => {
-    console.log("[Header] Logout initiated");
+    const handleLogout = async () => {
     try {
+      setIsLoading(true);
+      console.log("[Header] Starting logout process");
       await supabase.auth.signOut();
-      setUser(null);
-      setUserProfile(null);
-      console.log("[Header] Auth state cleared locally");
-
-      // For Telegram WebApp, use Telegram's navigation
-      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-        console.log("[Header] Using Telegram WebApp navigation");
-        window.location.href = "/";
-      } else {
-        console.log("[Header] Using standard navigation");
-        window.location.href = "/";
-      }
+      console.log("[Header] Logout successful");
+      // State will be updated by the auth state change listener
     } catch (error) {
-      console.error("[Header] Logout error:", error);
-      // Fallback navigation
-      window.location.href = "/";
+      console.error("[Header] Logout failed:", error);
+      setIsLoading(false); // Reset loading on error
     }
   };
 
@@ -231,68 +229,61 @@ export default function Header() {
   };
 
   return (
-    <header className="w-full bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
-      <div className="w-full max-w-5xl mx-auto flex items-center justify-between px-4 py-2">
-        <Link href={getLogoHref()}>
-          <span className="flex items-center gap-2">
-            <Image
-              src="/logo.png"
-              alt="Escroway Logo"
-              width={36}
-              height={36}
-              className="rounded"
-              priority
-            />
-            <span className="font-bold text-lg tracking-tight text-blue-700">
-              Escroway
-            </span>
-          </span>
-        </Link>
-        <nav className="flex gap-2 md:gap-4 items-center flex-wrap">
-          {/* Show navigation when logged in */}
-          {user && authChecked && (
-            <>
-              <Link
-                href="/settings/profile"
-                className="hover:text-blue-700 font-medium text-sm md:text-base"
-              >
-                Profile
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="ml-2 btn-secondary text-sm font-semibold"
-                style={{ minWidth: 70 }}
-              >
-                Logout
-              </button>
-            </>
-          )}
-
-          {/* Show all links when not logged in */}
-          {(!user || !authChecked) && (
-            <>
-              <Link
-                href="/admin/dashboard"
-                className="hover:text-blue-700 font-medium text-sm md:text-base"
-              >
-                Admin
-              </Link>
-              <Link
-                href="/buyer"
-                className="hover:text-blue-700 font-medium text-sm md:text-base"
-              >
-                Buyer
-              </Link>
-              <Link
-                href="/seller"
-                className="hover:text-blue-700 font-medium text-sm md:text-base"
-              >
-                Seller
-              </Link>
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
+    <>
+      {(!authChecked || isLoading) ? (
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <Link href="/" className="text-xl font-bold text-blue-600">
+                  Escroway
+                </Link>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="animate-pulse bg-gray-200 h-8 w-20 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </header>
+      ) : (
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <Link href="/" className="text-xl font-bold text-blue-600">
+                  Escroway
+                </Link>
+              </div>
+              <div className="flex items-center space-x-4">
+                {user ? (
+                  <>
+                    <Link
+                      href={getLogoHref()}
+                      className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                    >
+                      Profile
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      disabled={isLoading}
+                      className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {isLoading ? "Logging out..." : "Logout"}
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    href="/register"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                  >
+                    Sign Up
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
+      )}
+    </>
   );
 }

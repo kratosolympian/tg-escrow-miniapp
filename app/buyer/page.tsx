@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -282,7 +283,7 @@ export default function BuyerPage() {
   };
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<React.ReactNode>("");
   const router = useRouter();
 
   const handleJoinEscrow = async (e: React.FormEvent) => {
@@ -326,8 +327,31 @@ export default function BuyerPage() {
       }
       if (data?.blockedReason || data?.activeEscrows) {
         setBlockedJoinInfo({
-          reason: data.blockedReason || data.error,
+          reason: data.blockedReason || data.message || data.error,
           escrows: data.activeEscrows || [],
+          actionRequired: data.actionRequired,
+        });
+      } else if (data?.type === "MAX_ACTIVE_ESCROWS") {
+        setBlockedJoinInfo({
+          reason: data.message,
+          escrows: data.activeEscrows || [],
+          actionRequired: data.actionRequired,
+        });
+      } else if (data?.type === "ESCROW_NOT_FOUND") {
+        setError(
+          <div>
+            <p className="mb-2">{data.message}</p>
+            <ul className="text-sm text-gray-600 mb-3 list-disc list-inside">
+              {data.suggestions?.map((suggestion: string, index: number) => (
+                <li key={index}>{suggestion}</li>
+              ))}
+            </ul>
+          </div>
+        );
+      } else if (data?.type === "CANNOT_JOIN_OWN_ESCROW") {
+        setBlockedJoinInfo({
+          reason: data.message,
+          actionRequired: data.actionRequired,
         });
       } else {
         setError(
@@ -446,9 +470,20 @@ export default function BuyerPage() {
                 {blockedJoinInfo.reason ||
                   "Joining this transaction is not allowed."}
               </p>
+              {blockedJoinInfo.actionRequired && (
+                <div className="mb-3">
+                  <Link
+                    href={blockedJoinInfo.actionRequired.url}
+                    className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition-colors"
+                  >
+                    {blockedJoinInfo.actionRequired.text} →
+                  </Link>
+                </div>
+              )}
               {blockedJoinInfo.escrows &&
                 blockedJoinInfo.escrows.length > 0 && (
                   <div className="space-y-2">
+                    <p className="text-sm font-medium text-gray-700">Your active transactions:</p>
                     {blockedJoinInfo.escrows.map((e: any) => (
                       <div
                         key={e.id}
@@ -457,7 +492,7 @@ export default function BuyerPage() {
                         <div>
                           <div className="font-mono font-bold">{e.code}</div>
                           <div className="text-sm text-gray-600">
-                            {e.status}
+                            {e.status} • ₦{e.price?.toLocaleString()}
                           </div>
                         </div>
                         <Link

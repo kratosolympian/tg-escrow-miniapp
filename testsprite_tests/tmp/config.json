@@ -1,16 +1,16 @@
 {
   "status": "commited",
   "type": "frontend",
-  "scope": "codebase",
+  "scope": "diff",
   "localEndpoint": "http://localhost:3000",
   "loginUser": "buy@kratos.ng",
   "loginPassword": "letmein",
+  "apiKey": "sk-user-yEBk5fvmZTRRsoPJ04708tvuu0ou3TUCuIWzYaeRSxMMvDsUMifQ1rOAE0w1j7ka-CVDF02pviuLZo9RgRWLDK_dpz-kcJU8au50VHFMpP-Pe1Dp_6b6Dius5o9FJL2qoxg",
   "executionArgs": {
     "projectName": "tg-escrow-miniapp",
     "projectPath": "c:\\Users\\mrjoh\\Documents\\Projects\\escrow-services",
     "testIds": [],
-    "additionalInstruction": "Test the recent fixes for product image display and escrow expiration functionality",
+    "additionalInstruction": "Test the Header component authentication fixes specifically - verify logout button works reliably after login, profile navigation doesn't get stuck in loading loops, and loading indicators appear correctly during authentication operations.",
     "envs": {}
-  },
-  "proxy": "http://3d5c492b-fd80-4ade-af48-35b799cc163f:3dkddVuArbsnejIe4AiUnzGMv2Wl4RA8@tun.testsprite.com:8080"
+  }
 }
