@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -9,98 +9,11 @@ import { supabase } from "@/lib/supabaseClient";
 export default function HomePage() {
   const [isInTelegram, setIsInTelegram] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authenticatedUser, setAuthenticatedUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    // Check for deep link parameters from Telegram miniapp FIRST
-    const urlParams = new URLSearchParams(window.location.search);
-    const startapp = urlParams.get("startapp");
-
-    if (startapp) {
-      // Store deep link parameter for processing after authentication
-      sessionStorage.setItem("telegram_deep_link", startapp);
-    }
-
-    // Check if user is already authenticated and redirect if so
-    const checkExistingAuth = async () => {
-      try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-        if (user && !error) {
-          // Check for stored deep link or current deep link parameters
-          const storedDeepLink = sessionStorage.getItem("telegram_deep_link");
-          const currentStartapp = urlParams.get("startapp");
-          const deepLink = storedDeepLink || currentStartapp;
-
-          if (deepLink) {
-            // Clear stored deep link
-            sessionStorage.removeItem("telegram_deep_link");
-
-            // Handle deep links: escrow_CODE or chat_CODE
-            if (deepLink.startsWith("escrow_")) {
-              const code = deepLink.replace("escrow_", "");
-              // Redirect to escrow page
-              router.push(`/buyer/escrow/${code}`);
-              return;
-            } else if (deepLink.startsWith("chat_")) {
-              const code = deepLink.replace("chat_", "");
-              // For chat, we need to find the escrow by code first
-              // This will be handled by the escrow page itself
-              router.push(`/buyer/escrow/${code}`);
-              return;
-            }
-          }
-
-          // User is already authenticated, get their profile and redirect
-          const { data: profile, error: profileError } = await (supabase as any)
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single();
-
-          if (profile && !profileError) {
-            const userProfile = profile as { role: string };
-            switch (userProfile.role) {
-              case "admin":
-              case "super_admin":
-                router.push("/admin/dashboard");
-                break;
-              case "seller":
-                router.push("/seller");
-                break;
-              case "buyer":
-              default:
-                router.push("/buyer");
-                break;
-            }
-            return; // Don't continue with Telegram check
-          }
-        }
-      } catch (error) {
-        console.error("Auth check error:", error);
-      }
-
-      // Check if we're in Telegram WebApp
-      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-        const webApp = window.Telegram.WebApp;
-        setIsInTelegram(true);
-        webApp.ready?.();
-        webApp.expand?.();
-
-        // Auto-authenticate with Telegram
-        const initData = webApp.initData;
-        if (initData) {
-          authenticateWithTelegram(initData);
-        }
-      }
-    };
-
-    checkExistingAuth();
-  }, [router]);
-
-  const authenticateWithTelegram = async (initData: string) => {
+  const authenticateWithTelegram = useCallback(async (initData: string) => {
     try {
       const response = await fetch("/api/auth/telegram", {
         method: "POST",
@@ -176,7 +89,104 @@ export default function HomePage() {
     } catch (error) {
       console.error("Authentication error:", error);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    // Check for deep link parameters from Telegram miniapp FIRST
+    const urlParams = new URLSearchParams(window.location.search);
+    const startapp = urlParams.get("startapp");
+
+    if (startapp) {
+      // Store deep link parameter for processing after authentication
+      sessionStorage.setItem("telegram_deep_link", startapp);
+    }
+
+    // Check if user is already authenticated and redirect if so
+    const checkExistingAuth = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+        if (user && !error) {
+          // Check for stored deep link or current deep link parameters
+          const storedDeepLink = sessionStorage.getItem("telegram_deep_link");
+          const currentStartapp = urlParams.get("startapp");
+          const deepLink = storedDeepLink || currentStartapp;
+
+          if (deepLink) {
+            // Clear stored deep link
+            sessionStorage.removeItem("telegram_deep_link");
+
+            // Handle deep links: escrow_CODE or chat_CODE
+            if (deepLink.startsWith("escrow_")) {
+              const code = deepLink.replace("escrow_", "");
+              // Redirect to escrow page
+              router.push(`/buyer/escrow/${code}`);
+              return;
+            } else if (deepLink.startsWith("chat_")) {
+              const code = deepLink.replace("chat_", "");
+              // For chat, we need to find the escrow by code first
+              // This will be handled by the escrow page itself
+              router.push(`/buyer/escrow/${code}`);
+              return;
+            }
+          }
+
+          // User is already authenticated, get their profile and redirect
+          const { data: profile, error: profileError } = await (supabase as any)
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single();
+
+          if (profile && !profileError) {
+            const userProfile = profile as { role: string };
+            // Store user info for potential Telegram association
+            setAuthenticatedUser(user);
+            setUserProfile(userProfile);
+            // Don't redirect yet - continue to check for Telegram WebApp
+          }
+        }
+      } catch (error) {
+        console.error("Auth check error:", error);
+      }
+
+      // Check if we're in Telegram WebApp (regardless of auth status)
+      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+        const webApp = window.Telegram.WebApp;
+        setIsInTelegram(true);
+        webApp.ready?.();
+        webApp.expand?.();
+
+        // Auto-authenticate with Telegram (or associate with existing user)
+        const initData = webApp.initData;
+        if (initData) {
+          authenticateWithTelegram(initData);
+          return; // Don't redirect yet, let Telegram auth handle it
+        }
+      }
+
+      // If we get here, redirect authenticated users to their dashboard
+      if (authenticatedUser && userProfile) {
+        switch (userProfile.role) {
+          case "admin":
+          case "super_admin":
+            router.push("/admin/dashboard");
+            break;
+          case "seller":
+            router.push("/seller");
+            break;
+          case "buyer":
+          default:
+            router.push("/buyer");
+            break;
+        }
+      }
+    };
+
+    checkExistingAuth();
+  }, [router, authenticateWithTelegram, authenticatedUser, userProfile]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-blue-50">
