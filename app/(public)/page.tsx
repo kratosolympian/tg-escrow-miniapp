@@ -9,8 +9,6 @@ import { supabase } from "@/lib/supabaseClient";
 export default function HomePage() {
   const [isInTelegram, setIsInTelegram] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authenticatedUser, setAuthenticatedUser] = useState<any>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
   const router = useRouter();
 
   const authenticateWithTelegram = useCallback(async (initData: string) => {
@@ -142,16 +140,32 @@ export default function HomePage() {
 
           if (profile && !profileError) {
             const userProfile = profile as { role: string };
-            // Store user info for potential Telegram association
-            setAuthenticatedUser(user);
-            setUserProfile(userProfile);
-            // Don't redirect yet - continue to check for Telegram WebApp
+
+            // Redirect immediately based on role - no need to set local state
+            switch (userProfile.role) {
+              case "admin":
+              case "super_admin":
+                router.push("/admin/dashboard");
+                return;
+              case "seller":
+                router.push("/seller");
+                return;
+              case "buyer":
+              default:
+                router.push("/buyer");
+                return;
+            }
+          } else {
+            // Profile fetch failed, default to buyer
+            router.push("/buyer");
+            return;
           }
         }
       } catch (error) {
         console.error("Auth check error:", error);
       }
 
+      // If we get here, user is not authenticated, continue with normal flow
       // Check if we're in Telegram WebApp (regardless of auth status)
       if (typeof window !== "undefined" && window.Telegram?.WebApp) {
         const webApp = window.Telegram.WebApp;
@@ -166,27 +180,10 @@ export default function HomePage() {
           return; // Don't redirect yet, let Telegram auth handle it
         }
       }
-
-      // If we get here, redirect authenticated users to their dashboard
-      if (authenticatedUser && userProfile) {
-        switch (userProfile.role) {
-          case "admin":
-          case "super_admin":
-            router.push("/admin/dashboard");
-            break;
-          case "seller":
-            router.push("/seller");
-            break;
-          case "buyer":
-          default:
-            router.push("/buyer");
-            break;
-        }
-      }
     };
 
     checkExistingAuth();
-  }, [router, authenticateWithTelegram, authenticatedUser, userProfile]);
+  }, [router, authenticateWithTelegram]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-blue-50">
