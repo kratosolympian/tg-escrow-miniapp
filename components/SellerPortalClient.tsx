@@ -617,7 +617,16 @@ export default function SellerPortalClient({
         } catch {}
         setBlockedCreationInfo(null);
       } else {
-        if (data?.activeEscrow) {
+        // Handle specific error types
+        if (data?.type === "ACTIVE_ESCROW_EXISTS" && data?.activeEscrow) {
+          setBlockedCreationInfo({
+            message: data.message || "You already have an ongoing transaction. Please complete or cancel it before creating a new one.",
+            escrow: data.activeEscrow,
+            actionRequired: data.actionRequired,
+          });
+          setError("");
+        } else if (data?.activeEscrow) {
+          // Fallback for older error format
           setActiveEscrows([data.activeEscrow]);
           setBlockedCreationInfo({
             message: data.error || "You already have an ongoing transaction",

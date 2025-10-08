@@ -355,6 +355,49 @@ export async function POST(request: NextRequest) {
 
     if (escrowError) {
       console.error("Error creating escrow:", escrowError);
+
+      // Check if this is the specific error about seller having an active escrow
+      if (escrowError.code === 'P0001' && escrowError.message?.includes('Seller already has an active escrow')) {
+        // Extract the active escrow ID from the error message
+        const activeEscrowIdMatch = escrowError.message.match(/active_escrow_id=([a-f0-9-]+)/);
+        const activeEscrowId = activeEscrowIdMatch ? activeEscrowIdMatch[1] : null;
+
+        let activeEscrowDetails = null;
+        if (activeEscrowId) {
+          // Fetch the active escrow details
+          const { data: activeEscrow } = await serviceClient
+            .from("escrows")
+            .select("code, description, price, status, created_at")
+            .eq("id", activeEscrowId)
+            .single();
+
+          if (activeEscrow) {
+            activeEscrowDetails = {
+              id: activeEscrowId,
+              code: activeEscrow.code,
+              description: activeEscrow.description,
+              price: activeEscrow.price,
+              status: activeEscrow.status,
+              createdAt: activeEscrow.created_at,
+            };
+          }
+        }
+
+        return NextResponse.json(
+          {
+            error: "You already have an active escrow transaction",
+            type: "ACTIVE_ESCROW_EXISTS",
+            message: "You can only have one active escrow at a time. Please complete or cancel your existing transaction before creating a new one.",
+            activeEscrow: activeEscrowDetails,
+            actionRequired: activeEscrowDetails ? {
+              text: `View your active escrow (${activeEscrowDetails.code})`,
+              url: `/seller/escrow/${activeEscrowDetails.id}`,
+            } : null,
+          },
+          { status: 409 },
+        );
+      }
+
       return NextResponse.json(
         { error: "Failed to create escrow", details: escrowError.message },
         { status: 500 },
