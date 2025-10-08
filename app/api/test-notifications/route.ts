@@ -179,6 +179,7 @@ export async function GET(request: NextRequest) {
         testEscrow.status,
         "testing_status_change",
         serviceClient,
+        process.env.TELEGRAM_MINIAPP_URL,
       );
 
       // Test chat notification
@@ -190,6 +191,7 @@ export async function GET(request: NextRequest) {
           senderId,
           "🧪 This is a test notification from the notification testing endpoint!",
           serviceClient,
+          process.env.TELEGRAM_MINIAPP_URL,
         );
       }
     } else {
