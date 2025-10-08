@@ -184,7 +184,7 @@ export default function ProfileSettings() {
   };
 
   const handleResetTelegram = async () => {
-    if (!confirm("Are you sure you want to reset your Telegram connection? You'll need to reconnect to receive notifications again.")) {
+    if (!confirm("Are you sure you want to reset your Telegram connection? You'll need to close and reopen this WebApp from your new Telegram account to reconnect and receive notifications again.")) {
       return;
     }
 
@@ -206,7 +206,7 @@ export default function ProfileSettings() {
         // Clear browser session storage
         sessionStorage.removeItem("telegram_id");
         sessionStorage.removeItem("telegram_username");
-        setSuccess("Telegram connection has been reset. The page will reload in a moment. Please reconnect with your new Telegram account to receive notifications.");
+        setSuccess("Telegram connection has been reset. The page will reload in a moment. After the reload, close this WebApp and reopen it from your new Telegram account to reconnect and receive notifications.");
         // Reload the page to ensure clean state
         setTimeout(() => {
           window.location.reload();
@@ -430,6 +430,14 @@ export default function ProfileSettings() {
           <p className="text-gray-600 mb-4">
             Reset your Telegram connection if you&apos;re not receiving notifications on your current Telegram account.
           </p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+            <div className="flex">
+              <div className="text-yellow-400 mr-2">⚠️</div>
+              <div className="text-sm text-yellow-800">
+                <strong>Important:</strong> After resetting, you must <strong>close and reopen this WebApp</strong> from your new Telegram account to reconnect and receive notifications.
+              </div>
+            </div>
+          </div>
           <button
             onClick={handleResetTelegram}
             disabled={resettingTelegram}
@@ -438,7 +446,7 @@ export default function ProfileSettings() {
             {resettingTelegram ? "Resetting..." : "Reset Telegram Connection"}
           </button>
           <p className="text-sm text-gray-500 mt-2">
-            After resetting, reconnect with your Telegram account to receive notifications.
+            After resetting, close this WebApp completely and reopen it from your new Telegram account to reconnect.
           </p>
         </div>
 
