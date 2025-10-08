@@ -214,10 +214,26 @@ export default function Header() {
     }
   };
 
+  const getLogoHref = () => {
+    if (user && userProfile) {
+      switch (userProfile.role) {
+        case "admin":
+        case "super_admin":
+          return "/admin/dashboard";
+        case "seller":
+          return "/seller";
+        case "buyer":
+        default:
+          return "/buyer";
+      }
+    }
+    return "/";
+  };
+
   return (
     <header className="w-full bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
       <div className="w-full max-w-5xl mx-auto flex items-center justify-between px-4 py-2">
-        <Link href="/">
+        <Link href={getLogoHref()}>
           <span className="flex items-center gap-2">
             <Image
               src="/logo.png"
