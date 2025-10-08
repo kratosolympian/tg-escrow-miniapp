@@ -203,7 +203,14 @@ export default function ProfileSettings() {
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess("Telegram connection has been reset. Please reconnect with your Telegram account to receive notifications.");
+        // Clear browser session storage
+        sessionStorage.removeItem("telegram_id");
+        sessionStorage.removeItem("telegram_username");
+        setSuccess("Telegram connection has been reset. The page will reload in a moment. Please reconnect with your new Telegram account to receive notifications.");
+        // Reload the page to ensure clean state
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } else {
         setError(data.error || "Failed to reset Telegram connection");
       }
