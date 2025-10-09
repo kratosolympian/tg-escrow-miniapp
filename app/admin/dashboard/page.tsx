@@ -47,11 +47,13 @@ export default function AdminDashboard() {
     if (refreshData) {
       refreshData.current = refreshEscrows;
     }
-  }, [refreshData]);
+  }, [refreshData, refreshEscrows]);
 
   // Real-time subscription for all escrow updates (admins see all)
   useEffect(() => {
     if (!user) return;
+
+    console.log("[AdminDashboard] Setting up real-time subscription for admin:", user.id);
 
     const channel = supabase
       .channel("escrow-updates-admin")
@@ -63,6 +65,7 @@ export default function AdminDashboard() {
           table: "escrows",
         },
         (payload) => {
+          console.log("[AdminDashboard] Received UPDATE event:", payload);
           // Any escrow was updated, refresh the data
           fetchEscrows();
         },
@@ -75,19 +78,37 @@ export default function AdminDashboard() {
           table: "escrows",
         },
         (payload) => {
+          console.log("[AdminDashboard] Received INSERT event:", payload);
           // New escrow was created, refresh the data
           fetchEscrows();
         },
       )
-      .subscribe();
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "escrows",
+        },
+        (payload) => {
+          console.log("[AdminDashboard] Received DELETE event:", payload);
+          // If an escrow was deleted, refresh the data to remove it from the UI
+          fetchEscrows();
+        },
+      )
+      .subscribe((status) => {
+        console.log("[AdminDashboard] Subscription status:", status);
+      });
 
     return () => {
+      console.log("[AdminDashboard] Cleaning up subscription");
       supabase.removeChannel(channel);
     };
   }, [user]);
 
   const fetchEscrows = React.useCallback(async () => {
     try {
+      console.log("[AdminDashboard] Fetching escrows with filter:", filter, "search:", search);
       const params = new URLSearchParams();
       if (filter) params.append("status", filter);
       if (search) params.append("q", search);
@@ -98,10 +119,13 @@ export default function AdminDashboard() {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log("[AdminDashboard] Fetched escrows:", data.escrows?.length || 0);
         setEscrows(data.escrows);
+      } else {
+        console.error("[AdminDashboard] Failed to fetch escrows:", response.status, response.statusText);
       }
     } catch (error) {
-      console.error("Error fetching escrows:", error);
+      console.error("[AdminDashboard] Error fetching escrows:", error);
     } finally {
       setLoading(false);
     }
@@ -332,6 +356,17 @@ export default function AdminDashboard() {
 
             {/* Transactions Table */}
             <div className="card">
+              <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold">Transactions</h3>
+                <button
+                  onClick={fetchEscrows}
+                  className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center space-x-1 text-sm"
+                  title="Refresh transactions"
+                >
+                  <span>🔄</span>
+                  <span>Refresh</span>
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
