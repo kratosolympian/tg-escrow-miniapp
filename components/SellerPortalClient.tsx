@@ -74,11 +74,13 @@ export default function SellerPortalClient({
     if (refreshData) {
       refreshData.current = refreshEscrows;
     }
-  }, [refreshData]);
+  }, [refreshData, refreshEscrows]);
 
   // Real-time subscription for escrow updates
   useEffect(() => {
     if (!isAuthenticated || !user) return;
+
+    console.log("[SellerPortal] Setting up real-time subscription for user:", user.id);
 
     const channel = supabase
       .channel("escrow-updates-seller")
@@ -90,14 +92,18 @@ export default function SellerPortalClient({
           table: "escrows",
         },
         (payload) => {
+          console.log("[SellerPortal] Received UPDATE event:", payload);
           // Check if this escrow belongs to the current user
           if (
             payload.new &&
             (payload.new.seller_id === user.id ||
               payload.new.buyer_id === user.id)
           ) {
+            console.log("[SellerPortal] Escrow update belongs to user, refreshing data");
             // Escrow was updated and belongs to this user, refresh the data
             fetchActiveEscrows();
+          } else {
+            console.log("[SellerPortal] Escrow update does not belong to user, ignoring");
           }
         },
       )
@@ -109,20 +115,40 @@ export default function SellerPortalClient({
           table: "escrows",
         },
         (payload) => {
+          console.log("[SellerPortal] Received INSERT event:", payload);
           // Check if this new escrow belongs to the current user
           if (
             payload.new &&
             (payload.new.seller_id === user.id ||
               payload.new.buyer_id === user.id)
           ) {
+            console.log("[SellerPortal] New escrow belongs to user, refreshing data");
             // New escrow was created for this user, refresh the data
             fetchActiveEscrows();
+          } else {
+            console.log("[SellerPortal] New escrow does not belong to user, ignoring");
           }
         },
       )
-      .subscribe();
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "escrows",
+        },
+        (payload) => {
+          console.log("[SellerPortal] Received DELETE event:", payload);
+          // If an escrow was deleted, refresh the data to remove it from the UI
+          fetchActiveEscrows();
+        },
+      )
+      .subscribe((status) => {
+        console.log("[SellerPortal] Subscription status:", status);
+      });
 
     return () => {
+      console.log("[SellerPortal] Cleaning up subscription");
       supabase.removeChannel(channel);
     };
   }, [isAuthenticated, user]);
@@ -164,6 +190,7 @@ export default function SellerPortalClient({
 
   const fetchActiveEscrows = async () => {
     try {
+      console.log("[SellerPortal] Fetching active escrows...");
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const res = await fetch("/api/escrow/my-active", {
@@ -173,11 +200,14 @@ export default function SellerPortalClient({
       if (res.ok) {
         const j = await res.json();
         const sellerEscrows = j.seller || [];
+        console.log("[SellerPortal] Fetched escrows:", sellerEscrows.length);
         setActiveEscrows(sellerEscrows);
         setLastRefreshTime(new Date()); // Update refresh timestamp
+      } else {
+        console.error("[SellerPortal] Failed to fetch active escrows:", res.status, res.statusText);
       }
     } catch (e) {
-      console.error("Error fetching active escrows", e);
+      console.error("[SellerPortal] Error fetching active escrows:", e);
     }
   };
 
@@ -347,7 +377,7 @@ export default function SellerPortalClient({
     return () => {
       listener?.subscription.unsubscribe();
     };
-  }, []);
+  }, [initialAuthState]);
 
   // Fetch active escrows when authenticated
   useEffect(() => {
@@ -785,12 +815,22 @@ export default function SellerPortalClient({
               <h2 className="text-xl font-semibold text-green-800">
                 Active Transactions
               </h2>
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
-              >
-                Create New Transaction
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={fetchActiveEscrows}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center space-x-2"
+                  title="Refresh transactions"
+                >
+                  <span>🔄</span>
+                  <span>Refresh</span>
+                </button>
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                >
+                  Create New Transaction
+                </button>
+              </div>
             </div>
             {lastRefreshTime && (
               <div className="text-xs text-green-600 mb-2">
