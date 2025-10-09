@@ -299,19 +299,7 @@ export default function BuyerPage() {
     }
   };
 
-  const handleLogout = async () => {
-    setAuthLoading(true);
-    try {
-      await supabase.auth.signOut();
-      setIsAuthenticated(false);
-      setUser(null);
-      setShowAuthForm(true);
-    } catch (error) {
-      // ignore
-    } finally {
-      setAuthLoading(false);
-    }
-  };
+
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<React.ReactNode>("");

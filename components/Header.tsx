@@ -204,8 +204,9 @@ export default function Header() {
       setIsLoading(true);
       console.log("[Header] Starting logout process");
       await supabase.auth.signOut();
-      console.log("[Header] Logout successful");
-      // State will be updated by the auth state change listener
+      console.log("[Header] Logout successful, redirecting to landing page");
+      // Redirect to landing page after logout
+      window.location.href = "/";
     } catch (error) {
       console.error("[Header] Logout failed:", error);
       setIsLoading(false); // Reset loading on error

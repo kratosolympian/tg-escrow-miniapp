@@ -728,28 +728,7 @@ export default function SellerPortalClient({
     setError("");
   };
 
-  const handleLogout = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        setError(error.message || "Logout failed");
-      } else {
-        setIsAuthenticated(false);
-        setUser(null);
-        setShowAuthForm(true);
-        setAuthForm({ email: "", password: "", name: "" });
-        setAuthMode("signup");
-        setError("");
-        router.push("/");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   // Handle auth form input changes
   const handleAuthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
